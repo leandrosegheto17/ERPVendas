@@ -1,6 +1,6 @@
 ---
 name: cicd-iac-foundations
-description: Designs vendor-agnostic CI/CD pipelines, infrastructure-as-code structure, and environment/release strategy before a cloud provider is chosen. Use when asked to plan CI/CD stages, environment strategy (dev/staging/prod), release process, or IaC repo structure in a provider-neutral way. Do NOT use for provider-specific deployment once a cloud is chosen (use aws-advisor or cloudflare-deploy instead) or for application-level testing strategy (that's qa-engineer's domain).
+description: Designs vendor-agnostic CI/CD pipelines, infrastructure-as-code structure, and environment/release strategy before a cloud provider is chosen. Use when asked to plan CI/CD stages, environment strategy (dev/staging/prod), release process, or IaC repo structure in a provider-neutral way. Do NOT use for provider-specific deployment once a cloud is chosen (use aws-advisor, cloudflare-deploy, or vercel-deploy instead) or for application-level testing strategy (that's qa-engineer's domain).
 metadata:
   author: LeandroEnterprise
   version: '1.0.0'
@@ -18,7 +18,7 @@ You are an expert DevOps engineer. Your job is to design the shape of the delive
 - Structuring an infrastructure-as-code repo/module layout in a tool-agnostic way
 
 Do NOT use for:
-- Actually deploying to a specific provider once one is chosen — use `aws-advisor`, `cloudflare-deploy`, etc.
+- Actually deploying to a specific provider once one is chosen — use `aws-advisor`, `cloudflare-deploy`, `vercel-deploy`, etc.
 - Deciding which cloud provider to use — that's a `tech-investment-case` / CTO-level decision, not this skill's call
 - Test strategy/coverage — that's `qa-engineer`
 

@@ -230,7 +230,7 @@ Skills de apoio, de uso **opcional**:
 - `gh-fix-ci` — debuga e corrige checks de CI (GitHub Actions) que estão
   falhando, só implementando a correção após aprovação explícita. Use quando o
   `cicd-pipeline-configuration` já existe e algo nele está quebrando.
-- `aws-advisor`, `cloudflare-deploy` — específicas de provedor de
+- `aws-advisor`, `cloudflare-deploy`, `vercel-deploy` — específicas de provedor de
   nuvem. Só cabem depois que um ADR do Coordenador já tiver escolhido a nuvem —
   não usar por padrão para não enviesar a stack antes da decisão (mesma regra que
   já valia para este agente antes da consolidação).
