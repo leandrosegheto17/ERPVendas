@@ -1,0 +1,7 @@
+# ADR-011 — Tema único e design tokens centralizados na UI
+
+- Status: Accepted (proposto pelo Coordenador, chapéu UX/UI, a pedido do usuário: "interface clean e profissional"; 2026-09-21)
+- Contexto: UX-SPEC v1 usava o padrão nativo dos componentes sem identidade visual. O usuário pediu capricho visual. Restrições: 1 desenvolvedor, feature freeze em 24/09, DEC-02 (versão Delphi/DevExpress) aberta, custo zero/trial.
+- Alternativas: (a) padrão nativo sem tema (v1) — barato, aparência inconsistente; (b) estilo por tela, propriedade a propriedade — caro e diverge; (c) uma unit de tokens + skin único aplicado no composition root + bases de form — custo pequeno e centralizado.
+- Decisão: (c). `ERPV.UI.Tokens` (constantes de cor/fonte/espaço, sem lógica), aplicação do skin uma única vez em `src/App`/`src/UI` via controller centralizado com fallback para o LookAndFeel nativo se o skin não existir; `TFormBaseLista`/`TFormBaseEdicao` promovidas de "cortáveis" para recomendadas (P1, e MUST na camada visual). Detalhes em UX-SPEC §3 e §9.
+- Consequências: (+) look consistente com custo baixo, troca de skin/paleta em 1 lugar; (+) nenhum recurso exclusivo de versão. (-) ~7 h extras na camada MUST; (-) dependência de skin presente no trial (mitigada pelo fallback). Não altera camadas do ADR-001: tokens vivem em UI (ou Core, sem `Vcl.*` se forem só inteiros/strings; cores como `TColor` ficam em UI).

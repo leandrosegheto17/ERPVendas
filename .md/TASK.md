@@ -1,0 +1,275 @@
+# TASK — ERP Vendas (Delphi) — Rodada 1 do Loop C (2026-09-21)
+
+Base: PRD-TECNICO.md, SDD.md, UX-SPEC.md, ADR-001..010, VISAO-PRODUTO.md §5-6. Prazo: dev até sex 25/09 (D1 = seg 21/09; D4 = qui 24/09 = feature freeze; D5 = integração final, docs, pacote).
+Legenda: Tipo OBR/SUG (PRD-TECNICO); Prio P0 (obrigatório) / P1 (alto retorno) / P2 (cortável). Estimativa em horas-pessoa de trabalho efetivo (referência: 6 h = 1 dia-pessoa). Status inicial de toda tarefa: `Pendente`. Todo código exige compilar sem warnings novos e passar no critério manual da tarefa.
+
+## 1. Diretrizes de Implementação
+
+**Linguagem/versão (DEC-02 aberta):** sintaxe compatível com Delphi 10.3+. Proibido: inline var, declaração de variável em bloco, `for ... in` sobre tipos exóticos que exijam versão nova, recursos exclusivos de 11+/12+/13 (ex.: multiline strings, `Result` em inicialização inline). Generics só `TList<T>`/`TObjectList<T>`/`TDictionary` padrão. Sem pacotes runtime (build único com DLLs mínimas).
+
+**Camadas e dependência (ADR-001/010):** UI -> Negócio -> interfaces do Domínio <- Dados/Integração. Domínio sem `Vcl.*`, `FireDAC.*`, `System.Net.*`, `Id*`. Os 7 contratos (`IClienteRepository`, `IProdutoRepository`, `IVendaRepository`, `IFilaRepository`, `IFinanceiroGateway`, `IEmailSender`, `IRelatorioPedido`) ficam em `src/Dominio/Contratos`. DI manual por construtor; só o composition root (`src/App`) instancia classes concretas. Unit scope `ERPV.<Camada>.<Nome>` (ex.: `ERPV.Negocio.VendaService`).
+
+**Forms finos:** nenhum SQL, `THTTPClient`, `TIdSMTP` ou regra de negócio em `.pas` de form. Form coleta, chama Service, apresenta resultado tipado. Sem `TFDQuery/TFDConnection` dentro de form ou DataModule de tela; cxGrid liga a `TDataSet` devolvido pelo repositório (ADR-003).
+
+**Dados (ADR-002/003):** SQL sempre parametrizado (`ParamByName`), nunca concatenação. Transação explícita em toda escrita multi-tabela (`StartTransaction/Commit/Rollback` com `try/except`); nunca manter transação aberta durante HTTP (ADR-006). Entidade para edição; `TDataSet` somente leitura para grade e relatório. Dinheiro: `Currency` no Delphi, `NUMERIC(15,2)` no banco; proibido `Double/Extended` para valores monetários. CPF/CNPJ gravado só com dígitos.
+
+**Integração (ADR-004/005/006):** `THTTPClient` síncrono; timeout de conexão e de resposta lidos do INI (padrão 10 s). JSON via `System.JSON` com `TFormatSettings` invariante (ponto decimal, ISO 8601, UTF-8), independente do locale pt-BR. `vendaId/clienteId/produtoId` enviados como string do ID inteiro. Resultado tipado (`Sucesso | Recusado(4xx) | Indisponivel(5xx/timeout/rede) | RespostaInvalida`) em vez de exceção para falha esperada. Ordem do fluxo de quitação exatamente a de ADR-006: POST -> commit curto do status local -> PDF -> e-mail; e-mail só após quitação confirmada (RN-06). 4xx não reenfileira; 5xx/timeout reenfileira (RN-08); no máximo 1 item PENDENTE por (venda, tipo).
+
+**Exceções/log (ADR-008):** hierarquia `EValidacao`/`ERegraNegocio` (mensagem ao usuário) e `EIntegracao`/`EInfra` (mensagem amigável + log). Um único `Application.OnException`. Mensagem ao usuário nunca contém SQL, caminho, stack ou credencial. Log em arquivo por dia; CPF/CNPJ/e-mail mascarados; nunca corpo de mensagem, senha ou ApiKey.
+
+**Config/segredos (ADR-007/008):** tudo em `erpvendas.ini` (fora do Git) com variável de ambiente opcional para senha SMTP/ApiKey; repositório só tem `config/erpvendas.ini.example` fictício. Se o INI faltar/for inválido: mensagem clara e encerramento controlado (sem crash).
+
+**UI (UX-SPEC):** estados vazio/carregando/erro/sucesso conforme UX-SPEC §4; habilitação de botões por status (§4.2); textos de desfecho de §4.3 literais; TabOrder lógico, Enter=OK, Esc=Cancelar, `&` nos rótulos, `Scaled=True`, foco no primeiro campo inválido; cor de status sempre com texto. Componentes só DevExpress/VCL padrão; itens novos (marcados [NOVO], ADR-011): bases `TFormBaseLista/TFormBaseEdicao`, helper `Notificar`, unit de tokens `ERPV.UI.Tokens`, unit `ERPV.UI.Tema` e ícone "Sinc". **Proibido cor, fonte ou tamanho solto em form ou DFM: tudo vem de `ERPV.UI.Tokens`; estilo de grade/botão só via `ConfigurarGrade`/`EstilizarBotao`; mensagens ao usuário só via `Notificar` (Info=banner; Aviso/Erro/Pergunta=modal), sem `MessageDlg` direto.** Skin aplicado uma única vez (`AplicarTema`) com fallback nativo. Nomes de componentes DevExpress variam por versão: confirmar na versão de T01.
+
+**Contrato:** qualquer mudança em rota/payload/códigos só entra registrada em `docs/contrato-api-financeiro.md` (fonte única). Cliente tolerante a v1.0 (não exigir corpo de erro nem `vendaId` na resposta); `X-Api-Key` só se configurado.
+
+**Estilo:** Pascal padrão (`T` classe, `I` interface, `E` exceção, `F` campo, `A` parâmetro); métodos curtos; comentário só para decisão não óbvia (o porquê); sem código morto; sem `TODO` sem tarefa associada. Commits pequenos por tarefa, mensagem `Txx: resumo`. Antes de cada commit: varredura de segredo (GUARDRAILS).
+
+**Bibliotecas:** obrigatórias: FireDAC, DevExpress VCL, ReportBuilder, `THTTPClient`/`System.JSON`, Indy `TIdSMTP` + OpenSSL. Proibidas: qualquer DI/ORM/JSON/HTTP de terceiros, testes automatizados como requisito, threads (`TTask/TThread`) no fluxo de integração (DEC-14).
+
+**Verificação sem testes automatizados:** cada tarefa tem critério de aceite manual (coluna da Seção 3) executado pelo Executor e anotado no Status/notas; o roteiro consolidado é T56 (escrita) e T59 (execução com evidências).
+
+## 2. Spikes Técnicos
+
+| ID | Spike | Incerteza | Timebox | Saída esperada | Impacto se falhar |
+|---|---|---|---|---|---|
+| S1 = T02 | Indy `TIdSMTP` + OpenSSL (32/64 bit, versão da DLL) enviando e-mail real ao Mailtrap/Ethereal, com e sem TLS | Alta (R-02) | 3 h, D1 | Parâmetros de porta/TLS que funcionam, DLLs exatas anotadas | Usar Mailtrap sem TLS; documentar; T48 estimada sobre o resultado |
+| S2 = T67 | ReportBuilder trial: gerar PDF de um relatório com DataSet, verificar marca d'água/limitações/expiração | Alta (R-06) | 2 h, D1 | Evidência (PDF de teste) e limitação documentada | Reavaliar T46/T47 e a nota de README sobre trial |
+| S3 (dentro de T01) | FireDAC driver Firebird na edição Community; propriedades `ConnectionTimeout/ResponseTimeout` do `THTTPClient` na versão instalada | Média | 1 h | Anotado em `docs/ambiente-licencas.md` | Trial de Delphi; ou timeout via alternativa (anotar) |
+
+T34, T46, T47 e T48 só têm estimativa firme depois de S1/S2 (as estimativas abaixo assumem resultado favorável).
+
+## 3. Lista de Tarefas
+
+Coluna "Par." = Paralelizável-com (mesmo lote; "-" = nenhuma, ordem obrigatória). Donos: Executor(DB) SQL/Firebird; Executor(Delphi) código Delphi; Executor(UI) forms DevExpress; Executor(Docs) documentação; Executor(Build) empacotamento/ambiente.
+
+### Lote 1 — Ambiente e infraestrutura externa (D1)
+| ID | Tarefa | Dono | Tipo | Prio | Origem | Est.(h) | Depende | Par. | Critério de aceite (manual) | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| T01 | Ambiente e licenças: instalar Delphi (Community/trial), Firebird 3.0, DevExpress VCL, ReportBuilder; "hello world" compilando com os 4; anotar edição/versão/validade de cada licença em `docs/ambiente-licencas.md` (sem chaves); fechar DEC-02; incluir S3; listar os skins disponíveis no trial DevExpress e registrar o skin escolhido (ou "fallback", ADR-011) | Executor(Build) | OBR | P0 | RNF-01/02/08, R-06/07, ADR-011 | 3.5 | - | T05, T06 | Projeto de teste abre form DevExpress, conecta ao FB via FireDAC, roda TppReport; arquivo lista versão exata, data de validade, lista de skins e skin escolhido/fallback; nenhuma chave no repo | Pendente |
+| T02 | Spike S1: envio SMTP real com Indy + OpenSSL | Executor(Delphi) | OBR | P0 | RF-21, ADR-007, R-02 | 3 | T01 | T03, T05, T06 | E-mail chega ao Mailtrap/Ethereal com anexo PDF de teste; parâmetros TLS e DLLs anotados em `docs/ambiente-licencas.md` | Pendente |
+| T03 | DDL `db/01_schema.sql` (5 tabelas, CHECK/UNIQUE/FK, índices) conforme VISAO §3 | Executor(DB) | OBR | P0 | RNF-07, ADR-002, SDD §5 | 2 | T01 | T05, T06, T02 | Script roda em banco novo sem erro; INSERT inválido (status 'X', qtd 0, CPF duplicado) é rejeitado; sem `SYSDBA` embutido | Pendente |
+| T04 | Seed mínimo `db/02_seed.sql` (2 clientes com CPF/CNPJ válidos e e-mails sandbox, 3 produtos) | Executor(DB) | SUG | P1 | SDD §5/§7 | 1 | T03 | T05, T06 | Script roda após o DDL; SELECT retorna 2 clientes e 3 produtos; dados claramente fictícios | Pendente |
+| T05 | Mock do Financeiro `tools/mock-financeiro/mock_financeiro.py` (stdlib; 3 rotas v1.0; modos ok/recusa/erro500/timeout/offline-simulado via `/_modo`) | Executor(Delphi) | SUG | P1 | RF-26, ADR-009 | 3 | - | T01, T02, T03, T06 | Com `curl`: quitação ok devolve `Quitada`+`dataQuitacao`; `/_modo?m=recusa` devolve 4xx; `erro500` 500; `timeout` excede 10 s; GET status reflete estado em memória; README curto no diretório | Pendente |
+| T06 | `docs/contrato-api-financeiro.md` (v1.0 vigente + v1.1 C1-C8 proposta + tabela de mudanças) e mensagem de envio ao contato C# pedindo confirmação de DEC-08/09 até 23/09 | Executor(Docs) | SUG | P0 | P-05, DEC-08/09 | 1.5 | - | T01..T05 | Arquivo cobre as 3 rotas com exemplos JSON; v1.1 marcada "Proposta"; texto de envio pronto (envio é ação do usuário) | Pendente |
+| T67 | Spike S2: ReportBuilder trial gera PDF a partir de DataSet | Executor(Delphi) | OBR | P0 | RF-19/20, R-06 | 2 | T01 | T03, T05, T06 | PDF de 1 página abre no leitor; limitações (marca d'água/aviso) anotadas em `docs/ambiente-licencas.md` | Pendente |
+
+Lote com 7 itens por serem spikes/artefatos curtos e independentes (justificado: a maioria < 3 h).
+
+### Lote 2 — Núcleo Delphi (D1)
+| ID | Tarefa | Dono | Tipo | Prio | Origem | Est.(h) | Depende | Par. | Critério de aceite (manual) | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| T07 | Esqueleto: `ERPVendas.dpr/.dproj`, pastas `src/{App,Core,Dominio/Contratos,Negocio,Dados,Integracao,Relatorios,UI}`, `.gitignore` (INI, logs, PDFs temp, `*.dcu`, licenças), unit scopes | Executor(Delphi) | SUG | P0 | ADR-001, RNF-08 | 1.5 | T01 | - | Projeto vazio compila e abre janela; `git status` não lista INI/logs/binários; estrutura idêntica à de VISAO §2 | Pendente |
+| T08 | Domínio: `TCliente/TProduto/TVenda/TVendaItem`, enums `TStatusVenda/TTipoFila`, resultados tipados, as 7 interfaces (assinaturas) | Executor(Delphi) | SUG | P0 | ADR-001/010, SDD §2 | 4 | T07 | T09, T10 | Compila sem `uses` de Vcl/FireDAC/System.Net/Id* nas units de Domínio (checar cláusulas `uses`); status literais = 'Pendente','Quitada','Cancelada' | Pendente |
+| T09 | `ERPV.Core.Config` (TIniFile: conexão, URL, timeout, SMTP, pasta PDF, pasta log, ApiKey opcional, variável de ambiente) + `config/erpvendas.ini.example` | Executor(Delphi) | SUG | P0 | RNF-03/04, ADR-007/008 | 2 | T07 | T08, T10 | Valores lidos do INI de teste; `.ini.example` só com dados fictícios; INI ausente => mensagem clara e saída controlada | Pendente |
+| T10 | `ERPV.Core.Log` (arquivo por dia, níveis, mascara CPF/CNPJ/e-mail, sem senha) | Executor(Delphi) | SUG | P1 | RF-24, ADR-008, SDD §7 | 1.5 | T07, T09 | T08 | Log criado na pasta configurada; CPF `12345678909` aparece mascarado; chamada com senha em texto não a grava | Pendente |
+| T11 | `ERPV.Core.Erros` (hierarquia EValidacao/ERegraNegocio/EIntegracao/EInfra + tradutor de mensagem amigável) e handler `Application.OnException` | Executor(Delphi) | SUG | P1 | RF-24, ADR-008 | 2.5 | T10 | T08 | Forçar exceção não tratada: MessageDlg "Ocorreu um erro inesperado. Os detalhes foram gravados no log." e stack/SQL só no log; EValidacao mostra o texto original | Pendente |
+| T12 | `ERPV.Dados.Conexao`: TFDConnection via INI, driver FB, helper de transação, mapeamento de falha para EInfra | Executor(Delphi) | OBR | P0 | ADR-002, RF-25 | 2.5 | T03, T09, T11 | - | App conecta ao banco criado por T03; banco offline ou senha errada => mensagem amigável sem SQL/caminho e detalhe no log | Pendente |
+| T13 | Composition root `src/App/ERPV.App.Root`: monta Config, Log, Conexão e (incrementalmente) repositórios/serviços, injetando por construtor | Executor(Delphi) | SUG | P0 | ADR-001 | 2 | T08, T09, T10, T11, T12 | - | App inicia via root; nenhuma unit de Negócio/UI referencia classe concreta de Dados/Integração (checar `uses`) | Pendente |
+
+Lote com 7 itens: fundação D1; T08, T09, T10 independentes entre si.
+
+### Lote 3 — Casca de UI, tokens e tema (D2)
+| ID | Tarefa | Dono | Tipo | Prio | Origem | Est.(h) | Depende | Par. | Critério de aceite | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| T14 | Form principal / shell UX §2.1: faixa de marca, navegação lateral (fallback: menu de barra), status bar em 3 áreas ("Financeiro: <BaseUrl>", estado, "Pendências: N" valor fixo 0 até T53), Sobre | Executor(UI) | SUG | P0 | UX §1/2.1 | 4 | T13, T68 | T15, T68 (início; fechamento após T68) | Shell abre com faixa, navegação e 3 áreas da status bar; sem a navegação lateral cai no menu de barra; status bar mostra URL do INI; navegável por teclado (Alt+letra); cores/tamanhos só de `ERPV.UI.Tokens` | Pendente |
+| T15 | `TFormBaseLista` e `TFormBaseEdicao` **[NOVO]** (Enter/Esc, botões padrão com papéis, TabOrder, Scaled, padrão visual UX §3.3) | Executor(UI) | SUG | P0 (MUST) | UX §3/§9, ADR-011 | 5 | T07, T68 | T14, T68 (início; fechamento após T68) | Form filho herda base e abre; Esc fecha, Enter aciona OK; botões nos 3 papéis via `EstilizarBotao`. **Não cortar sem aval do usuário**; telas T19/T20/T23/T24/T31/T32 herdam das bases | Pendente |
+| T68 | `ERPV.UI.Tokens` + `ERPV.UI.Tema` (`AplicarTema`, `ConfigurarGrade`, `EstilizarBotao`, `Notificar`) — ADR-011 | Executor(UI) | SUG | P0 (MUST) | UX §3/§8/§9, ADR-011 | 3.5 | T01, T07 | T14, T15 (início; ver Seção 6 item 10) | Skin aplicado; removendo os skins do `uses` o app abre sem erro (fallback nativo); form de teste com grade zebra, 3 papéis de botão e `Notificar` nos 4 tipos (Info=banner; Aviso/Erro/Pergunta=modal); skin efetivo anotado em `docs/ambiente-licencas.md`; contraste AA conferido; nenhuma cor fora dos tokens | Pendente |
+| T69 | Ícones: ~14 PNGs (16/24/32 px), licença MIT/ISC registrada; botões com ícone mantêm texto | Executor(UI) | SUG | P1 (SHOULD) | UX §3, ADR-011 | 2 | T68 | T14, T15 | Ícones carregam em botões/navegação/status bar; licença registrada em `docs/ambiente-licencas.md`; nenhum botão só com ícone | Pendente |
+
+### Lote 4 — Cadastro de Clientes (D2)
+| ID | Tarefa | Dono | Tipo | Prio | Origem | Est.(h) | Depende | Par. | Critério de aceite | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| T16 | `ERPV.Core.Validadores`: CPF, CNPJ (dígitos verificadores), e-mail | Executor(Delphi) | SUG | P1 | RF-02 | 2.5 | T07 | T17 | Casos: CPF 529.982.247-25 válido, 111.111.111-11 inválido, CNPJ válido/inválido, `a@b.com` válido, `a@b` inválido (tabela de casos anotada) | Pendente |
+| T17 | `ClienteRepository` FireDAC (`IClienteRepository`): incluir/alterar/excluir/obter, DataSet de lista com busca e filtro de inativos, existe-por-documento | Executor(Delphi) | OBR | P0 | RF-01, ADR-003/010 | 2.5 | T08, T12, T03 | T16 | Operações refletidas no banco; lista filtra inativos; SQL parametrizado (revisão de código) | Pendente |
+| T18 | `ClienteService`: obrigatórios (nome, CPF/CNPJ, e-mail), validação via T16, documento único, normalização (só dígitos) | Executor(Delphi) | OBR | P0 | RF-01/02/03, RN | 3 | T16, T17 | - | Salvar sem nome/CPF/e-mail => EValidacao indicando o campo; CPF inválido, e-mail malformado e CPF duplicado recusados; válido persiste | Pendente |
+| T19 | UI Lista de Clientes (busca, "Mostrar inativos", Novo/Editar/Excluir/Fechar, estados vazio/erro) | Executor(UI) | OBR | P0 | RF-01, UX 2.2/4.1 | 3 | T14, T15, T18 | T20 | Cabeçalho da página, chips de Situação (texto+cor), grade via `ConfigurarGrade`; busca filtra; vazio mostra "Nenhum registro. Use Novo."; erro com banner + "Tentar novamente" (§2.2); sem SQL no form | Pendente |
+| T20 | UI Edição de Cliente (modal, máscara CPF/CNPJ por tipo, validação visual ao sair do campo e ao Salvar, foco no 1º inválido) — inseparável: 1 tela + feedback visual do mesmo form | Executor(UI) | OBR | P0 | RF-01/02, UX 2.3/5 | 4 | T14, T15, T18 | T19 | Valida os casos de RF-01/02/03 na tela: coluna única, rótulo acima e erro abaixo com ícone + borda vermelha ("CPF inválido", "Documento já cadastrado"); foco visível de 2 px; botões nos papéis Primário/Secundário; Enter salva, Esc cancela; troca de tipo limpa máscara | Pendente |
+
+### Lote 5 — Cadastro de Produtos (D2; independente do Lote 4)
+| ID | Tarefa | Dono | Tipo | Prio | Origem | Est.(h) | Depende | Par. | Critério de aceite | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| T21 | `ProdutoRepository` (`IProdutoRepository`) | Executor(Delphi) | OBR | P0 | RF-05, ADR-010 | 1.5 | T08, T12, T03 | T16, T17 | CRUD no banco; DataSet de lista com filtro de ativos | Pendente |
+| T22 | `ProdutoService` (descrição/unidade obrigatórias, preço >= 0) | Executor(Delphi) | OBR | P0 | RF-05 | 2 | T21, T11 | - | Preço -1 ou descrição vazia recusados com mensagem; válido persiste | Pendente |
+| T23 | UI Lista de Produtos | Executor(UI) | OBR | P0 | RF-05, UX 2.2 | 2 | T14, T15, T22 | T24 | Igual a T19 para produtos (cabeçalho, chips de Situação, vazio, erro com banner + "Tentar novamente"); "Inativo" visível | Pendente |
+| T24 | UI Edição de Produto (cxCurrencyEdit preço) | Executor(UI) | OBR | P0 | RF-05, UX 2.3 | 2.5 | T14, T15, T22 | T23 | Preço em formato pt-BR na tela, gravado NUMERIC(15,2); validações de T22 exibidas no campo; coluna única, rótulo acima, erro abaixo com ícone, foco 2 px, papéis de botão | Pendente |
+
+### Lote 6 — Vendas: dados e regras (D3)
+| ID | Tarefa | Dono | Tipo | Prio | Origem | Est.(h) | Depende | Par. | Critério de aceite | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| T25 | `VendaRepository` (`IVendaRepository`) gravação/leitura: incluir/alterar/excluir mestre+itens numa transação, obter entidade, atualizar status/dataQuitacao/motivo — inseparável: mestre+itens na mesma transação | Executor(Delphi) | OBR | P0 | RF-07, ADR-002 | 4 | T08, T12 | T21 | Venda com 2 itens gravada de forma atômica; erro forçado no 2º item faz rollback do mestre; excluir apaga itens | Pendente |
+| T26 | `VendaRepository`: DataSet de lista (filtros status/cliente, nome do cliente, total) + consultas de existência (venda por cliente/produto) | Executor(Delphi) | OBR | P0 | RF-07, ADR-003 | 2 | T25 | T27 | Lista devolve vendas do seed inserido à mão; filtro por status funciona; existência retorna verdadeiro/falso corretos | Pendente |
+| T27 | `VendaService` CRUD + validações: >=1 item, qtd > 0, cliente ativo, produto ativo; nasce Pendente | Executor(Delphi) | OBR | P0 | RF-07/08, RN-01/03 | 3 | T25, T17, T21 | T26 | Cada violação recusada com motivo; venda válida grava status Pendente | Pendente |
+| T28 | `VendaService`: total = Σ(qtd × preço) recalculado e snapshot do preço do produto no item | Executor(Delphi) | SUG | P1 | RF-09/10, RN-04 | 2 | T27 | T29, T30 | Total calculado não aceita valor digitado; mudar preço do produto depois não altera itens gravados | Pendente |
+| T29 | `VendaService`: só Pendente é editável/excluível (lançar ERegraNegocio); CHECK de status como 2ª barreira | Executor(Delphi) | SUG | P1 | RF-11, RN-02 | 1.5 | T27 | T28, T30 | Tentar editar/excluir Quitada/Cancelada (status alterado via SQL manual no teste) é recusado | Pendente |
+| T30 | Regra "excluir = inativar" para cliente e produto com vendas (Services de T18/T22 chamam existência de T26) | Executor(Delphi) | SUG | P1 | RF-04/06, RN-05 | 2 | T18, T22, T26 | T28, T29 | Excluir cliente/produto com venda => inativa e informa; sem venda => exclui fisicamente | Pendente |
+
+### Lote 7 — Vendas: telas (D3)
+| ID | Tarefa | Dono | Tipo | Prio | Origem | Est.(h) | Depende | Par. | Critério de aceite | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| T31 | UI Lista de Vendas (filtro status/cliente, colunas, botões habilitados por status conforme UX 4.2, coluna "Sinc" reservada) | Executor(UI) | OBR | P0 | RF-07/11, UX 2.4/4.2 | 3.5 | T14, T15, T26, T29 | T32 | Lista mostra vendas; status como chip (texto+cor); valores monetários à direita; ícone "Sinc" reservado; botões habilitam conforme status; "Cancelar venda" só no menu de contexto e dentro da venda; vazio/erro conforme UX 4.1 | Pendente |
+| T32 | UI Venda mestre/detalhe (cliente ativo em lookup, grade de itens editável com produto ativo, qtd inteira, preço/subtotal/total somente leitura, banner e controles bloqueados se não Pendente) — inseparável: mestre e detalhe são a mesma tela | Executor(UI) | OBR | P0 | RF-07..11, UX 2.5 | 6.5 | T14, T15, T27, T28, T29 | T31 | Criar venda com 2 itens: total correto e em destaque; chip de status no cabeçalho; banner por status/fila; hierarquia de botões (primário/secundário/perigoso); salvar sem item recusado; abrir Quitada mostra somente leitura; preço não editável. Dividir na execução se estourar canário | Pendente |
+
+### Lote 8 — Cliente REST do Financeiro (D3; independente dos Lotes 6-7)
+| ID | Tarefa | Dono | Tipo | Prio | Origem | Est.(h) | Depende | Par. | Critério de aceite | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| T33 | `FinanceiroDTOs` + serialização/desserialização JSON (invariante de locale, ISO 8601) | Executor(Delphi) | OBR | P0 | RNF-05, ADR-004 | 2 | T08, T09 | - | JSON gerado tem `valorTotal` com ponto e 2 casas, ids como string, `itens[]` conforme contrato; parse de `Quitada` + `dataQuitacao` funciona com locale pt-BR ativo | Pendente |
+| T34 | `FinanceiroClient` base + POST `/api/vendas/quitacao`: THTTPClient, timeout do INI, ApiKey opcional, mapa para resultado tipado (Sucesso/Recusado/Indisponível/RespostaInvalida) | Executor(Delphi) | OBR | P0 | RF-12/13, ADR-004 | 4 | T33, T05, T11 | - | Contra o mock: ok => Sucesso; modo recusa => Recusado com mensagem (ou fallback "código HTTP xxx"); erro500 e timeout (10 s) => Indisponível sem travar além do timeout; servidor parado => Indisponível | Pendente |
+| T35 | `FinanceiroClient`: POST `/api/vendas/cancelamento` | Executor(Delphi) | OBR | P0 | RF-16 | 1.5 | T34 | T36 | Mock: ok => Cancelada; recusa/500 mapeados como em T34 | Pendente |
+| T36 | `FinanceiroClient`: GET `/api/vendas/{id}/status` | Executor(Delphi) | SUG | P1 | RF-18 | 1.5 | T34 | T35 | Mock devolve Quitada/Pendente e o cliente converte para enum; status desconhecido => RespostaInvalida | Pendente |
+
+### Lote 9 — Fluxo Confirmar venda (D4)
+| ID | Tarefa | Dono | Tipo | Prio | Origem | Est.(h) | Depende | Par. | Critério de aceite | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| T37 | `FilaRepository` (`IFilaRepository`): enfileirar (1 PENDENTE por venda+tipo, senão incrementa tentativas), listar, marcar concluído, registrar falha, contar pendências, existe-pendência-por-venda | Executor(Delphi) | SUG | P1 | RF-14/23, ADR-005 | 3 | T08, T12 | T38 | Enfileirar 2x a mesma venda+tipo => 1 linha com tentativas 2; CONCLUIDO seta `CONCLUIDO_EM`; `ULTIMO_ERRO` truncado em 500 | Pendente |
+| T38 | `QuitacaoService.Confirmar` caminho feliz: exige Pendente, POST, 200 Quitada => commit curto de status+dataQuitacao (sem transação durante HTTP); ainda sem PDF/e-mail | Executor(Delphi) | OBR | P0 | RF-12/13, ADR-006 | 3 | T34, T25, T29 | T37 | Contra o mock ok: venda vira Quitada com dataQuitacao no banco; venda não Pendente é recusada antes do POST | Pendente |
+| T39 | Confirmar: recusa 4xx => mantém Pendente, devolve mensagem, não enfileira | Executor(Delphi) | SUG | P1 | RF-15, RN-08 | 2 | T38 | T40 | Mock modo recusa: venda continua Pendente, nada na fila, mensagem do Financeiro (ou fallback com código HTTP) disponível ao chamador | Pendente |
+| T40 | Confirmar: 5xx/timeout/rede => mantém Pendente e enfileira QUITACAO | Executor(Delphi) | SUG | P1 | RF-14, RN-07/08 | 2 | T38, T37 | T39 | Mock erro500/timeout: venda Pendente, 1 item QUITACAO PENDENTE com `ULTIMO_ERRO`; app não trava além do timeout | Pendente |
+| T41 | Confirmar: reconciliação por GET status após timeout/5xx antes de enfileirar; se Quitada conclui local sem repostar | Executor(Delphi) | SUG | P1 | RF-18, ADR-005 | 2.5 | T40, T36 | - | Mock em timeout mas GET devolve Quitada: venda vira Quitada, sem item na fila e sem segundo POST (ver log do mock) | Pendente |
+| T42 | UI Confirmar na lista/edição de venda: pergunta de confirmação, cursor de espera + botões desabilitados + "Aguardando Financeiro...", mensagens de desfecho UX 4.3 (sucesso, indisponível, recusa, resposta inválida, erro inesperado) | Executor(UI) | OBR | P0 | RF-12..15, UX 4.3 | 3.5 | T32, T38, T39, T40, T68 | - | Executar 4 cenários no mock (ok, recusa, 500, timeout) e ver texto literal de UX 4.3 via `Notificar` (Info=banner; Aviso/Erro/Pergunta=modal; sem `MessageDlg` direto); UI volta a ficar utilizável após a resposta | Pendente |
+
+### Lote 10 — Cancelamento (D4)
+| ID | Tarefa | Dono | Tipo | Prio | Origem | Est.(h) | Depende | Par. | Critério de aceite | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| T43 | `QuitacaoService.Cancelar`: só Pendente; POST cancelamento; Cancelada => grava status+motivo; 4xx => mantém e informa; 5xx/timeout => fila CANCELAMENTO | Executor(Delphi) | OBR | P0 | RF-16/17, RN-02/08 | 3 | T35, T37, T25, T29 | - | Mock ok: venda Cancelada com motivo; recusa: Pendente sem fila; 500: fila CANCELAMENTO; venda Quitada não envia POST | Pendente |
+| T44 | UI diálogo de cancelamento (motivo opcional, confirmação) + mensagens UX 4.3 | Executor(UI) | OBR | P0 | RF-16, UX 2.6 | 2.5 | T32, T43, T68 | - | Cancelar venda Pendente pelo diálogo (papel Perigoso); mensagens de UX 4.3 literais via `Notificar`; botão indisponível em Quitada/Cancelada | Pendente |
+
+### Lote 11 — Relatório e PDF (D4)
+| ID | Tarefa | Dono | Tipo | Prio | Origem | Est.(h) | Depende | Par. | Critério de aceite | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| T45 | `VendaRepository`: DataSet do relatório (venda + cliente + itens + totais) | Executor(Delphi) | OBR | P0 | RF-19 | 2 | T25, T03 | T46 (layout pode usar dados fixos) | DataSet devolve nome, documento, itens e total idênticos ao banco para uma venda | Pendente |
+| T46 | Layout ReportBuilder "Confirmação de Pedido" (cabeçalho, cliente, itens, total, status) | Executor(UI) | OBR | P0 | RF-19 | 5 | T45, T67 | - | Preview mostra dados iguais ao registro (conferência com o banco); leitura clara, sem estouro de coluna | Pendente |
+| T47 | `IRelatorioPedido` impl.: gera PDF em pasta temp configurada e devolve caminho; limpeza do arquivo | Executor(Delphi) | SUG | P0 | RF-20, ADR-007 | 2.5 | T46, T09 | - | Arquivo PDF legível é criado; falha de escrita => EInfra amigável; remoção funciona | Pendente |
+
+### Lote 12 — E-mail pós-quitação (D4)
+| ID | Tarefa | Dono | Tipo | Prio | Origem | Est.(h) | Depende | Par. | Critério de aceite | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| T48 | `EmailSender` (`IEmailSender`) com Indy `TIdSMTP`: host/porta/TLS/credenciais do INI e env, anexo PDF, resultado tipado (sem exceção para falha esperada) | Executor(Delphi) | OBR | P0 | RF-21, ADR-007 | 3.5 | T02, T09 | T47 | Envio ao Mailtrap com anexo chega; senha errada => resultado Falha sem crash e sem senha no log | Pendente |
+| T49 | Pós-quitação no `QuitacaoService`: após commit local (T38) gera PDF, envia e-mail ao cliente, apaga PDF no sucesso; falha => venda continua Quitada + fila EMAIL; nunca envia antes da quitação | Executor(Delphi) | OBR | P0 | RF-13/21/22, RN-06, INT-04, ADR-006 | 4 | T38, T47, T48, T37, T68 | - | Mock ok: e-mail chega com PDF; SMTP com senha errada: venda Quitada + item EMAIL PENDENTE + mensagem UX 4.3 literal exibida via `Notificar` (Aviso, modal); recusa 4xx/500: nenhum e-mail enviado. O Service só devolve resultado tipado; a exibição é da UI | Pendente |
+
+### Lote 13 — Fila e pendências (D4 fim/D5 manhã)
+| ID | Tarefa | Dono | Tipo | Prio | Origem | Est.(h) | Depende | Par. | Critério de aceite | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| T50 | `FilaService.Reenviar` QUITACAO/CANCELAMENTO: GET status antes de repostar (Quitada => conclui local), sucesso => CONCLUIDO, falha => tentativas+1 e `ULTIMO_ERRO` | Executor(Delphi) | SUG | P1 | RF-23, ADR-005 | 3 | T37, T36, T38, T43 | T51 | Com mock erro500 depois `ok`: item vira CONCLUIDO e venda muda de status; falha mantém PENDENTE com tentativas incrementadas | Pendente |
+| T51 | `FilaService.Reenviar` EMAIL: regenera PDF do banco, reenvia, limpa arquivo | Executor(Delphi) | SUG | P1 | RF-22/23, ADR-005 | 2.5 | T37, T47, T48 | T50 | SMTP corrigido => e-mail chega e item CONCLUIDO; falha mantém PENDENTE com erro registrado | Pendente |
+| T52 | UI Pendências (grade, "Somente pendentes", Atualizar, Reenviar selecionado, mensagem-resumo, vazio "Nenhuma pendência.") | Executor(UI) | SUG | P1 | RF-23, UX 2.7 | 3 | T14, T15, T50, T51, T68 | T53 | Reenviar item do cenário 500 conclui ("Item concluído." via `Notificar` Info); falha mostra "Ainda não foi possível: <erro>" via `Notificar`; item concluído some do filtro; vazio e erro com banner + "Tentar novamente" | Pendente |
+| T53 | Contador "Pendências: N" (clicável) na status bar, indicador "Sinc" na lista de vendas e bloqueio de Editar/Confirmar/Cancelar com item QUITACAO/CANCELAMENTO pendente (UX 4.2) | Executor(UI) | SUG | P1 | ADR-005, INT-03, R-11 | 3 | T37, T14, T31, T42, T44 | T52 | Após falha no mock, chip com N na navegação e ícone na status bar (sempre com texto) sobem e "(!)" aparece na lista; botões bloqueados; após reenvio ok, contador desce e botões liberam | Pendente |
+
+### Lote 14 — Integração real com o Financeiro C# (D4 tarde/D5)
+| ID | Tarefa | Dono | Tipo | Prio | Origem | Est.(h) | Depende | Par. | Critério de aceite | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| T54 | Smoke ponta a ponta contra o C# real (quitação, cancelamento, GET status; INI aponta para a URL real); registrar divergências | Executor(Delphi) | OBR | P0 | RF-12/13/16, R-03 | 4 | T38..T44 (e T06 respondida) | - | Fluxo confirmar e cancelar funciona contra o C#; divergências listadas em `docs/contrato-api-financeiro.md` §mudanças; se o C# não estiver disponível: registrar em BLOCKERS e demonstrar com mock | Pendente |
+| T55 | Ajustes de mapeamento de erro/códigos/`X-Api-Key` conforme resposta do C# (DEC-08/09/v1.1) e registro da resposta no contrato | Executor(Delphi) | OBR | P0 | DEC-08/09, R-03 | 2 | T54 | - | Recusa e indisponibilidade reais tratadas como no mock; contrato atualizado com data e status da confirmação | Pendente |
+
+### Lote 15 — Documentação (D3-D5, rascunhos antes do freeze)
+| ID | Tarefa | Dono | Tipo | Prio | Origem | Est.(h) | Depende | Par. | Critério de aceite | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| T56 | `docs/roteiro-testes-manuais.md` enxuto (cenários do SDD §7: CRUD/validações, venda, status, quitação+e-mail+PDF, recusa/500/timeout->fila->Reenviar, SMTP falho, reconciliação, cancelamento, INI ausente, teclado, instalação limpa) | Executor(Docs) | SUG | P1 | SDD §7, R-09 | 3 | T12 (cenários) | T57, T58 | Cada cenário tem passos, dado de entrada e resultado esperado verificáveis | Pendente |
+| T57 | `README.md`: instalação (FB3, restore `gbak`), INI, dependências/DLLs, mock, limitações do trial (T01/T67), nota LGPD (finalidade/retenção), arquitetura resumida | Executor(Docs) | OBR | P0 | RF-25, SDD §7 | 2.5 | T01, T09, T67 | T56, T58 | Lido por alguém sem contexto, cobre os passos da instalação; validado de fato em T64 | Pendente |
+| T58 | `docs/decisoes.md`: resumo apontando para os ADRs 001-010 + decisões DEC-xx adotadas | Executor(Docs) | OBR | P0 | RNF-06 | 2 | - | T56, T57 | Todos os 10 ADRs listados com 1 linha e link; nenhum texto duplicado dos ADRs | Pendente |
+
+### Lote 16 — Aceite, build e pacote (D5)
+| ID | Tarefa | Dono | Tipo | Prio | Origem | Est.(h) | Depende | Par. | Critério de aceite | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| T59 | Executar o roteiro completo (mock e, se possível, C# real) e anexar evidências (prints, PDF gerado, e-mail recebido) em `docs/evidencias/` | Executor(Docs) | SUG | P1 | R-09 | 4 | T56, T55 | T60 | Todos os cenários marcados OK/falha com evidência; falhas viram tarefa ou nota | Pendente |
+| T60 | Revisão de acessibilidade: navegar todas as telas só por teclado, TabOrder, Enter/Esc, foco no campo inválido, DPI 125% | Executor(UI) | OBR | P0 | UX §5 | 2.5 | T52, T44 | T59 | Checklist de UX §5 marcado sem pendência crítica; validação em DPI 100% e 125%; contraste e foco visível conferidos (§5/§3.1); correções feitas ou registradas | Pendente |
+| T61 | Build release (sem runtime packages), pasta `bin/` com exe + `fbclient.dll` + DLLs OpenSSL + `erpvendas.ini.example` | Executor(Build) | OBR | P0 | RF-25, SDD §7 | 2.5 | T59, T60 | T62, T63 | Exe roda em máquina sem IDE; arquitetura (32/64) coerente entre exe, `fbclient.dll` e OpenSSL | Pendente |
+| T62 | Gerar `db/ERPVENDAS.FBK` (DDL + seed) e validar restore com `gbak` em banco novo | Executor(DB) | OBR | P0 | RF-25 | 1.5 | T03, T04 (schema congelado) | T61, T63 | `gbak -c` restaura sem erro e o app conecta ao banco restaurado | Pendente |
+| T63 | Varredura de segredos/licenças no repo e no pacote (grep de senha/host/token/chave DevExpress/RB, `.ini` real, logs, PDFs) | Executor(Build) | OBR | P0 | RNF-08, SDD §7 | 1 | T61 | T61, T62 | Zero ocorrências; `.gitignore` cobre INI/log/PDF; resultado anotado | Pendente |
+| T64 | Teste de instalação em pasta/máquina limpa seguindo só o README (FB3 -> restore -> INI -> executar -> fluxo quitação) | Executor(Build) | OBR | P0 | RF-25 | 2.5 | T61, T62, T63, T57 | - | Fluxo principal completa sem ajuda; falhas corrigidas no README/pacote e repetidas | Pendente |
+
+### Lote 17 — Acabamento (P2, cortável primeiro)
+| ID | Tarefa | Dono | Tipo | Prio | Origem | Est.(h) | Depende | Par. | Critério de aceite | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| T65 | "Reenviar todos" na tela de Pendências | Executor(UI) | SUG | P2 | UX 2.7 | 1.5 | T52 | T66 | Botão processa todos e mostra resumo | Pendente |
+| T66 | Acabamento de UI cortável: atalhos extras, máscaras adicionais, ícone de check de validação (o "skin único" foi para T68) | Executor(UI) | SUG | P2 | VISAO T20 | 5 | T60 | T65 | Extras aplicados sem quebrar layouts em 1366x768 | Pendente |
+
+Total: 69 tarefas (T01..T69), 17 lotes, ~184,5 h-pessoa (P0+P1 ~178 h; P2 ~6,5 h). Rodada 2 (UX v1.1, ADR-011): +10,5 h no total, sendo +8,5 h MUST (T68 3,5; T15 +2; T14 +1; T01, T20, T32, T60 +0,5 cada) e +2 h SHOULD (T69). Fora de escopo (cortes assumidos): reprocessamento automático da fila, seed extenso, "Visualizar relatório" (fora do PRD).
+
+## 4. Dependências e Ordem de Execução
+
+**Alinhamento ao cronograma (VISAO §6):**
+- D1: Lotes 1 e 2. D2: Lotes 3, 4, 5 (4 e 5 independentes entre si). D3: Lotes 6, 7, 8 (8 independente de 6/7). D4: Lotes 9, 10, 11, 12 (freeze no fim). D5: Lotes 13 (concluir, ver Seção 6 item 3), 14, 15, 16. Lote 15 (rascunhos) roda ao longo da semana; Lote 17 só com folga.
+
+**Independência dentro de cada lote (rodadas de instâncias paralelas do Executor):**
+| Lote | Rodada 1 | Rodada 2 | Rodada 3 |
+|---|---|---|---|
+| 1 | T01, T05, T06 | T02, T03, T67 | T04 |
+| 2 | T07 | T08, T09, T10 | T11, depois T12, depois T13 |
+| 3 | T68 (T14, T15 iniciam em paralelo contra a API de tokens/tema e fecham após T68) | T14, T15, T69 | - |
+| 4 | T16, T17 | T18 | T19, T20 |
+| 5 | T21 | T22 | T23, T24 |
+| 6 | T25 | T26, T27 | T28, T29, T30 |
+| 7 | T31, T32 | - | - |
+| 8 | T33 | T34 | T35, T36 |
+| 9 | T37, T38 | T39, T40 | T41, T42 |
+| 10 | T43 | T44 | - |
+| 11 | T45 (T46 pode começar com dados fixos) | T46 | T47 |
+| 12 | T48 | T49 (T48 ∥ T47 do Lote 11) | - |
+| 13 | T50, T51 | T52, T53 | - |
+| 14 | T54 | T55 | - |
+| 15 | T56, T57, T58 | - | - |
+| 16 | T59, T60 | T61, T62 | T63, depois T64 |
+| 17 | T65, T66 | - | - |
+Entre lotes: L4 ∥ L5; L8 ∥ L6/L7; L11 (T45/T46) ∥ L9/L10; L12 T48 ∥ L11; L15 ∥ todos. Só há um desenvolvedor: "paralelo" significa que o /executar pode disparar várias instâncias, mas o build/IDE e o banco de dev são recursos compartilhados; evitar duas instâncias editando o mesmo `.dpr/.dproj` (T07 fixa o esqueleto; `uses` do `.dpr` é ponto de conflito, tratar por merge manual).
+
+**Caminho crítico (pior caso):** T01 -> T03 -> T07 -> T08 -> T11 -> T12 -> T13 -> T14 (fecha após T68, que corre em paralelo com T08-T13 e não alonga o caminho) -> T15 -> T18 -> T27 (via T25/T17/T21) -> T28/T29 -> T32 -> T42 (requer T38 <- T34 <- T33 <- T05) -> T47 -> T48 -> T49 -> T50/T51 -> T52/T53 -> T54 -> T55 -> T59 -> T61 -> T64. Extensão em horas ~ 98 h (era ~95 h; +T01 0,5, T14 +1, T32 +0,5, T60 +0,5, T15 +2 entra no caminho); e o C# real (T54) é dependência externa fora do controle.
+
+**Prioridade de corte (ordem, se o prazo apertar):**
+1. T66 (acabamento), T65 (Reenviar todos) — já assumidos.
+   Seed extenso (T04 reduzido a 1 cliente e 1 produto) — já assumido.
+2. SHOULD visual: T69 (ícones), navegação lateral do shell (T14 cai no menu de barra) e chips de status (viram texto + cor simples).
+3. T53 parcial: manter só o bloqueio de botões; cortar indicador "Sinc", chip N e ícone da status bar.
+4. Sofisticação do log em T10; depois T41 (reconciliação GET status — degrada para fila direta, registrar como dívida).
+5. T56/T59 reduzidos aos fluxos principais.
+6. T28/T29/T30 (SUG de regra) — nunca abaixo de RN-01 (nasce Pendente) e integridade de CHECK.
+**T68 e T15 não se cortam sem aval do usuário (MUST visual, ADR-011).**
+**Nunca cortar:** T01, T03, T07-T09, T12-T15, T68, T17-T25, T27, T31-T35, T38, T42-T49, T54, T55, T57, T58, T60-T64 (P0).
+
+## 5. Riscos de Prazo
+
+| ID | Risco | Sev. | Ação |
+|---|---|---|---|
+| RP-1 | Soma ~184,5 h-pessoa (era ~174 h; +8,5 h MUST e +2 h SHOULD do ADR-011) contra ~30-45 h efetivas de um dev em 5 dias; só fecha se as instâncias do Executor produzirem o código e o dev apenas revisar/compilar/aceitar | Alta | Sinalizado na Seção 6 item 1 (decisão do usuário mantida em aberto); corte na ordem da Seção 4; D4 congela P0 |
+| RP-2 | T01/DEC-02: versão do Delphi/DevExpress/RB muda componentes e sintaxe permitida | Média | Feito no início do D1; ajustar T14, T20, T46 |
+| RP-3 | Spikes S1/S2 falham (TLS, marca d'água/PDF) | Média | Fallback sem TLS/Mailtrap; documentar; T46/T48 re-estimadas |
+| RP-4 | C# indisponível ou divergente (T54/T55) | Alta | Mock; contrato v1.1 enviado no D1 (T06); evidência com mock |
+| RP-5 | Recursos compartilhados (IDE, banco, `.dpr`) limitam o paralelismo real | Média | Rodadas conforme Seção 4; T07 fecha o esqueleto |
+| RP-6 | T32 (6,5 h), T46 (5 h) e T15 (5 h) são as maiores tarefas; qualquer surpresa de componente DevExpress/RB as estoura | Média | Dividir na execução se o Executor sinalizar canário de contexto |
+| RP-7 | Skin ausente ou limitado no trial DevExpress | Média | T01 lista os skins e registra o escolhido; T68 tem fallback nativo testado; aparência degrada, nada quebra |
+| RP-8 | DPI 125% quebra layouts (tokens em pixel, `Scaled`) | Média | Tokens em unidades escaláveis; validação em 100% e 125% em T60 |
+| RP-9 | Navegação lateral instável em alguma versão dos componentes | Média | Fallback para menu de barra em T14; a navegação lateral é SHOULD (corte nº 2) |
+
+## 6. Lacunas Sinalizadas
+
+1. **Capacidade x prazo (sinalizar ao Gestor/usuário):** estimativa total ~184,5 h (Rodada 2 incluída) contra prazo de 5 dias. Não decidi cortar escopo (não é minha decisão); a Seção 4 traz a ordem de corte. Decisão pedida ao usuário: aceitar o risco assumindo produção majoritária pelas instâncias Executor, ou cortar mais P1.
+2. **DEC-02 aberta:** T01 fecha. Enquanto isso, sintaxe 10.3+ (Seção 1). Detalhe, sem ADR novo.
+3. **Fila (P1) fica após o freeze do VISAO §6 (D5):** ADR-005/UX 4.2 exigem enfileirar no D4 (T37/T40/T43) e Reenviar/Pendências ficam no fim do D4-D5 manhã. Decisão de detalhe: Reenviar (T50-T53) é P1 e conta como parte do P0 funcional para a demonstração; o freeze proíbe funcionalidade nova, não a conclusão dos itens já planejados. Se o usuário discordar, mover para D4 e cortar por T53/T56.
+4. **Bloqueio de edição por fila pendente (UX 4.2):** aplicado na UI e no Service em T53; T29 só cobre status. Detalhe de implementação: `VendaService` consulta `IFilaRepository.ExistePendenciaPorVenda` (já prevista em T37) — sem nova interface (ADR-010 mantido, só novos métodos).
+5. **Métodos adicionais nas interfaces (existência por cliente/produto, contagem de pendências, DataSet do relatório):** detalhe de assinatura em T08; não é decisão estrutural, sem novo ADR.
+6. **"Visualizar relatório" (UX §7):** fora do PRD; não há tarefa. Decisão do Gestor se sobrar tempo.
+7. **RF-15/RF-17 dependem de DEC-08/09 no C#:** implementados com fallback tolerante (T34/T39/T43); confirmação em T55.
+8. **Envio do contrato v1.1 ao C#:** T06 prepara o texto; o envio é ação humana do usuário até D1 (senão DEC-08/09 confirmadas só em 23/09).
+10. **T68 x T14/T15 (Rodada 2):** o pedido dá T68 como paralela a T14/T15 e também como dependência deles. Decisão de detalhe: T14/T15 começam junto com T68 contra a API combinada (`AplicarTema`, `ConfigurarGrade`, `EstilizarBotao`, `Notificar`) e só fecham após T68 concluída.
+11. **Estimativa MUST +8,5 h (esperado ~+7 h) e SHOULD +2 h (esperado ~+5 h):** somei os ajustes explícitos de cada tarefa; a diferença no MUST vem dos +0,5 h de T01, T20, T32 e T60. Sinalizado, sem cortar.
+9. **Nenhuma lacuna estrutural** no SDD/UX-SPEC exigiu novo ADR ou BLOCKER.
+
+**Inseparabilidades documentadas (regra de não-mistura):** T20 (tela de edição + feedback visual do mesmo form); T25 (mestre+itens na mesma transação); T32 (mestre/detalhe é uma tela).
+
+**Autocheck de granularidade (divisões automáticas, antes -> depois):**
+- CRUD Clientes (1 tarefa VISAO T05) -> T16 validadores, T17 repositório, T18 serviço, T19 lista, T20 edição (mistura tela+regra+SQL).
+- CRUD Produtos (T06) -> T21, T22, T23, T24.
+- CRUD Vendas (T07) -> T25, T26 (SQL), T27, T28, T29, T30 (regras distintas RF-08/09/10/11/04-06), T31, T32 (2 telas).
+- Camada de dados (T04) -> repositórios por entidade em T12, T17, T21, T25/T26, T37, T45.
+- DDL+seed+esqueleto (T02) -> T03, T04, T07, T08, T13 (SQL x código x contratos).
+- Exceções + log (T13) -> T10, T11.
+- Cliente HTTP (T08) -> T33, T34, T35, T36 (um endpoint por tarefa).
+- Confirmar/Cancelar (T09) -> T38, T39, T40, T41, T42, T43, T44 (uma regra/desfecho por tarefa; canário de contexto).
+- Relatório+PDF (T10/T11) -> T45, T46, T47.
+- SMTP (T12) -> T47/T48 separados de T49 (integração no fluxo).
+- Fila (T15) -> T37, T50, T51, T52, T53.
+- README/roteiro/decisões (T18) -> T56, T57, T58, T59.
+- Build/pacote (T19) -> T61, T62, T63, T64.
+- Ambiente (T01) -> T01 + spikes T02/T67 separados por incerteza alta.
+- Rodada 2 (reroda do autocheck): T68 (tokens+tema, 3,5 h) e T69 (ícones, 2 h) já nascem separados por tema/ícones; T15 (5 h) e T32 (6,5 h) ficam no limite de ~1 dia: T15 é um único par de bases de form (inseparável), T32 tem gatilho de divisão na execução (mestre x grade de itens) se estourar o canário. Nenhuma divisão automática adicional.
+- Nenhuma tarefa restante estimada acima de 6,5 h; nenhuma prevista acima de ~300k tokens de contexto.

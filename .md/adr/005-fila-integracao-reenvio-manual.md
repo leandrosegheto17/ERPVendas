@@ -1,0 +1,7 @@
+# ADR-005 — Fila FILA_INTEGRACAO com reenvio manual e reconciliação por GET /status
+
+- Status: Accepted (proposta VISAO adotada, escopo reduzido)
+- Contexto: falhas do Financeiro/SMTP não podem travar nem perder trabalho (RN-07). Corte já assumido: sem reprocessamento automático.
+- Alternativas: sem fila (usuário refaz); worker em background (fora do prazo/risco de concorrência).
+- Decisão: tabela `FILA_INTEGRACAO` (QUITACAO | CANCELAMENTO | EMAIL; PENDENTE | CONCLUIDO). Regras: (1) enfileira só em indisponibilidade (5xx/timeout) ou falha de e-mail; recusa 4xx não enfileira (RN-08); (2) no máximo 1 item PENDENTE por (venda, tipo) — se já existir, incrementa tentativas em vez de duplicar; (3) "Reenviar" processa item a item, no thread da UI: para QUITACAO faz antes `GET /status` — Quitada => conclui local sem repostar (RF-18); Pendente => repete POST; (4) sucesso marca CONCLUIDO + `CONCLUIDO_EM`, falha atualiza `ULTIMO_ERRO` (truncado, sem dados pessoais) e `TENTATIVAS`; (5) EMAIL reprocessado regenera o PDF a partir do banco (PDF não é guardado em BLOB) e reenvia; (6) `PROXIMA_TENTATIVA` mantida no schema mas não usada nesta fase. Enquanto houver QUITACAO/CANCELAMENTO pendente para a venda, Confirmar/Cancelar da mesma venda ficam desabilitados (evita corrida) e a grade de vendas mostra o indicador "sincronização pendente" derivado da fila (INT-03).
+- Consequências: (+) baixo custo e comportamento previsível; (-) sem auto-retry: usuário precisa abrir Pendências (mitigado por contador no menu principal/status bar).

@@ -1,0 +1,7 @@
+# ADR-001 — Arquitetura em 3 camadas enxuta com composition root
+
+- Status: Accepted (2026-09-21) — trecho sobre repositórios superseded by ADR-010 (interfaces de repositório mantidas)
+- Contexto: VISAO-PRODUTO propõe UI/Negócio/Dados + Domínio com interfaces para tudo (7 interfaces), pastas por camada e DI manual. Critério de avaliação pesa separação de camadas; prazo é de 5 dias sem folga; não há testes automatizados.
+- Alternativas: (A) tudo no form (RAD puro) — rejeitada, reprova no critério de boas práticas; (B) camadas completas com interface para todo repositório — custo alto sem retorno (sem testes automáticos); (C) camadas com interface só nas fronteiras externas e que precisam de substituição (Financeiro, e-mail, relatório).
+- Decisão: **C**. Camadas UI -> Negócio (Services) -> Dados/Integração; Domínio (entidades/enums/exceções/interfaces de fronteira) sem VCL/FireDAC. Interfaces apenas: `IFinanceiroGateway`, `IEmailSender`, `IRelatorioPedido`. Repositórios são classes concretas (FireDAC) injetadas por construtor. DI manual em `App` (composition root). Forms sem SQL e sem HTTP. Unit scopes `ERPV.<Camada>.<Nome>`.
+- Consequências: (+) menos units/boilerplate (~-8 units); mock do Financeiro e falha de SMTP continuam substituíveis; (-) Negócio conhece a API dos repositórios concretos (aceito, dívida técnica consciente; trocar de banco não é requisito). Diverge de VISAO-PRODUTO §2 (interfaces de repositório).
