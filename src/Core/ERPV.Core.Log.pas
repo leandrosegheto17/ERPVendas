@@ -133,6 +133,9 @@ type
 
 implementation
 
+uses
+  System.IOUtils;
+
 { TLogger }
 
 constructor TLogger.Create(const APastaLog: string);
