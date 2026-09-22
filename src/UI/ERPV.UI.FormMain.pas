@@ -1,4 +1,4 @@
-unit ERPV.UI.FormMain;
+﻿unit ERPV.UI.FormMain;
 
 {
   Placeholder do form principal (T07 — esqueleto do projeto).
@@ -35,3 +35,5 @@ implementation
 {$R *.dfm}
 
 end.
+
+

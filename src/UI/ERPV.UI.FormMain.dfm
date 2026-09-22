@@ -10,8 +10,6 @@ object FormMain: TFormMain
   Font.Height = -12
   Font.Name = 'Segoe UI'
   Font.Style = []
-  OldCreateOrder = False
   Position = poScreenCenter
-  Scaled = True
   TextHeight = 15
 end
