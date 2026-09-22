@@ -1,0 +1,50 @@
+; erpvendas.ini.example
+; -----------------------------------------------------------------------
+; Modelo de configuracao do ERP Vendas. Copie este arquivo para a pasta do
+; executavel com o nome "erpvendas.ini" e ajuste os valores para o seu
+; ambiente. NUNCA versione o "erpvendas.ini" real (ele esta no .gitignore) -
+; apenas este .example, com dados ficticios, fica no repositorio.
+;
+; Segredos preferenciais por variavel de ambiente (prioridade sobre este
+; arquivo, ver ERPV.Core.Config / ADR-007/008):
+;   ERPV_BANCO_SENHA          -> senha de [Banco]
+;   ERPV_SMTP_PASSWORD        -> senha de [SMTP]
+;   ERPV_FINANCEIRO_APIKEY    -> ApiKey de [Financeiro]
+; Se a variavel de ambiente correspondente estiver definida, o valor abaixo
+; e ignorado.
+; -----------------------------------------------------------------------
+
+[Banco]
+; Caminho/alias do banco Firebird (.FDB). Exemplo local de desenvolvimento.
+Caminho=C:\ERPVendas\dados\ERPVENDAS.FDB
+Usuario=SYSDBA
+; Senha ficticia - use ERPV_BANCO_SENHA em ambientes reais.
+Senha=senha_ficticia_dev
+
+[Financeiro]
+; URL base do sistema Financeiro (C#). Ver docs/contrato-api-financeiro.md.
+BaseUrl=http://localhost:5000
+; Timeout de conexao/resposta, EM SEGUNDOS (convertido para milissegundos
+; internamente antes de ser usado no THTTPClient - ver ERPV.Core.Config).
+TimeoutSegundos=10
+; Chave opcional do header X-Api-Key. Vazio = nao envia o header (DEC-07).
+; Use ERPV_FINANCEIRO_APIKEY em ambientes que exigirem a chave.
+ApiKey=
+
+[SMTP]
+; Exemplo de caixa de teste (Mailtrap/Ethereal) - nunca um servidor real aqui.
+Host=sandbox.smtp.mailtrap.io
+Porta=587
+Usuario=usuario_ficticio_mailtrap
+; Senha ficticia - use ERPV_SMTP_PASSWORD em ambientes reais (ADR-007).
+Senha=senha_ficticia_smtp
+UsaTLS=1
+
+[Relatorio]
+; Pasta onde o PDF do pedido/quitacao e gerado temporariamente antes do
+; anexo no e-mail (T47). Precisa existir e ter permissao de escrita.
+PastaPdfTemp=C:\ERPVendas\temp\pdf
+
+[Log]
+; Pasta onde os arquivos de log diario sao gravados (T10, ADR-008).
+Pasta=C:\ERPVendas\logs

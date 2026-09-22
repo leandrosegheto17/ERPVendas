@@ -44,7 +44,7 @@
              units nao sao referenciadas via "in" no .dpr (exceto o form
              principal), entao o compilador precisa achar cada pasta de
              camada por aqui quando outra unit as citar em "uses". -->
-        <DCC_UnitSearchPath>src\App;src\Core;src\Dominio\Contratos;src\Negocio;src\Dados;src\Integracao;src\Relatorios;src\UI;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>src\App;src\Core;src\Dominio\Contratos;src\Dominio\Entidades;src\Negocio;src\Dados;src\Integracao;src\Relatorios;src\UI;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <VerInfo_Keys>CompanyName=;FileDescription=ERP Vendas;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=ERP Vendas;ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
         <DCC_Namespace>Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;System;Xml;Data;Datasnap;Web;Soap;$(DCC_Namespace)</DCC_Namespace>
         <VerInfo_Locale>1046</VerInfo_Locale>
