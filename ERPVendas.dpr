@@ -1,4 +1,4 @@
-program ERPVendas;
+﻿program ERPVendas;
 
 {
   Esqueleto do projeto (T07, Lote 2). Plataforma-alvo: Win32 (fixada em

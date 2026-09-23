@@ -30,25 +30,28 @@ unit ERPV.Core.Config;
     do ADR. Se o Coordenador preferir nomes diferentes, e so ajustar as
     constantes abaixo.
   - Arquivo INI ausente, ou faltando secao/chave obrigatoria: a classe lanca
-    EConfiguracao (heranca de Exception) com mensagem amigavel, sem crash nao
-    tratado. O composition root (T13) deve capturar EConfiguracao, mostrar a
-    mensagem ao usuario e encerrar a aplicacao de forma controlada. Quando
-    ERPV.Core.Erros (T11) existir, EConfiguracao pode passar a herdar de
-    EInfra em vez de Exception; por ora fica como Exception simples, decisao
-    documentada aqui para T11 ajustar.
+    EConfiguracao com mensagem amigavel, sem crash nao tratado. O composition
+    root (T13) deve capturar EConfiguracao, mostrar a mensagem ao usuario e
+    encerrar a aplicacao de forma controlada.
+  - Atualizacao feita em T11: agora que ERPV.Core.Erros existe, EConfiguracao
+    passa a herdar de EInfra (falha de configuracao e, na pratica, uma falha
+    de infraestrutura) em vez de Exception puro. Mudanca de baixo risco: a
+    API publica de EConfiguracao (construtor, mensagem) nao muda, so o
+    ancestral - decisao ja prevista/documentada aqui em T09 para T11 ajustar.
 }
 
 interface
 
 uses
   System.SysUtils,
-  System.IniFiles;
+  System.IniFiles,
+  ERPV.Core.Erros;
 
 type
   /// <summary>Erro de configuracao: INI ausente, invalido ou faltando secao/
-  /// chave obrigatoria. Ver nota de decisao no cabecalho desta unit sobre a
-  /// futura integracao com a hierarquia de excecoes de T11 (EInfra).</summary>
-  EConfiguracao = class(Exception);
+  /// chave obrigatoria. Herda de EInfra (ERPV.Core.Erros, T11) por ser, na
+  /// pratica, uma falha de infraestrutura.</summary>
+  EConfiguracao = class(EInfra);
 
   TConfiguracaoBanco = record
     Caminho: string;   // caminho/alias do banco Firebird (.FDB) ou host:caminho
