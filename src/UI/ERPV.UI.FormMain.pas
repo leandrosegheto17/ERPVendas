@@ -43,7 +43,11 @@ uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants,
   System.Classes, Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs,
   Vcl.ExtCtrls, Vcl.StdCtrls, Vcl.Menus, cxButtons,
-  ERPV.UI.Tokens, ERPV.UI.Tema;
+  ERPV.UI.Tokens, ERPV.UI.Tema,
+  ERPV.Negocio.ClienteService, ERPV.UI.FormListaClientes;
+
+const
+  WM_ERPV_FECHAR_LISTA = WM_USER + 101;
 
 type
   /// <summary>Destinos navegaveis do shell (mesmas opcoes na nav lateral e no menu).</summary>
@@ -52,6 +56,8 @@ type
   TFormMain = class(TForm)
   private
     FBaseUrlFinanceiro: string;
+    FClienteService: TClienteService;
+    FListaClientes: TFormListaClientes;
     FPainelMarca: TPanel;
     FRotuloMarca: TLabel;
     FPainelNav: TPanel;
@@ -66,6 +72,9 @@ type
     FBarrasAtivas: array[TDestinoShell] of TPanel;
     FBotoesNav: array[TDestinoShell] of TcxButton;
     FMenu: TMainMenu;
+    procedure FecharListaClientes;
+    procedure AoFecharListaClientes(Sender: TObject);
+    procedure MsgFecharLista(var Msg: TMessage); message WM_ERPV_FECHAR_LISTA;
     procedure MontarFaixaMarca;
     procedure MontarAreaConteudo;
     procedure MontarStatusBar;
@@ -92,7 +101,8 @@ type
     ///   Injeta o dado de ambiente exibido na status bar (BaseUrl vinda do
     ///   INI, lida pelo composition root). Chamar uma vez apos criar o form.
     /// </summary>
-    procedure Configurar(const ABaseUrlFinanceiro: string);
+    procedure Configurar(const ABaseUrlFinanceiro: string;
+      AClienteService: TClienteService);
 
     /// <summary>
     ///   Ponto de entrada de navegacao. T14 ainda nao tem as telas (T19/T23/
@@ -150,9 +160,11 @@ begin
   DefinirTextoStatus(FStatusPendencias, PENDENCIAS_FIXO);
 end;
 
-procedure TFormMain.Configurar(const ABaseUrlFinanceiro: string);
+procedure TFormMain.Configurar(const ABaseUrlFinanceiro: string;
+  AClienteService: TClienteService);
 begin
   FBaseUrlFinanceiro := ABaseUrlFinanceiro;
+  FClienteService := AClienteService;
   DefinirTextoStatus(FStatusFinanceiro, 'Financeiro: ' + FBaseUrlFinanceiro);
 end;
 
@@ -434,9 +446,41 @@ end;
 procedure TFormMain.AbrirDestino(const ADestino: TDestinoShell);
 begin
   AtualizarItemAtivo(ADestino);
-  // As telas reais chegam em T19 (Clientes), T23 (Produtos), T31 (Vendas) e
-  // T52 (Pendencias); ate la o shell so informa, sem bloquear.
-  Notificar(utnInfo, 'Esta tela ainda não está disponível.', FAreaConteudo);
+  // T19 (Clientes) embutida; T23 (Produtos), T31 (Vendas) e T52 (Pendencias)
+  // chegam depois; ate la o shell so informa, sem bloquear.
+  if (ADestino = dsClientes) and (FClienteService <> nil) then
+  begin
+    FecharListaClientes;
+    FRotuloBemVindo.Visible := False;
+    FRotuloBemVindoSub.Visible := False;
+    FListaClientes := TFormListaClientes.Create(Self, FClienteService);
+    FListaClientes.BorderStyle := bsNone;
+    FListaClientes.Parent := FAreaConteudo;
+    FListaClientes.Align := alClient;
+    FListaClientes.OnFechada := AoFecharListaClientes;
+    FListaClientes.Show;
+  end
+  else
+    Notificar(utnInfo, 'Esta tela ainda não está disponível.', FAreaConteudo);
+end;
+
+procedure TFormMain.FecharListaClientes;
+begin
+  FreeAndNil(FListaClientes);
+  FRotuloBemVindo.Visible := True;
+  FRotuloBemVindoSub.Visible := True;
+end;
+
+procedure TFormMain.AoFecharListaClientes(Sender: TObject);
+begin
+  // Fechar/Esc na lista embutida: volta ao "Bem-vindo". O Free acontece fora
+  // do handler do proprio botao/tecla para nao destruir o form em uso.
+  PostMessage(Handle, WM_ERPV_FECHAR_LISTA, 0, 0);
+end;
+
+procedure TFormMain.MsgFecharLista(var Msg: TMessage);
+begin
+  FecharListaClientes;
 end;
 
 procedure TFormMain.AoClicarDestino(Sender: TObject);
