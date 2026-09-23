@@ -17,6 +17,8 @@ uses
 
 type
   TFilhoEdicao = class(TFormBaseEdicao)
+  private
+    procedure CampoChange(Sender: TObject);
   protected
     function Validar: Boolean; override;
     procedure Gravar; override;
@@ -49,7 +51,12 @@ begin
   E.Top := 16;
   E.Width := 300;
   E.TextHint := 'Digite algo (marca como modificado)';
-  E.OnChange := procedure(Sender: TObject) begin MarcarModificado; end;
+  E.OnChange := CampoChange;
+end;
+
+procedure TFilhoEdicao.CampoChange(Sender: TObject);
+begin
+  MarcarModificado;
 end;
 
 function TFilhoEdicao.Validar: Boolean;
