@@ -116,6 +116,10 @@ begin
   FPnlAcoes.Color := clERPVFundoApp;
   FPnlAcoes.Height := ERPVAlturaBarraAcoes;
   FPnlAcoes.OnResize := LayoutAcoes;
+  // Dois alTop com Top igual empilham o mais novo em cima; UX-SPEC 3.3 manda
+  // cabecalho ANTES da barra de acoes (achado real no teste da T15).
+  FPnlCabecalho.Top := 0;
+  FPnlAcoes.Top := FPnlCabecalho.Height;
 
   FPnlConteudo := TPanel.Create(Self);
   FPnlConteudo.Parent := Self;
