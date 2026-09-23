@@ -109,7 +109,8 @@ uses
   ERPV.Core.Erros,
   ERPV.Dados.Conexao,
   ERPV.Dados.ClienteRepository,
-  ERPV.Dominio.Contratos.IClienteRepository;
+  ERPV.Dominio.Contratos.IClienteRepository,
+  ERPV.Negocio.ClienteService;
 
 type
   /// <summary>
@@ -127,6 +128,7 @@ type
     FTratador: TTratadorDeExcecoes;
     FConexao: TConexao;
     FClienteRepository: IClienteRepository;
+    FClienteService: TClienteService;
   public
     /// <exception cref="EConfiguracao">INI ausente ou invalido (T09).</exception>
     /// <exception cref="EInfra">Falha ao conectar ao banco (T12).</exception>
@@ -138,6 +140,7 @@ type
     property Tratador: TTratadorDeExcecoes read FTratador;
     property Conexao: TConexao read FConexao;
     property ClienteRepository: IClienteRepository read FClienteRepository;
+    property ClienteService: TClienteService read FClienteService;
 
     // Proximos incrementos (T17 ClienteRepository, T21 ProdutoRepository,
     // T25 VendaRepository, T37 FilaRepository, servicos de negocio etc.):
@@ -175,6 +178,7 @@ begin
   FConexao := TConexao.Create(FConfiguracao, FLogger);
 
   FClienteRepository := TClienteRepository.Create(FConexao, FLogger); // T17
+  FClienteService := TClienteService.Create(FClienteRepository); // T18
 
   // Proximos incrementos (T21, T25, T37...) entram aqui.
 end;
@@ -188,6 +192,7 @@ begin
   if Assigned(Application) then
     Application.OnException := nil;
 
+  FClienteService.Free; // T18, antes do repositorio
   FClienteRepository := nil; // antes de FConexao (T17)
   FConexao.Free;
   FTratador.Free;

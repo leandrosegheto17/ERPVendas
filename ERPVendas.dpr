@@ -15,7 +15,9 @@ uses
   Vcl.Forms,
   ERPV.App.Root in 'src\App\ERPV.App.Root.pas',
   ERPV.Core.Validadores in 'src\Core\ERPV.Core.Validadores.pas',
+  ERPV.Temp.TesteT18 in 'src\App\ERPV.Temp.TesteT18.pas',
   ERPV.Dados.ClienteRepository in 'src\Dados\ERPV.Dados.ClienteRepository.pas',
+  ERPV.Negocio.ClienteService in 'src\Negocio\ERPV.Negocio.ClienteService.pas',
   ERPV.UI.FormBaseEdicao in'src\UI\ERPV.UI.FormBaseEdicao.pas',
   ERPV.UI.FormBaseLista in 'src\UI\ERPV.UI.FormBaseLista.pas',
   ERPV.UI.FormMain in 'src\UI\ERPV.UI.FormMain.pas' {FormMain},
@@ -38,6 +40,7 @@ begin
       AplicarTema; // skin uma unica vez, antes de criar qualquer form (T14)
       Application.CreateForm(TFormMain, FormMain);
       FormMain.Configurar(Root.Configuracao.Financeiro.BaseUrl);
+      RodarTesteT18(Root); // TEMPORARIO (remover apos teste)
       Application.Run;
     finally
       Root.Free;
