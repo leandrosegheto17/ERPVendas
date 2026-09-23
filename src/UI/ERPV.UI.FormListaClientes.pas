@@ -19,7 +19,7 @@ uses
   Winapi.Windows,
   System.SysUtils, System.Classes, System.UITypes, System.Variants, Data.DB,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Graphics,
-  cxGraphics, cxClasses, cxCustomData, cxData, cxDBData, cxGridCustomView,
+  cxControls, cxGraphics, cxClasses, cxCustomData, cxData, cxDBData, cxGridCustomView,
   cxGridCustomTableView, cxGridTableView, cxGridDBTableView, cxGridLevel, cxGrid,
   cxButtons,
   ERPV.UI.Tokens, ERPV.UI.Tema, ERPV.UI.FormBaseLista,
@@ -65,7 +65,11 @@ type
     procedure AoMudarFoco(Sender: TcxCustomGridTableView;
       APrevFocusedRecord, AFocusedRecord: TcxCustomGridRecord;
       ANewItemRecordFocusingChanged: Boolean);
-    procedure AoDuploClique(Sender: TObject);
+    // OnDblClick do TcxGrid e protected (E2362); o duplo clique em celula vem
+    // do evento da view (achado real de compilacao, 2026-09-23).
+    procedure AoDuploClique(Sender: TcxCustomGridTableView;
+      ACellViewInfo: TcxGridTableDataCellViewInfo; AButton: TMouseButton;
+      AShift: TShiftState; var AHandled: Boolean);
     procedure AoTextoSituacao(Sender: TcxCustomGridTableItem;
       ARecord: TcxCustomGridRecord; var AText: string);
     procedure AoDesenharCelula(Sender: TcxCustomGridTableView; ACanvas: TcxCanvas;
@@ -195,7 +199,7 @@ begin
   ConfigurarGrade(FView);
   FView.OnCustomDrawCell := AoDesenharCelula;
   FView.OnFocusedRecordChanged := AoMudarFoco;
-  FGrade.OnDblClick := AoDuploClique;
+  FView.OnCellDblClick := AoDuploClique;
 end;
 
 procedure TFormListaClientes.MontarVazio;
@@ -352,10 +356,15 @@ begin
   HabilitarAcoes(IdSelecionado > 0, IdSelecionado > 0);
 end;
 
-procedure TFormListaClientes.AoDuploClique(Sender: TObject);
+procedure TFormListaClientes.AoDuploClique(Sender: TcxCustomGridTableView;
+  ACellViewInfo: TcxGridTableDataCellViewInfo; AButton: TMouseButton;
+  AShift: TShiftState; var AHandled: Boolean);
 begin
-  if IdSelecionado > 0 then
+  if (AButton = mbLeft) and (IdSelecionado > 0) then
+  begin
+    AHandled := True;
     AoEditar;
+  end;
 end;
 
 procedure TFormListaClientes.AoMudarBusca(Sender: TObject);
