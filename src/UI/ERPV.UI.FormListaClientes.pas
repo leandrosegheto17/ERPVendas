@@ -19,7 +19,7 @@ uses
   Winapi.Windows,
   System.SysUtils, System.Classes, System.UITypes, System.Variants, Data.DB,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Graphics,
-  cxControls, cxGraphics, cxClasses, cxCustomData, cxData, cxDBData, cxGridCustomView,
+  cxControls, cxTextEdit, cxGraphics, cxClasses, cxCustomData, cxData, cxDBData, cxGridCustomView,
   cxGridCustomTableView, cxGridTableView, cxGridDBTableView, cxGridLevel, cxGrid,
   cxButtons,
   ERPV.UI.Tokens, ERPV.UI.Tema, ERPV.UI.FormBaseLista,
@@ -192,6 +192,10 @@ begin
   AdicionarColuna('EMAIL', 'E-mail', 200);
   AdicionarColuna('TELEFONE', 'Telefone', 110);
   FColSituacao := AdicionarColuna('ATIVO', 'Situação', 80);
+  // Campo booleano vira caixa de selecao por padrao no cxGrid; UX §4 pede
+  // texto+cor ("Ativo"/"Inativo"), entao forca editor de texto (achado real
+  // no teste de T19, 2026-09-23).
+  FColSituacao.PropertiesClass := TcxTextEditProperties;
   FColSituacao.OnGetDisplayText := AoTextoSituacao;
 
   FView.DataController.KeyFieldNames := 'ID';

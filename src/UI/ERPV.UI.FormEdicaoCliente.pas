@@ -98,8 +98,11 @@ type
 implementation
 
 const
-  MascaraCpf = '999.999.999-99;0;_';
-  MascaraCnpj = '99.999.999/9999-99;0;_';
+  // Segundo campo ';1;' = a mascara GUARDA os literais em Text. Com ';0;' o campo
+  // mostrava o CPF carregado sem pontuacao (achado real no teste de T20).
+  // Toda leitura passa por NormalizarDocumento, entao so digitos seguem adiante.
+  MascaraCpf = '999.999.999-99;1;_';
+  MascaraCnpj = '99.999.999/9999-99;1;_';
   cAlturaControleRadio = 28;
   cAlturaRotulo = 18;
   cAlturaMoldura = 32;
@@ -454,6 +457,19 @@ begin
     Result := tpFisica;
 end;
 
+// Formata so digitos no padrao da mascara (CPF 11 / CNPJ 14 digitos); se o
+// tamanho nao bate, devolve os digitos como estao.
+function FormatarDocumento(const ADigitos: string; AFisica: Boolean): string;
+begin
+  Result := ADigitos;
+  if AFisica and (Length(ADigitos) = 11) then
+    Result := Copy(ADigitos, 1, 3) + '.' + Copy(ADigitos, 4, 3) + '.' +
+      Copy(ADigitos, 7, 3) + '-' + Copy(ADigitos, 10, 2)
+  else if (not AFisica) and (Length(ADigitos) = 14) then
+    Result := Copy(ADigitos, 1, 2) + '.' + Copy(ADigitos, 3, 3) + '.' +
+      Copy(ADigitos, 6, 3) + '/' + Copy(ADigitos, 9, 4) + '-' + Copy(ADigitos, 13, 2);
+end;
+
 // Troca a mascara conforme o tipo; limpa o valor antes (evita texto orfao).
 procedure TFormEdicaoCliente.AplicarMascara;
 var
@@ -523,7 +539,7 @@ begin
     FRbJuridica.Checked := FCliente.TipoPessoa = tpJuridica;
     AplicarMascara;
     FEdtNome.Text := FCliente.Nome;
-    FEdtDoc.EditValue := FCliente.CpfCnpj; // so digitos; mascara formata
+    FEdtDoc.EditValue := FormatarDocumento(FCliente.CpfCnpj, TipoAtual = tpFisica);
     FEdtEmail.Text := FCliente.Email;
     FEdtTel.Text := FCliente.Telefone;
     FEdtEnd.Text := FCliente.Endereco;
