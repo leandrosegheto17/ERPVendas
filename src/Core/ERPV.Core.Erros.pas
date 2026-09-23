@@ -28,6 +28,11 @@
     o texto a exibir.
   - EInfra: falha de infraestrutura (banco Firebird, arquivo, configuracao).
     Mesma ideia de EIntegracao: mensagem tecnica so no log.
+  - EInfraMensagemSegura (subclasse de EInfra, adicionada ao lado de T12/T13):
+    para o caso especifico de uma falha de infraestrutura cuja mensagem do
+    construtor ja foi escrita para o usuario e comprovadamente nao contem
+    SQL/credencial (ex.: EConfiguracao, abaixo). MensagemAmigavel mostra
+    essa mensagem literal, nao a generica de EInfra.
 
   Nota sobre EConfiguracao (T09, ERPV.Core.Config.pas): a unit de Config foi
   escrita antes desta hierarquia existir e deixou EConfiguracao herdando de
@@ -36,17 +41,21 @@
   configuracao e, na pratica, uma falha de infraestrutura - arquivo INI
   ausente/invalido). Mudanca de baixo risco (so troca o ancestral, nenhuma
   API publica de EConfiguracao muda) feita diretamente em
-  ERPV.Core.Config.pas como parte desta tarefa.
+  ERPV.Core.Config.pas como parte desta tarefa. Ajuste posterior (T12/T13):
+  EConfiguracao passou a herdar de EInfraMensagemSegura em vez de EInfra
+  puro - ver nota acima e em ERPV.Core.Config.pas.
 
   ==========================================================================
   TRADUTOR DE MENSAGEM AMIGAVEL (MensagemAmigavel)
   ==========================================================================
-  Regra (ADR-008 + criterio de aceite de T11):
-  - EValidacao / ERegraNegocio -> devolve E.Message literal (a mensagem ja
-    foi escrita pensando no usuario final).
-  - EIntegracao / EInfra -> devolve mensagem generica amigavel fixa,
-    NUNCA o E.Message original (que pode ter SQL, caminho de arquivo, URL,
-    corpo de resposta HTTP etc. - isso so vai para o log).
+  Regra (ADR-008 + criterio de aceite de T11, ajustada ao lado de T12/T13):
+  - EValidacao / ERegraNegocio / EInfraMensagemSegura -> devolve E.Message
+    literal (a mensagem ja foi escrita pensando no usuario final; para
+    EInfraMensagemSegura, com a garantia adicional de nao conter dado
+    sensivel, ver classe acima).
+  - EIntegracao / EInfra (demais casos) -> devolve mensagem generica
+    amigavel fixa, NUNCA o E.Message original (que pode ter SQL, caminho de
+    arquivo, URL, corpo de resposta HTTP etc. - isso so vai para o log).
   - Qualquer outra excecao nao mapeada (EAccessViolation, excecoes de
     biblioteca de terceiros, bugs nao previstos) -> mensagem fixa exigida
     pelo criterio de aceite: "Ocorreu um erro inesperado. Os detalhes foram
@@ -188,11 +197,27 @@ type
   /// Mesma ideia de EIntegracao: mensagem tecnica so no log.</summary>
   EInfra = class(EErpVendas);
 
+  /// <summary>Subclasse de EInfra para o caso especifico em que a propria
+  /// mensagem do construtor ja foi escrita para ser lida pelo usuario final
+  /// (orientacao de configuracao/setup, ex.: "copie o arquivo .example e
+  /// ajuste") e comprovadamente NAO contem SQL/caminho de dado sensivel/
+  /// credencial - so caminho do proprio arquivo de configuracao e instrucao
+  /// de uso, que sao seguros de expor. Quem lancar uma excecao dessa
+  /// subclasse esta afirmando essa garantia; MensagemAmigavel mostra
+  /// E.Message literal para ela, ao inves da mensagem generica usada para
+  /// EInfra/EIntegracao em geral. Uso previsto: EConfiguracao
+  /// (ERPV.Core.Config, T09) - arquivo INI ausente/invalido nao e dado
+  /// sensivel, e a mensagem especifica orienta o usuario a resolver
+  /// sozinho.</summary>
+  EInfraMensagemSegura = class(EInfra);
+
   /// <summary>Traduz uma excecao qualquer na mensagem a ser exibida ao
   /// usuario, nunca incluindo SQL/caminho/stack/credencial (ADR-008).
-  /// EValidacao/ERegraNegocio: mensagem literal. EIntegracao/EInfra:
-  /// mensagem generica fixa. Qualquer outra excecao: mensagem fixa de erro
-  /// inesperado (texto literal do criterio de aceite de T11).</summary>
+  /// EValidacao/ERegraNegocio: mensagem literal. EInfraMensagemSegura:
+  /// mensagem literal (comprovadamente sem dado sensivel, ver classe).
+  /// EIntegracao/EInfra (demais casos): mensagem generica fixa. Qualquer
+  /// outra excecao: mensagem fixa de erro inesperado (texto literal do
+  /// criterio de aceite de T11).</summary>
   function MensagemAmigavel(E: Exception): string;
 
 
@@ -219,7 +244,9 @@ begin
   if not Assigned(E) then
     Exit(MSG_ERRO_INESPERADO);
 
-  if (E is EValidacao) or (E is ERegraNegocio) then
+  if (E is EValidacao) or (E is ERegraNegocio) or (E is EInfraMensagemSegura) then
+    // EInfraMensagemSegura checada antes de EInfra: subclasse mais especifica,
+    // com a garantia de que E.Message nao contem dado sensivel (ver classe).
     Result := E.Message
   else if (E is EIntegracao) or (E is EInfra) then
     Result := MSG_INTEGRACAO_INFRA

@@ -38,6 +38,13 @@ unit ERPV.Core.Config;
     de infraestrutura) em vez de Exception puro. Mudanca de baixo risco: a
     API publica de EConfiguracao (construtor, mensagem) nao muda, so o
     ancestral - decisao ja prevista/documentada aqui em T09 para T11 ajustar.
+  - Ajuste feito ao lado de T12/T13 (verificacao manual do usuario expos a
+    inconsistencia): EConfiguracao passa a herdar de EInfraMensagemSegura
+    (subclasse de EInfra, ERPV.Core.Erros) em vez de EInfra puro - a
+    mensagem que esta unit monta (ValidarArquivo/ValidarSecoesObrigatorias/
+    LerObrigatoria, acima) e escrita para orientar o usuario final e nao
+    contem SQL/credencial, entao MensagemAmigavel agora mostra ela literal
+    ao inves do texto generico usado para EInfra em geral.
 }
 
 interface
@@ -49,9 +56,16 @@ uses
 
 type
   /// <summary>Erro de configuracao: INI ausente, invalido ou faltando secao/
-  /// chave obrigatoria. Herda de EInfra (ERPV.Core.Erros, T11) por ser, na
-  /// pratica, uma falha de infraestrutura.</summary>
-  EConfiguracao = class(EInfra);
+  /// chave obrigatoria. Herda de EInfraMensagemSegura (ERPV.Core.Erros,
+  /// ajuste feito ao lado de T12/T13): e uma falha de infraestrutura, mas a
+  /// mensagem do construtor (ValidarArquivo/ValidarSecoesObrigatorias/
+  /// LerObrigatoria, acima) e escrita para o usuario final (orientacao de
+  /// setup: "copie o arquivo .example...") e nao contem SQL/credencial -
+  /// so caminho do proprio arquivo de configuracao, que e seguro de expor.
+  /// MensagemAmigavel (ERPV.Core.Erros) mostra essa mensagem literal ao
+  /// usuario por causa disso, ao inves do texto generico usado para EInfra
+  /// em geral (ex.: falha de conexao ao banco, ERPV.Dados.Conexao).</summary>
+  EConfiguracao = class(EInfraMensagemSegura);
 
   TConfiguracaoBanco = record
     Caminho: string;   // caminho/alias do banco Firebird (.FDB) ou host:caminho
