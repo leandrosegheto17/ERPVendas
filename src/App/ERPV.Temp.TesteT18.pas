@@ -56,7 +56,7 @@ begin
     Tenta('2 sem CPF (esp: [CpfCnpj] Informe o CPF/CNPJ)');
     C.CpfCnpj := '111.111.111-11';
     Tenta('3 CPF invalido (esp: [CpfCnpj] CPF invalido)');
-    C.CpfCnpj := '529.982.247-25';
+    C.CpfCnpj := '111.444.777-35'; // CPF valido que NAO esta no seed
     Tenta('4 sem e-mail (esp: [Email] Informe o e-mail)');
     C.Email := 'malformado@';
     Tenta('5 e-mail malformado (esp: [Email] E-mail invalido)');
@@ -79,7 +79,7 @@ begin
         else
         begin
           Log := Log + '9 Obter: doc=' + D.CpfCnpj + ' ativo=' + BoolToStr(D.Ativo, True) +
-            ' (esp: 52998224725, True)' + sLineBreak;
+            ' (esp: 11144477735, True)' + sLineBreak;
           D.Nome := 'Teste T18 editado';
           D.Ativo := False;
           try
