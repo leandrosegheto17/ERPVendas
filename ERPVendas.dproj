@@ -98,11 +98,11 @@
         <DCCReference Include="src\Core\ERPV.Core.Validadores.pas"/>
         <DCCReference Include="src\Dados\ERPV.Dados.ClienteRepository.pas"/>
         <DCCReference Include="src\Negocio\ERPV.Negocio.ClienteService.pas"/>
+        <DCCReference Include="src\UI\ERPV.UI.FormBaseEdicao.pas"/>
+        <DCCReference Include="src\UI\ERPV.UI.FormBaseLista.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.FormMain.pas">
             <Form>FormMain</Form>
         </DCCReference>
-        <DCCReference Include="src\UI\ERPV.UI.FormBaseEdicao.pas"/>
-        <DCCReference Include="src\UI\ERPV.UI.FormBaseLista.pas"/>
         <DCCReference Include="src\UI\ERPV.Temp.TesteT15.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.FormTesteTema.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.Tema.pas"/>

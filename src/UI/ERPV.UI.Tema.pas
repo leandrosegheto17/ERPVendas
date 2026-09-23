@@ -427,6 +427,15 @@ begin
   ABotao.Font.Size := ERPVTamCorpo;
   ABotao.Height := ERPVAlturaControle;
 
+  // Causa provavel da pendencia visual (a) de T68, vista na 1a tela real (T15):
+  // com o skin global ativo o TcxButton pinta via skin e IGNORA Colors (so o
+  // hover aparecia; o primario ficava sem fundo, com texto branco ilegivel).
+  // LookAndFeel proprio, sem skin e nao nativo, faz Colors valerem. Atribuir
+  // explicitamente marca o valor como "assigned", entao nao herda do master.
+  ABotao.LookAndFeel.NativeStyle := False;
+  ABotao.LookAndFeel.SkinName := '';
+  ABotao.LookAndFeel.Kind := lfFlat;
+
   case APapel of
     upbPrimario:
       begin

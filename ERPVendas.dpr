@@ -41,7 +41,7 @@ begin
       Application.CreateForm(TFormMain, FormMain);
       FormMain.Configurar(Root.Configuracao.Financeiro.BaseUrl);
       RodarTesteT15; // TEMPORARIO (remover apos teste)
-      RodarTesteT18(Root); // TEMPORARIO (remover apos teste)
+      //RodarTesteT18(Root); // TEMPORARIO (remover apos teste)
       Application.Run;
     finally
       Root.Free;
