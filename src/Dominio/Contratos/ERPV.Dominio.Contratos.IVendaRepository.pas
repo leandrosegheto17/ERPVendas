@@ -1,4 +1,4 @@
-unit ERPV.Dominio.Contratos.IVendaRepository;
+﻿unit ERPV.Dominio.Contratos.IVendaRepository;
 
 {
   Interface de fronteira do Domínio (ADR-010) — só assinaturas; a

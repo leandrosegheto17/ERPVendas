@@ -1,4 +1,4 @@
-unit ERPV.Dominio.Contratos.IEmailSender;
+﻿unit ERPV.Dominio.Contratos.IEmailSender;
 
 {
   Interface de fronteira do Domínio (ADR-001/010) — só assinaturas; a

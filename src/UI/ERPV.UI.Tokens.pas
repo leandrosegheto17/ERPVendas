@@ -1,4 +1,4 @@
-unit ERPV.UI.Tokens;
+﻿unit ERPV.UI.Tokens;
 
 {
   T68 (Lote 3) - Design tokens da UI (UX-SPEC.md Secao 3/8, ADR-011).

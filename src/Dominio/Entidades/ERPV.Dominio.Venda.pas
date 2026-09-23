@@ -1,4 +1,4 @@
-unit ERPV.Dominio.Venda;
+﻿unit ERPV.Dominio.Venda;
 
 {
   Entidade de Domínio TVenda (T08, Lote 2). Campos batendo com

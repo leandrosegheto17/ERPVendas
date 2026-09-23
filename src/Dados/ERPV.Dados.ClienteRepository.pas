@@ -1,4 +1,4 @@
-unit ERPV.Dados.ClienteRepository;
+﻿unit ERPV.Dados.ClienteRepository;
 
 {
   T17 (Lote 4) - Implementacao FireDAC de IClienteRepository (ADR-003/010).

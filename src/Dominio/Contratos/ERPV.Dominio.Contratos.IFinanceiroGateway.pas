@@ -1,4 +1,4 @@
-unit ERPV.Dominio.Contratos.IFinanceiroGateway;
+﻿unit ERPV.Dominio.Contratos.IFinanceiroGateway;
 
 {
   Interface de fronteira do Domínio (ADR-001/010) — só assinaturas; a

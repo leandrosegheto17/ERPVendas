@@ -1,4 +1,4 @@
-unit ERPV.Dominio.VendaItem;
+﻿unit ERPV.Dominio.VendaItem;
 
 {
   Entidade de Domínio TVendaItem (T08, Lote 2). Campos batendo com

@@ -1,4 +1,4 @@
-unit ERPV.Dominio.Resultados;
+﻿unit ERPV.Dominio.Resultados;
 
 {
   Resultados tipados do Domínio (T08, Lote 2; TASK.md Seção 1

@@ -1,4 +1,4 @@
-unit ERPV.UI.FormBaseEdicao;
+﻿unit ERPV.UI.FormBaseEdicao;
 
 {
   T15 (Lote 3) - TFormBaseEdicao (UX-SPEC 2.3, 3.3, 5, 2.6; ADR-011).

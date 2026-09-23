@@ -1,4 +1,4 @@
-unit ERPV.Dados.Conexao;
+﻿unit ERPV.Dados.Conexao;
 
 {
   T12 (Lote 2) - Conexao FireDAC/Firebird via INI, helper de transacao e
