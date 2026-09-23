@@ -14,6 +14,8 @@
 uses
   Vcl.Forms,
   ERPV.App.Root in 'src\App\ERPV.App.Root.pas',
+  ERPV.UI.FormBaseEdicao in 'src\UI\ERPV.UI.FormBaseEdicao.pas',
+  ERPV.UI.FormBaseLista in 'src\UI\ERPV.UI.FormBaseLista.pas',
   ERPV.UI.FormMain in 'src\UI\ERPV.UI.FormMain.pas' {FormMain},
   ERPV.UI.FormTesteTema in 'src\UI\ERPV.UI.FormTesteTema.pas',
   ERPV.UI.Tema in 'src\UI\ERPV.UI.Tema.pas',
@@ -31,7 +33,9 @@ begin
   if TentarIniciarAplicacao(Root) then
   begin
     try
+      AplicarTema; // skin uma unica vez, antes de criar qualquer form (T14)
       Application.CreateForm(TFormMain, FormMain);
+      FormMain.Configurar(Root.Configuracao.Financeiro.BaseUrl);
       Application.Run;
     finally
       Root.Free;
