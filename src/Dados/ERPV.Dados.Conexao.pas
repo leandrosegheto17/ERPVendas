@@ -188,6 +188,11 @@ uses
   FireDAC.Phys,
   FireDAC.Phys.FB,
   FireDAC.Phys.FBDef,
+  // Registra o adaptador de execucao de queries (TFDQuery). Sem ele, o primeiro
+  // Open/ExecSQL falha com "Object factory for class {...} is missing" (achado
+  // real de T17, 2026-09-23). Fica aqui, e nao em cada repositorio, por ser
+  // dependencia de infra comum a todos.
+  FireDAC.DApt,
   FireDAC.Comp.Client,
   ERPV.Core.Config,
   ERPV.Core.Log,
