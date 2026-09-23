@@ -193,6 +193,13 @@ uses
   // real de T17, 2026-09-23). Fica aqui, e nao em cada repositorio, por ser
   // dependencia de infra comum a todos.
   FireDAC.DApt,
+  // Registra o wait cursor do FireDAC para aplicacoes VCL. Sem ele, o primeiro
+  // Open/ExecSQL falha com "Object factory ... TFDGUIxWaitCursor is missing"
+  // (segundo achado real de T17, 2026-09-23). E unit do proprio FireDAC, nao
+  // acopla a Dados a nenhum form.
+  FireDAC.UI.Intf,
+  FireDAC.VCLUI.Wait,
+  FireDAC.Comp.UI,
   FireDAC.Comp.Client,
   ERPV.Core.Config,
   ERPV.Core.Log,
