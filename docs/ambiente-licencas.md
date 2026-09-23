@@ -200,6 +200,16 @@ o 2º da lista, nem usar o fallback nativo do ADR-011.
 o esqueleto em T07/T68): `dxSkinOffice2019Colorful` + `dxSkinsCore` (núcleo,
 sempre necessário).
 
+**Confirmação em T68 (Lote 3):** `ERPV.UI.Tema.AplicarTema`
+(`src/UI/ERPV.UI.Tema.pas`) usa exatamente esse mesmo skin — `Office2019Colorful`
+— e o mesmo par de units (`dxSkinsCore` + `dxSkinOffice2019Colorful`), sem
+reabrir a escolha feita acima em T01. A decisão não muda; T68 só implementa a
+aplicação do skin (com fallback para `TcxLookAndFeelController`/
+`lfUltraFlat` se o skin não carregar em runtime) e o helper de estilo de
+grade/botão/notificação em cima dele. Detalhe de verificação (compilação e
+conferência visual do skin realmente pintando a UI) ainda pendente de
+confirmação do usuário na IDE — ver roteiro na nota de T68 em `TASK.md`.
+
 ## 6. Decisão de arquitetura (fecha DEC-02 e alinhamento entre componentes)
 
 **Plataforma-alvo do projeto: Win32.** Coerente entre:
