@@ -1,4 +1,4 @@
-unit ERPV.UI.FormTesteTema;
+﻿unit ERPV.UI.FormTesteTema;
 
 {
   T68 (Lote 3) - Form de teste manual do tema/tokens (criterio de aceite:
@@ -21,7 +21,7 @@ unit ERPV.UI.FormTesteTema;
   o fluxo real do app). Para testar na IDE:
   1. Abrir ERPVendas.dpr.
   2. Adicionar temporariamente ao uses:
-       ERPV.UI.FormTesteTema in 'src\UI\ERPV.UI.FormTesteTema.pas' {FormTesteTema},
+       ERPV.UI.FormTesteTema in 'src\UI\ERPV.UI.FormTesteTema.pas' FormTesteTema,
   3. Trocar temporariamente a linha
        Application.CreateForm(TFormMain, FormMain);
      por
@@ -135,12 +135,13 @@ begin
   FGrid.SetBounds(ERPVMargemPagina, ERPVMargemPagina, 680, 280);
   FGrid.Anchors := [akLeft, akTop, akRight];
 
-  // Criacao de view em tempo de execucao (API TcxGrid.CreateView) - assuncao
-  // documentada em ERPV.UI.Tema.pas (cabecalho, secao ConfigurarGrade). O
-  // TcxGrid sempre nasce com 1 nivel padrao (Levels[0]); associa-se a view
-  // recem-criada a esse nivel.
+  // Criacao de view em tempo de execucao (API TcxGrid.CreateView). Achado
+  // real de compilacao (T68): "Levels" do TcxGrid NAO e uma lista indexada
+  // (a suposicao original "Levels[0]" estava errada) - e uma unica
+  // property TcxGridLevel (o nivel raiz); associa-se a view recem-criada
+  // direto nela, sem indice.
   FGridView := FGrid.CreateView(TcxGridDBTableView) as TcxGridDBTableView;
-  FGrid.Levels[0].GridView := FGridView;
+  FGrid.Levels.GridView := FGridView;
   FGridView.DataController.DataSource := FFonteDados;
   // Gera as colunas automaticamente a partir dos campos do dataset.
   FGridView.DataController.CreateAllItems;

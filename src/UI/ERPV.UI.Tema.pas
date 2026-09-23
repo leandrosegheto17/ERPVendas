@@ -1,4 +1,4 @@
-unit ERPV.UI.Tema;
+﻿unit ERPV.UI.Tema;
 
 {
   T68 (Lote 3) - AplicarTema / ConfigurarGrade / EstilizarBotao / Notificar
@@ -50,26 +50,32 @@ unit ERPV.UI.Tema;
     UX-SPEC Secao 3.2, confirmado instalado no trial - ver
     docs/ambiente-licencas.md Secao 5, decisao de T01, reaproveitada aqui
     sem reabrir escolha).
-  - Units DevExpress assumidas (a confirmar no `uses` do projeto real):
-    `dxSkinsCore` (motor de skins, sempre necessario) e
-    `dxSkinOffice2019Colorful` (recurso do skin escolhido) - mesmo par de
-    pacotes ja apontado em docs/ambiente-licencas.md Secao 5
-    ("dxSkinOffice2019Colorful" + "dxSkinsCore"). Classe usada:
+  - Units DevExpress (confirmadas por compilacao real na IDE, T68 - a
+    suposicao original deste cabecalho estava errada, ver abaixo):
+    `dxSkinsForm` (motor de skins/`TdxSkinController`, sempre necessario) e
+    `dxSkinOffice2019Colorful` (recurso do skin escolhido) - ambas fazem
+    parte do pacote `dxSkinsCoreRS37`/`dxSkinOffice2019ColorfulRS37`
+    (Runtime Packages do projeto), mas **"dxSkinsCore" nao e nome de unit**,
+    e sim so do pacote - o `.dpk` real do pacote declara
+    "contains dxSkinsForm[...]"; a suposicao original deste cabecalho (unit
+    `dxSkinsCore`) causava "Undeclared identifier: TdxSkinController" na
+    compilacao real, corrigido para `dxSkinsForm`. Classe usada:
     `TdxSkinController` (propriedades `NativeStyle: Boolean` e
-    `SkinName: string`) - basta existir UMA instancia deste componente na
-    aplicacao para que todos os controles DevExpress passem a pintar pelo
-    skin (comportamento documentado da ExpressSkins Library); nenhuma
-    outra unit precisa tocar em skin.
+    `SkinName: string`, confirmadas no header/`.hpp` do pacote) - basta
+    existir UMA instancia deste componente na aplicacao para que todos os
+    controles DevExpress passem a pintar pelo skin (comportamento
+    documentado da ExpressSkins Library); nenhuma outra unit precisa tocar
+    em skin.
   - Guarda de compilacao para o teste de fallback do criterio de aceite
     ("removendo os skins do uses o app abre sem erro"): a dependencia das
     duas units de skin fica isolada atras da diretiva
-    `{$DEFINE ERPV_SKIN_DISPONIVEL}` logo abaixo. Para reproduzir o cenario
-    do criterio de aceite manualmente na IDE: comentar essa `{$DEFINE}` +
-    as duas linhas `dxSkinsCore`/`dxSkinOffice2019Colorful` do `uses` da
+    `{$DEFINE ERPV_SKIN_DISPONIVEL` logo abaixo. Para reproduzir o cenario
+    do criterio de aceite manualmente na IDE: comentar essa `{$DEFINE` +
+    as duas linhas `dxSkinsForm`/`dxSkinOffice2019Colorful` do `uses` da
     implementation, recompilar - `AplicarTema` cai direto no fallback
     nativo (ninguem mais referencia classe de skin), sem alterar nenhuma
     outra unit do projeto.
-  - Fallback nativo (skin ausente, `{$UNDEF ERPV_SKIN_DISPONIVEL}`, OU
+  - Fallback nativo (skin ausente, `{$UNDEF ERPV_SKIN_DISPONIVEL`, OU
     skin presente mas falha em tempo de execucao - ex.: trial expirado):
     `TcxLookAndFeelController` (unit `cxLookAndFeels`) com
     `Kind := lfUltraFlat` e `NativeStyle := False`, conforme UX-SPEC
@@ -89,13 +95,19 @@ unit ERPV.UI.Tema;
     usado pelos repositorios de T17/T21/T25/T37 mais adiante) - assim o
     mesmo helper serve para o form de teste (unbound) e para as telas reais
     (bound), sem duplicar codigo.
-  - Zebra: `OnStylesGetContentStyle` (evento `TcxGridGetCellStyleEvent`,
-    assinatura `procedure(Sender: TcxCustomGridTableView; AItem:
-    TcxCustomGridTableItem; ARecordIndex: Integer; var AStyle: TcxStyle) of
-    object`) - padrao documentado da ExpressQuantumGrid para alternar cor
-    de linha; usa dois `TcxStyle` (par/impar) criados uma unica vez e
-    reaproveitados (classe auxiliar interna `TERPVEstiloZebra`, nao
-    exposta na interface desta unit).
+  - Zebra: `Styles.ContentOdd`/`Styles.ContentEven` + `Styles.UseOddEvenStyles
+    := bTrue` (achado real de compilacao, T68 - a suposicao original deste
+    cabecalho, um evento `OnStylesGetContentStyle` direto na view, nao
+    existe; a API real e mais simples e ja fica em
+    `TcxCustomGridTableViewStyles`, base comum de bound/unbound, sem
+    downcast). Dois `TcxStyle` (par/impar) criados uma unica vez e
+    reaproveitados por todas as grades (variaveis de unit, nao expostas na
+    interface). `Styles.Header` (cabecalho) e `OptionsView.Indicator/
+    GroupByBox/ColumnAutoWidth/GridLines` so existem nas classes concretas
+    `TcxGridTableViewStyles`/`TcxGridTableOptionsView` (comuns as duas
+    subclasses reais usadas neste projeto - `TcxGridTableView` unbound e
+    `TcxGridDBTableView` bound), por isso tem downcast seguro isolado
+    dentro de `ConfigurarGrade`.
   - Demais ajustes: sem indicador de linha, sem agrupamento, sem selecao de
     celula (selecao de linha inteira), sem grade vertical forte (so
     horizontal 1px, token `clERPVLinhaGrade`), texto do "vazio" plugado via
@@ -105,15 +117,22 @@ unit ERPV.UI.Tema;
   ==========================================================================
   EstilizarBotao - decisoes de implementacao
   ==========================================================================
-  - Parametro `TcxButton` (unit `cxButtons`), propriedade `Style: TcxButtonStyle`
-    (cor de fundo/borda/fonte) - se esta propriedade nao existir tal como
-    assumida nesta versao, o ajuste fica isolado dentro desta funcao (nomes
-    documentados no comentario do corpo da funcao).
+  - Parametro `TcxButton` (unit `cxButtons`). Achado real de compilacao
+    (T68): `TcxButton` NAO tem propriedade `Style`/`TcxButtonStyle` (a
+    suposicao original deste cabecalho estava errada) - a customizacao de
+    cor por estado vem de `Colors: TcxButtonColors`
+    (Normal/NormalText/Hot/HotText/Pressed/PressedText/Disabled/
+    DisabledText), cada uma so tendo efeito se marcada no set
+    `AssignedColors` (senao o LookAndFeel/skin decide). Nao ha cor de borda
+    separada nessa classe - o efeito "contorno" de Secundario/Perigoso fica
+    por conta de Normal=Superficie (fundo claro) + NormalText na cor do
+    papel; confirmar visualmente na IDE (roteiro de T68) se o resultado
+    bate com UX-SPEC 3.3 ou se precisa de ajuste fino.
   - 3 papeis (UX-SPEC Secao 3.3): Primario = preenchido com
     `clERPVDestaque`/`clERPVDestaqueHover`, texto branco, `fsBold`;
-    Secundario = contorno `clERPVBordaCampo`, texto `clERPVTextoPrincipal`;
-    Perigoso = contorno `clERPVErroTexto`, texto `clERPVErroTexto` - nunca
-    preenchido (UX-SPEC 3.3: "perigoso... nunca preenchido").
+    Secundario = fundo claro, texto `clERPVTextoPrincipal`;
+    Perigoso = fundo claro, texto `clERPVErroTexto` - nunca preenchido
+    (UX-SPEC 3.3: "perigoso... nunca preenchido").
 
   ==========================================================================
   Notificar - decisoes de implementacao
@@ -142,8 +161,8 @@ interface
 uses
   System.SysUtils, System.Classes, System.UITypes,
   Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls,
-  cxGridCustomView, cxGridCustomTableView, cxButtons,
-  ERPV.UI.Tokens;
+  ERPV.UI.Tokens, cxGrid, cxGridCustomTableView, cxGridDBTableView, cxGridCustomView,
+  cxButtons;
 
 type
   /// <summary>Papel visual de um botao (UX-SPEC Secao 3.3).</summary>
@@ -193,9 +212,14 @@ implementation
 uses
   Winapi.Windows, Winapi.Messages,
   {$IFDEF ERPV_SKIN_DISPONIVEL}
-  dxSkinsCore, dxSkinOffice2019Colorful,
+  // TdxSkinController mora em dxSkinsForm (nao em "dxSkinsCore" - esse e o
+  // nome do PACOTE dxSkinsCoreRS37.dpk, nao de uma unit; confirmado no
+  // .dpk real do pacote, que declara "contains dxSkinsForm" entre outras).
+  // Achado real de compilacao (T68, verificacao manual do usuario na IDE),
+  // nao suposicao.
+  dxSkinsForm, dxSkinOffice2019Colorful,
   {$ENDIF}
-  cxLookAndFeels, cxStyles, cxGraphics;
+  dxCore, cxLookAndFeels, cxStyles, cxGraphics, cxGridTableView;
 
 const
   ERPVSkinEfetivo = 'Office2019Colorful';
@@ -222,7 +246,12 @@ begin
     // Uma unica instancia de TdxSkinController na aplicacao ja basta para
     // que todos os controles DevExpress passem a pintar via skin
     // (comportamento documentado da ExpressSkins Library) - nao precisa
-    // ser atribuido a cada control individualmente.
+    // ser atribuido a cada control individualmente. Confirmado por
+    // execucao real (T68, teste diagnostico sem este try/except): a
+    // criacao/SkinName nao lanca excecao neste ambiente - o skin e
+    // aplicado sem erro (a aparencia mais palida observada nos controles
+    // de teste nao e falha de carregamento do skin, ver nota de status
+    // de T68 no TASK.md).
     SkinController := TdxSkinController.Create(Application);
     SkinController.NativeStyle := False;
     SkinController.SkinName := ERPVSkinEfetivo;
@@ -240,7 +269,11 @@ begin
   // aparencia degrada, nada quebra (RP-7).
   LookAndFeelController := TcxLookAndFeelController.Create(Application);
   LookAndFeelController.NativeStyle := False;
-  LookAndFeelController.LookAndFeel.Kind := lfUltraFlat;
+  // Kind fica direto no controller (nao existe "LookAndFeelController.
+  // LookAndFeel.Kind" - achado real de compilacao, T68; Kind/NativeStyle
+  // sao propriedades de TcxCustomLookAndFeelController, confirmado no
+  // header/.hpp do pacote cxLibraryRS37).
+  LookAndFeelController.Kind := lfUltraFlat;
 end;
 
 procedure AplicarTema;
@@ -256,82 +289,121 @@ end;
   ConfigurarGrade
   ========================================================================== }
 
-type
-  // Guarda os dois TcxStyle (linha par/impar) reaproveitados por todas as
-  // grades da aplicacao - criados sob demanda, liberados so no encerramento
-  // do processo (Finalization), sem custo perceptivel (2 objetos leves).
-  TERPVEstiloZebra = class
-  private
-    class var FEstiloPar: TcxStyle;
-    class var FEstiloImpar: TcxStyle;
-    class procedure Garantir;
-  public
-    class procedure AoObterEstiloConteudo(Sender: TcxCustomGridTableView;
-      AItem: TcxCustomGridTableItem; ARecordIndex: Integer; var AStyle: TcxStyle);
-    class procedure Liberar;
-  end;
+// Guarda os dois TcxStyle (linha par/impar) reaproveitados por todas as
+// grades da aplicacao - criados sob demanda, liberados so no encerramento
+// do processo (Finalization), sem custo perceptivel (2 objetos leves).
+// Achado real de compilacao (T68): a abordagem original (evento
+// "OnStylesGetContentStyle" direto na view) nao existe - a API real de
+// zebra do ExpressQuantumGrid e mais simples, via Styles.ContentOdd/
+// ContentEven + Styles.UseOddEvenStyles (confirmado no header do pacote
+// cxGridRS37), sem precisar de classe auxiliar nem evento manual.
+var
+  FEstiloContentPar: TcxStyle;
+  FEstiloContentImpar: TcxStyle;
+  FEstiloSelecao: TcxStyle;
+  FEstiloHeader: TcxStyle;
 
-class procedure TERPVEstiloZebra.Garantir;
+procedure GarantirEstilosZebra;
 begin
-  if FEstiloPar = nil then
+  if FEstiloContentPar = nil then
   begin
-    FEstiloPar := TcxStyle.Create(nil);
-    FEstiloPar.Color := clERPVSuperficie;
-    FEstiloPar.TextColor := clERPVTextoPrincipal;
+    FEstiloContentPar := TcxStyle.Create(nil);
+    FEstiloContentPar.Color := clERPVSuperficie;
+    FEstiloContentPar.TextColor := clERPVTextoPrincipal;
   end;
-  if FEstiloImpar = nil then
+  if FEstiloContentImpar = nil then
   begin
-    FEstiloImpar := TcxStyle.Create(nil);
-    FEstiloImpar.Color := clERPVZebra;
-    FEstiloImpar.TextColor := clERPVTextoPrincipal;
+    FEstiloContentImpar := TcxStyle.Create(nil);
+    FEstiloContentImpar.Color := clERPVZebra;
+    FEstiloContentImpar.TextColor := clERPVTextoPrincipal;
   end;
 end;
 
-class procedure TERPVEstiloZebra.AoObterEstiloConteudo(
-  Sender: TcxCustomGridTableView; AItem: TcxCustomGridTableItem;
-  ARecordIndex: Integer; var AStyle: TcxStyle);
+// Achado real de compilacao/execucao (T68): "AView.Styles.Selection" pode
+// devolver nil ate ser explicitamente atribuido (criado sob demanda pela
+// classe interna do pacote) - fazer "AView.Styles.Selection.Color := X"
+// direto crashava com EAccessViolation em cxLibraryRS37 (leitura de nil).
+// Mesmo padrao da zebra: cria-se um TcxStyle proprio e ATRIBUI via
+// Styles.Selection := ..., nunca le o valor antigo para mutar.
+procedure GarantirEstiloSelecao;
 begin
-  if ARecordIndex < 0 then
-    Exit; // linha de novo registro/grupo - mantem estilo padrao do skin
-  Garantir;
-  if Odd(ARecordIndex) then
-    AStyle := FEstiloImpar
-  else
-    AStyle := FEstiloPar;
+  if FEstiloSelecao = nil then
+  begin
+    FEstiloSelecao := TcxStyle.Create(nil);
+    FEstiloSelecao.Color := clERPVSelecaoLinha;
+    FEstiloSelecao.TextColor := clERPVTextoPrincipal;
+  end;
 end;
 
-class procedure TERPVEstiloZebra.Liberar;
+// Mesmo achado/padrao de GarantirEstiloSelecao acima, aplicado a Header
+// (tambem GetValue/SetValue na classe do pacote - mesmo risco de nil).
+procedure GarantirEstiloHeader;
 begin
-  FreeAndNil(FEstiloPar);
-  FreeAndNil(FEstiloImpar);
+  if FEstiloHeader = nil then
+  begin
+    FEstiloHeader := TcxStyle.Create(nil);
+    FEstiloHeader.Color := clERPVSuperficie;
+    FEstiloHeader.TextColor := clERPVTextoSecundario;
+    FEstiloHeader.Font.Name := ERPVFontePrincipal;
+    FEstiloHeader.Font.Size := ERPVTamCabecalhoCol;
+    FEstiloHeader.Font.Style := [fsBold];
+  end;
 end;
 
 procedure ConfigurarGrade(AView: TcxCustomGridTableView);
+var
+  EstilosCompletos: TcxGridTableViewStyles;
+  OpcoesViewCompletas: TcxGridTableOptionsView;
 begin
   // Sem indicador de linha, sem agrupamento, sem rodape desnecessario
   // (UX-SPEC Secao 3.2 "cxGrid: TableView sem indicador, sem
-  // agrupamento/rodape desnecessarios").
-  AView.OptionsView.Indicator := False;
-  AView.OptionsView.GroupByBox := False;
-  AView.OptionsView.ColumnAutoWidth := True;
-  AView.OptionsView.GridLines := glHorizontal; // so linha horizontal fina, sem vertical forte
-  AView.OptionsSelect.CellSelect := False;      // selecao de linha inteira (padrao de lista)
-  AView.OptionsData.Editing := False;           // listas somente leitura (edicao real e nas telas de edicao)
+  // agrupamento/rodape desnecessarios"). Mesmo caso de "Header" abaixo:
+  // Indicator/GroupByBox/ColumnAutoWidth/GridLines so existem na classe
+  // concreta TcxGridTableOptionsView (achado real de compilacao, T68),
+  // nao na base abstrata do parametro AView - downcast seguro, mesmo par
+  // de subclasses reais (TcxGridTableView/TcxGridDBTableView).
+  if AView.OptionsView is TcxGridTableOptionsView then
+  begin
+    OpcoesViewCompletas := TcxGridTableOptionsView(AView.OptionsView);
+    OpcoesViewCompletas.Indicator := False;
+    OpcoesViewCompletas.GroupByBox := False;
+    OpcoesViewCompletas.ColumnAutoWidth := True;
+    OpcoesViewCompletas.GridLines := glHorizontal; // so linha horizontal fina, sem vertical forte
+  end;
+  AView.OptionsSelection.CellSelect := False;      // selecao de linha inteira (padrao de lista) - na base, sem downcast
+  AView.OptionsData.Editing := False;           // listas somente leitura (edicao real e nas telas de edicao) - na base, sem downcast
 
-  // Zebra (UX-SPEC "zebra #F8FAFC, selecao #DCEBFA") via estilo por
-  // registro - ver TERPVEstiloZebra acima.
-  AView.OnStylesGetContentStyle := TERPVEstiloZebra.AoObterEstiloConteudo;
+  // Zebra (UX-SPEC "zebra #F8FAFC"): ContentOdd/ContentEven + flag - ja
+  // disponiveis em TcxCustomGridTableViewStyles (base comum de bound/
+  // unbound), sem precisar de downcast.
+  GarantirEstilosZebra;
+  AView.Styles.ContentEven := FEstiloContentPar;
+  AView.Styles.ContentOdd := FEstiloContentImpar;
+  AView.Styles.UseOddEvenStyles := bTrue;
 
-  // Selecao de linha e cabecalho: cores centralizadas via Styles (se a
-  // propriedade nao existir tal como nomeada nesta versao, ajustar aqui -
-  // impacto isolado a esta funcao).
-  AView.Styles.Selection.Color := clERPVSelecaoLinha;
-  AView.Styles.Selection.TextColor := clERPVTextoPrincipal;
-  AView.Styles.Header.Color := clERPVSuperficie;
-  AView.Styles.Header.TextColor := clERPVTextoSecundario;
-  AView.Styles.Header.Font.Name := ERPVFontePrincipal;
-  AView.Styles.Header.Font.Size := ERPVTamCabecalhoCol;
-  AView.Styles.Header.Font.Style := [fsBold];
+  // Selecao de linha (UX-SPEC "selecao #DCEBFA"): tambem na base comum.
+  // Atribuicao direta (nunca ler o valor antigo para mutar - ver
+  // GarantirEstiloSelecao acima).
+  GarantirEstiloSelecao;
+  AView.Styles.Selection := FEstiloSelecao;
+
+  // Cabecalho: "Header" so existe na classe concreta TcxGridTableViewStyles
+  // (comum a TcxGridTableView unbound e TcxGridDBTableView bound - ambas
+  // as unicas subclasses reais de TcxCustomGridTableView usadas neste
+  // projeto), nao na base abstrata do parametro AView - downcast seguro
+  // aqui, documentado por ser um achado real de compilacao (T68). Mesma
+  // atribuicao direta de GarantirEstiloHeader (nunca mutar o valor lido).
+  if AView.Styles is TcxGridTableViewStyles then
+  begin
+    EstilosCompletos := TcxGridTableViewStyles(AView.Styles);
+    GarantirEstiloHeader;
+    EstilosCompletos.Header := FEstiloHeader;
+  end;
+
+  // Mesmo achado de EstilizarBotao (T68): forcar o redesenho para nao
+  // esperar o proximo evento do sistema aplicar os estilos configurados
+  // aqui (Styles/Options so tomando efeito visual depois de um repaint).
+  AView.Invalidate;
 end;
 
 { ==========================================================================
@@ -340,10 +412,17 @@ end;
 
 procedure EstilizarBotao(ABotao: TcxButton; const APapel: TUIPapelBotao);
 begin
-  // TcxButton.Style (TcxButtonStyle) permite customizar cor de fundo, borda
-  // e fonte sem depender do skin estar ativo - assuncao documentada no
-  // cabecalho desta unit; se a propriedade divergir nesta versao, o ajuste
-  // fica isolado a este procedimento.
+  // TcxButton nao tem propriedade "Style" (achado real de compilacao, T68 -
+  // a suposicao original deste cabecalho estava errada). A customizacao de
+  // cor por estado vem de `ABotao.Colors` (TcxButtonColors: Normal/
+  // NormalText/Hot/HotText/Pressed/PressedText/Disabled/DisabledText),
+  // cada uma só tendo efeito se marcada em `AssignedColors` (senao o
+  // LookAndFeel/skin decide a cor). TcxButtonColors nao expoe cor de borda
+  // separada - a aparencia "contorno" de Secundario/Perigoso fica por conta
+  // de Normal=Superficie (fundo branco) + NormalText na cor do papel; se o
+  // skin ativo nao desenhar borda visivel o bastante nesse caso, e um
+  // ajuste fino de UX a confirmar visualmente na IDE (roteiro de T68, item
+  // 4), nao um erro de compilacao.
   ABotao.Font.Name := ERPVFontePrincipal;
   ABotao.Font.Size := ERPVTamCorpo;
   ABotao.Height := ERPVAlturaControle;
@@ -353,9 +432,14 @@ begin
       begin
         // Preenchido, texto branco, negrito (UX-SPEC 3.3: primario sempre o
         // mais a direita no rodape de modal / primeiro na barra de lista).
-        ABotao.Style.Color := clERPVDestaque;
-        ABotao.Style.HotTrackColor := clERPVDestaqueHover;
-        ABotao.Style.BorderColor := clERPVDestaque;
+        ABotao.Colors.AssignedColors := [cxbcNormal, cxbcNormalText, cxbcHot,
+          cxbcHotText, cxbcPressed, cxbcPressedText];
+        ABotao.Colors.Normal := clERPVDestaque;
+        ABotao.Colors.NormalText := clWhite;
+        ABotao.Colors.Hot := clERPVDestaqueHover;
+        ABotao.Colors.HotText := clWhite;
+        ABotao.Colors.Pressed := clERPVDestaqueHover;
+        ABotao.Colors.PressedText := clWhite;
         ABotao.Font.Color := clWhite;
         ABotao.Font.Style := [fsBold];
       end;
@@ -363,9 +447,14 @@ begin
       begin
         // Contorno, texto principal (UX-SPEC 3.3: secundario ao lado do
         // primario).
-        ABotao.Style.Color := clERPVSuperficie;
-        ABotao.Style.HotTrackColor := clERPVFundoApp;
-        ABotao.Style.BorderColor := clERPVBordaCampo;
+        ABotao.Colors.AssignedColors := [cxbcNormal, cxbcNormalText, cxbcHot,
+          cxbcHotText, cxbcPressed, cxbcPressedText];
+        ABotao.Colors.Normal := clERPVSuperficie;
+        ABotao.Colors.NormalText := clERPVTextoPrincipal;
+        ABotao.Colors.Hot := clERPVFundoApp;
+        ABotao.Colors.HotText := clERPVTextoPrincipal;
+        ABotao.Colors.Pressed := clERPVFundoApp;
+        ABotao.Colors.PressedText := clERPVTextoPrincipal;
         ABotao.Font.Color := clERPVTextoPrincipal;
         ABotao.Font.Style := [];
       end;
@@ -375,23 +464,61 @@ begin
         // nunca preenchido, sempre com confirmacao" - a confirmacao em si e
         // responsabilidade de quem chama, via Notificar(utnPergunta, ...)
         // antes de disparar a acao perigosa).
-        ABotao.Style.Color := clERPVSuperficie;
-        ABotao.Style.HotTrackColor := clERPVErroFundo;
-        ABotao.Style.BorderColor := clERPVErroTexto;
+        ABotao.Colors.AssignedColors := [cxbcNormal, cxbcNormalText, cxbcHot,
+          cxbcHotText, cxbcPressed, cxbcPressedText];
+        ABotao.Colors.Normal := clERPVSuperficie;
+        ABotao.Colors.NormalText := clERPVErroTexto;
+        ABotao.Colors.Hot := clERPVErroFundo;
+        ABotao.Colors.HotText := clERPVErroTexto;
+        ABotao.Colors.Pressed := clERPVErroFundo;
+        ABotao.Colors.PressedText := clERPVErroTexto;
         ABotao.Font.Color := clERPVErroTexto;
         ABotao.Font.Style := [];
       end;
   end;
+
+  // Achado real de execucao (T68): a cor do estado Normal (parado) so
+  // aparecia depois de um redesenho (ex.: passar o mouse por cima) -
+  // Invalidate forca o repaint com as cores ja aplicadas, sem esperar o
+  // proximo evento do sistema.
+  ABotao.Invalidate;
 end;
 
 { ==========================================================================
   Notificar
   ========================================================================== }
 
-procedure FecharBanner(APainel: TPanel);
+// TNotifyEvent (OnClick/OnTimer) e "of object" - metodo vinculado a uma
+// instancia, NAO aceita procedure anonima direto (achado real de
+// compilacao, T68: "E2010 Incompatible types: TNotifyEvent e Procedure").
+// TERPVFechadorDeBanner e o metodo de instancia real usado como handler.
+// Herda de TComponent especificamente para poder ter o Painel como Owner
+// (ExibirBannerInfo cria com Create(Painel) mais abaixo) - assim, quando o
+// Painel for liberado (por este mesmo Fechar, ou pelo Host ao ser
+// destruido), o proprio Fechador e liberado automaticamente pelo mecanismo
+// padrao de ownership de TComponent, sem vazamento. Chamar FPainel.Free
+// de dentro de um metodo deste proprio objeto (que sera destruido junto)
+// e seguro desde que nada mais acesse Self/campos depois - e o caso aqui
+// (nenhuma instrucao depois do Free).
+type
+  TERPVFechadorDeBanner = class(TComponent)
+  private
+    FPainel: TPanel;
+  public
+    constructor Create(APainel: TPanel); reintroduce;
+    procedure Fechar(Sender: TObject);
+  end;
+
+constructor TERPVFechadorDeBanner.Create(APainel: TPanel);
 begin
-  if Assigned(APainel) then
-    APainel.Free;
+  inherited Create(APainel); // APainel = Owner (ownership, libera este objeto junto)
+  FPainel := APainel;
+end;
+
+procedure TERPVFechadorDeBanner.Fechar(Sender: TObject);
+begin
+  if Assigned(FPainel) then
+    FPainel.Free; // libera o Painel e, por ownership, este TERPVFechadorDeBanner tambem
 end;
 
 procedure ExibirBannerInfo(const ATexto: string; AOwnerBanner: TWinControl);
@@ -400,6 +527,7 @@ var
   Painel: TPanel;
   Rotulo: TLabel;
   Temporizador: TTimer;
+  Fechador: TERPVFechadorDeBanner;
 begin
   Host := AOwnerBanner;
   if Host = nil then
@@ -433,21 +561,18 @@ begin
   Rotulo.Caption := 'i  ' + ATexto; // icone real (ERPVIconeInfo, T69) plugado nas bases de form
   Rotulo.Transparent := True;
 
+  // Fechador e criado com o Painel como Owner: quando o Painel for liberado
+  // (Free chamado por Fechar, ou pelo proprio Host ao ser destruido), o
+  // Fechador tambem e liberado automaticamente - sem vazamento.
+  Fechador := TERPVFechadorDeBanner.Create(Painel);
+
   Temporizador := TTimer.Create(Painel);
   Temporizador.Interval := ERPVBannerAutoOcultaMs;
-  Temporizador.OnTimer :=
-    procedure(Sender: TObject)
-    begin
-      FecharBanner(Painel);
-    end;
+  Temporizador.OnTimer := Fechador.Fechar;
   Temporizador.Enabled := True;
 
-  Painel.OnClick :=
-    procedure(Sender: TObject)
-    begin
-      FecharBanner(Painel);
-    end;
-  Rotulo.OnClick := Painel.OnClick;
+  Painel.OnClick := Fechador.Fechar;
+  Rotulo.OnClick := Fechador.Fechar;
 
   Painel.BringToFront;
 end;
@@ -523,6 +648,9 @@ end;
 initialization
 
 finalization
-  TERPVEstiloZebra.Liberar;
+  FreeAndNil(FEstiloContentPar);
+  FreeAndNil(FEstiloContentImpar);
+  FreeAndNil(FEstiloSelecao);
+  FreeAndNil(FEstiloHeader);
 
 end.

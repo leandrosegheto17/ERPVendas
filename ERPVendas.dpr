@@ -14,7 +14,10 @@
 uses
   Vcl.Forms,
   ERPV.App.Root in 'src\App\ERPV.App.Root.pas',
-  ERPV.UI.FormMain in 'src\UI\ERPV.UI.FormMain.pas' {FormMain};
+  ERPV.UI.FormMain in 'src\UI\ERPV.UI.FormMain.pas' {FormMain},
+  ERPV.UI.FormTesteTema in 'src\UI\ERPV.UI.FormTesteTema.pas',
+  ERPV.UI.Tema in 'src\UI\ERPV.UI.Tema.pas',
+  ERPV.UI.Tokens in 'src\UI\ERPV.UI.Tokens.pas';
 
 {$R *.res}
 
