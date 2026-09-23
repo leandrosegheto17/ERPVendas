@@ -14,7 +14,9 @@
 uses
   Vcl.Forms,
   ERPV.App.Root in 'src\App\ERPV.App.Root.pas',
-  ERPV.UI.FormBaseEdicao in 'src\UI\ERPV.UI.FormBaseEdicao.pas',
+  ERPV.Core.Validadores in 'src\Core\ERPV.Core.Validadores.pas',
+  ERPV.Dados.ClienteRepository in 'src\Dados\ERPV.Dados.ClienteRepository.pas',
+  ERPV.UI.FormBaseEdicao in'src\UI\ERPV.UI.FormBaseEdicao.pas',
   ERPV.UI.FormBaseLista in 'src\UI\ERPV.UI.FormBaseLista.pas',
   ERPV.UI.FormMain in 'src\UI\ERPV.UI.FormMain.pas' {FormMain},
   ERPV.UI.FormTesteTema in 'src\UI\ERPV.UI.FormTesteTema.pas',
