@@ -11,3 +11,42 @@ coverage/
 .DS_Store
 __pycache__/
 *.pyc
+
+# --- ERP Vendas (Delphi) — T07 (GUARDRAILS regra 16: nenhum segredo/licenca no repo) ---
+
+# Config real (segredos: conexao, URL do Financeiro, SMTP, ApiKey) — só o
+# .example fica versionado (T09 cria config/erpvendas.ini.example)
+erpvendas.ini
+config/*.ini
+!config/erpvendas.ini.example
+
+# Saida de build (dcc32/IDE) e artefatos intermediarios
+*.dcu
+*.dcp
+*.map
+*.drc
+*.rsm
+*.identcache
+*.local
+*.tvsconfig
+*.stat
+*.~*
+__history/
+__recovery/
+Win32/
+Win64/
+
+# Executavel/recurso gerados localmente (regenerados pela IDE ou pelo build)
+*.exe
+*.res
+
+# Logs de execucao da aplicacao (ERPV.Core.Log, T10) e PDFs temporarios
+# gerados por IRelatorioPedido (T47) antes do anexo no e-mail
+logs/
+*.pdf
+
+# Licencas/chaves (DevExpress, ReportBuilder, SMTP) — nunca versionar
+*.slip
+*.lic
+*.license
+*.key

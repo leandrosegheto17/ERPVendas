@@ -268,6 +268,39 @@ Confirmado — nenhuma chave de licença, número de série, ou credencial foi
 registrada neste arquivo ou em qualquer outro arquivo deste commit.
 `config/erpvendas.ini.example` (T09) seguirá com dados fictícios.
 
+## 12. Achado estrutural (T07): Delphi Community Edition não compila via linha de comando
+
+Descoberto em 2026-09-22 ao tentar validar a compilação do esqueleto do
+projeto (T07) por automação, sem IDE gráfica: tanto `dcc32.exe` direto quanto
+`msbuild ERPVendas.dproj /t:Build` (com `rsvars`/`BDS` configurados
+corretamente, `.dproj` importando `CodeGear.Delphi.Targets`) retornam a
+mensagem do próprio compilador: *"This version of the product does not
+support command line compiling."* — é uma restrição conhecida da edição
+**Community**, que só compila através da IDE gráfica (`bds.exe`).
+
+**Armadilha a evitar:** o `msbuild` reporta *"Compilação com êxito, 0 erros"*
+mesmo assim, de forma **enganosa** — a pasta de saída (`Win32\Debug\`) fica
+vazia, nenhum `.dcu`/`.exe` é gerado de fato. Qualquer verificação futura que
+confie só na saída do `msbuild`/`dcc32` para "confirmar" compilação nesta
+máquina vai estar checando um resultado falso.
+
+**Impacto no restante do projeto:**
+- **Toda tarefa Delphi a partir daqui** (T08 em diante) depende de o usuário
+  abrir a IDE e compilar manualmente (F9/Ctrl+F9) para confirmar o critério de
+  aceite — o Executor não consegue mais se autoverificar por linha de comando
+  como fez nos artefatos não-Delphi do Lote 1 (SQL via `isql`, Python, etc.).
+- **Risco para CI/CD (Lote 16, T61/T63/T64) e para qualquer pipeline
+  automatizado futuro:** um build headless (servidor de CI sem IDE interativa)
+  não é possível com esta edição do Delphi. Se o projeto precisar de
+  integração contínua automatizada de verdade, será necessário: (a) uma
+  edição paga do Delphi com suporte a compilação via linha de comando
+  (Professional/Enterprise/Architect, licenciada), ou (b) manter o processo de
+  build sempre manual, via IDE, mesmo em produção. Sinalizado aqui sem decidir
+  — decisão de escopo/orçamento do usuário/Gestor.
+- Isso reforça o risco RP-1 já registrado no `TASK.md` Seção 5 (capacidade x
+  prazo): o gargalo de "revisão/compilação manual pelo dev" é ainda mais
+  literal do que o esperado — é a única forma de compilar, não só de revisar.
+
 ## 11. Spike S1 (T02) — Indy `TIdSMTP` + OpenSSL — status: **Bloqueada**
 
 **Tarefa:** T02 (Lote 1). **Status: Bloqueada** — verificação estática do
