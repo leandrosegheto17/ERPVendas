@@ -22,7 +22,9 @@ uses
   ERPV.UI.FormBaseEdicao in 'src\UI\ERPV.UI.FormBaseEdicao.pas',
   ERPV.UI.FormBaseLista in 'src\UI\ERPV.UI.FormBaseLista.pas',
   ERPV.UI.FormEdicaoCliente in 'src\UI\ERPV.UI.FormEdicaoCliente.pas',
+  ERPV.UI.FormEdicaoProduto in 'src\UI\ERPV.UI.FormEdicaoProduto.pas',
   ERPV.UI.FormListaClientes in 'src\UI\ERPV.UI.FormListaClientes.pas',
+  ERPV.UI.FormListaProdutos in 'src\UI\ERPV.UI.FormListaProdutos.pas',
   ERPV.UI.FormMain in'src\UI\ERPV.UI.FormMain.pas' {FormMain},
   ERPV.UI.FormTesteTema in 'src\UI\ERPV.UI.FormTesteTema.pas',
   ERPV.UI.Tema in 'src\UI\ERPV.UI.Tema.pas',
@@ -42,7 +44,8 @@ begin
     try
       AplicarTema; // skin uma unica vez, antes de criar qualquer form (T14)
       Application.CreateForm(TFormMain, FormMain);
-      FormMain.Configurar(Root.Configuracao.Financeiro.BaseUrl, Root.ClienteService);
+      FormMain.Configurar(Root.Configuracao.Financeiro.BaseUrl, Root.ClienteService,
+        Root.ProdutoService);
       Application.Run;
     finally
       Root.Free;

@@ -44,7 +44,8 @@ uses
   System.Classes, Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs,
   Vcl.ExtCtrls, Vcl.StdCtrls, Vcl.Menus, cxButtons,
   ERPV.UI.Tokens, ERPV.UI.Tema,
-  ERPV.Negocio.ClienteService, ERPV.UI.FormListaClientes;
+  ERPV.Negocio.ClienteService, ERPV.UI.FormListaClientes,
+  ERPV.Negocio.ProdutoService, ERPV.UI.FormListaProdutos;
 
 const
   WM_ERPV_FECHAR_LISTA = WM_USER + 101;
@@ -58,6 +59,8 @@ type
     FBaseUrlFinanceiro: string;
     FClienteService: TClienteService;
     FListaClientes: TFormListaClientes;
+    FProdutoService: TProdutoService;
+    FListaProdutos: TFormListaProdutos;
     FPainelMarca: TPanel;
     FRotuloMarca: TLabel;
     FPainelNav: TPanel;
@@ -73,7 +76,9 @@ type
     FBotoesNav: array[TDestinoShell] of TcxButton;
     FMenu: TMainMenu;
     procedure FecharListaClientes;
+    procedure FecharListaProdutos;
     procedure AoFecharListaClientes(Sender: TObject);
+    procedure AoFecharListaProdutos(Sender: TObject);
     procedure MsgFecharLista(var Msg: TMessage); message WM_ERPV_FECHAR_LISTA;
     procedure MontarFaixaMarca;
     procedure MontarAreaConteudo;
@@ -102,7 +107,7 @@ type
     ///   INI, lida pelo composition root). Chamar uma vez apos criar o form.
     /// </summary>
     procedure Configurar(const ABaseUrlFinanceiro: string;
-      AClienteService: TClienteService);
+      AClienteService: TClienteService; AProdutoService: TProdutoService);
 
     /// <summary>
     ///   Ponto de entrada de navegacao. T14 ainda nao tem as telas (T19/T23/
@@ -161,10 +166,11 @@ begin
 end;
 
 procedure TFormMain.Configurar(const ABaseUrlFinanceiro: string;
-  AClienteService: TClienteService);
+  AClienteService: TClienteService; AProdutoService: TProdutoService);
 begin
   FBaseUrlFinanceiro := ABaseUrlFinanceiro;
   FClienteService := AClienteService;
+  FProdutoService := AProdutoService;
   DefinirTextoStatus(FStatusFinanceiro, 'Financeiro: ' + FBaseUrlFinanceiro);
 end;
 
@@ -448,8 +454,22 @@ begin
   AtualizarItemAtivo(ADestino);
   // T19 (Clientes) embutida; T23 (Produtos), T31 (Vendas) e T52 (Pendencias)
   // chegam depois; ate la o shell so informa, sem bloquear.
-  if (ADestino = dsClientes) and (FClienteService <> nil) then
+  if (ADestino = dsProdutos) and (FProdutoService <> nil) then
   begin
+    FecharListaClientes;
+    FecharListaProdutos;
+    FRotuloBemVindo.Visible := False;
+    FRotuloBemVindoSub.Visible := False;
+    FListaProdutos := TFormListaProdutos.Create(Self, FProdutoService);
+    FListaProdutos.BorderStyle := bsNone;
+    FListaProdutos.Parent := FAreaConteudo;
+    FListaProdutos.Align := alClient;
+    FListaProdutos.OnFechada := AoFecharListaProdutos;
+    FListaProdutos.Show;
+  end
+  else if (ADestino = dsClientes) and (FClienteService <> nil) then
+  begin
+    FecharListaProdutos;
     FecharListaClientes;
     FRotuloBemVindo.Visible := False;
     FRotuloBemVindoSub.Visible := False;
@@ -471,6 +491,19 @@ begin
   FRotuloBemVindoSub.Visible := True;
 end;
 
+procedure TFormMain.FecharListaProdutos;
+begin
+  FreeAndNil(FListaProdutos);
+  FRotuloBemVindo.Visible := True;
+  FRotuloBemVindoSub.Visible := True;
+end;
+
+procedure TFormMain.AoFecharListaProdutos(Sender: TObject);
+begin
+  // mesma mecânica da lista de clientes: libera fora do handler do botão/tecla
+  PostMessage(Handle, WM_ERPV_FECHAR_LISTA, 0, 0);
+end;
+
 procedure TFormMain.AoFecharListaClientes(Sender: TObject);
 begin
   // Fechar/Esc na lista embutida: volta ao "Bem-vindo". O Free acontece fora
@@ -481,6 +514,7 @@ end;
 procedure TFormMain.MsgFecharLista(var Msg: TMessage);
 begin
   FecharListaClientes;
+  FecharListaProdutos;
 end;
 
 procedure TFormMain.AoClicarDestino(Sender: TObject);
