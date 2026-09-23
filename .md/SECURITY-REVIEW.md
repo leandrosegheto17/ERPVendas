@@ -291,3 +291,28 @@ para o fechamento estrutural (checagem do Validador) e, com a dupla
 aprovação QA+DevSecOps deste lote, para `/deploy` quando o usuário decidir
 (preparação de infraestrutura/CI-CD segue em paralelo desde o início,
 conforme timing padrão).
+
+## Lote 4 — Cadastro de Clientes (D2)
+
+Escopo: `ERPV.Dados.ClienteRepository`, `ERPV.Negocio.ClienteService`, `ERPV.Core.Validadores`, `FormListaClientes`, `FormEdicaoCliente`. QA do lote: Aprovado com ressalvas. Análise por leitura de código (sem SAST automatizado disponível); sem recompilação.
+
+### 1. Segredo/credencial no repositório
+Varredura por `password/senha/apikey` em `.pas/.dpr/.ini/.sql/.js`: só `config/erpvendas.ini.example` com valores fictícios, leitura por variável de ambiente e a montagem de `Password=` em `Conexao.pas` (já auditada no Lote 2). Nenhum segredo nas units do Lote 4. Sem achado.
+
+### 2. SQL parametrizado (regra 11)
+`ClienteRepository`: INSERT/UPDATE/DELETE/SELECT/existe-por-documento usam `ParamByName` para todo valor. A listagem concatena apenas fragmentos de SQL constantes (`AND ATIVO = TRUE`, bloco de busca); o texto do usuário entra só como parâmetro, com `%`, `_` e `\` escapados. Sem SQL em form, Service ou Dominio. Sem achado.
+
+### 3. Log e dados sensíveis (regra 17)
+O repositório loga só a operação e a exceção do FireDAC via `TLogger.Erro` (que mascara CPF/CNPJ/e-mail e redige senha, verificado na T10); nenhum valor de parâmetro é passado ao log. Forms e Service não logam. Sem achado.
+
+### 4. Mensagens ao usuário e achados
+Mensagens do repositório são fixas e amigáveis (sem SQL/caminho/credencial); a UI mostra `E.Message` apenas de `EErpVendas` e cai em texto genérico para qualquer outra exceção. **Achado 1 (baixa):** o repositório levanta `EInfra` (não `EInfraMensagemSegura`) para duplicidade/em uso/não encontrado; hoje funciona porque a UI usa `E.Message`, mas via `Application.OnException` sairia a mensagem genérica. É a nota de disciplina já prevista no Lote 2. Falha para o lado seguro (não vaza). Vira RF4-02, prazo antes do Lote 16.
+
+### 5. Camadas ADR-001/010
+Grep em `Negocio`, `Dominio` e `Core`: `Vcl`/`FireDAC` só aparecem em comentários, exceto `Vcl.Dialogs` em `ERPV.Core.Erros` (tratador de exceções, exceção documentada e aceita no Lote 2). `Negocio` não referencia `Dados`. Forms dependem só de `TClienteService`, sem SQL/regra de negócio. Sem achado.
+
+### 6. Compliance (LGPD básica) e operacional
+CPF/e-mail tratados como dado pessoal: mascarados em log, não expostos em mensagem. Nenhum requisito operacional novo para o chapéu DevOps. Nada de relevância estratégica para o Gestor.
+
+### Veredito do lote (chapéu DevSecOps)
+**Aprovado com débito baixo** (achado 1, RF4-02). Sem achado alto/crítico nem compliance em aberto. Libera para `/deploy` quando o usuário decidir.

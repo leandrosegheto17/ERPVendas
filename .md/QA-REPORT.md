@@ -212,3 +212,33 @@ confirmada e revisada pelo Validador, para T12/T13).
 **Aprovado.** Todas as 7 tarefas do Lote 2 atendem ao critério de aceite
 específico, sem reprovação crítica ou simples, e sem achado pendente em
 `Refatoração Lote-2`. Segue para auditoria de segurança (chapéu DevSecOps).
+
+## Lote 4 — Cadastro de Clientes (D2)
+
+Base: critério de aceite de T16-T20 no `TASK.md`, código real lido (`ERPV.Core.Validadores`, `ERPV.Dados.ClienteRepository`, `ERPV.Negocio.ClienteService`, `ERPV.UI.FormListaClientes`, `ERPV.UI.FormEdicaoCliente`), sem usar a nota do Executor como base. Limitação declarada: sem CLI de compilação (Delphi Community) e sem testes automatizados; a evidência de execução é a verificação real do usuário na IDE (2026-09-23), cruzada com a leitura do código. O Validador não recompilou.
+
+| Tarefa | Critério (resumo) | Verificação | Veredito |
+|---|---|---|---|
+| T16 | CPF/CNPJ/e-mail válidos e inválidos da tabela | 5 casos executados pelo usuário (True/False/True/True/False); dígitos verificadores conferidos contra implementação independente (25.000 entradas, 0 divergências) | **Aprovado** |
+| T17 | Operações refletidas no banco; lista filtra inativos; SQL parametrizado | Leitura: todo SQL usa `ParamByName`, sem concatenação de valor (só monta cláusulas fixas); busca com LIKE escapado; execução real de incluir/obter/alterar/existe/excluir; SQLs também validados em `isql` real | **Aprovado** (ver RF4-03) |
+| T18 | Obrigatórios, validação T16, documento único, só dígitos | Leitura de `Validar`: nome, CPF/CNPJ (por tipo), e-mail, duplicidade ignorando o próprio Id; `uses` sem Vcl/FireDAC/Dados; execução real confirmou cada caso com o campo certo | **Aprovado** (texto sem acento, RF4-01) |
+| T19 | Cabeçalho, chips de situação, busca, vazio, erro + Tentar novamente, sem SQL no form | Leitura: form só chama `TClienteService`, sem SQL/FireDAC; execução real aprovada (grade com seed, busca, inativos, Novo/Editar/Excluir) | **Aprovado** |
+| T20 | Coluna única, erro no campo, máscara por tipo, Enter/Esc, botões nos papéis | Leitura: `EValidacao.Campo` vira erro no campo com foco no 1º inválido; execução real aprovada | **Aprovado com ressalva** (RF4-01; borda grossa, abaixo) |
+
+### Testes de integração (dentro do lote)
+
+Form -> Service -> Repository -> Firebird exercitado pelo usuário na IDE: incluir, editar, duplicado, inativar (lista filtra), excluir. Contrato `IClienteRepository` consistente entre Service e Repository. Dependência do Lote 3 (T14/T15/T68) satisfeita: lista embutida no `FormMain`, herda das bases.
+
+### Observações (não são reprovação)
+
+- Borda grossa dos campos da edição (T20): revisar na T60.
+- T68: roteiro visual completo e contraste AA/"nenhuma cor solta" seguem como dívida conhecida (aval do usuário).
+- Não verificados em execução: fallback de menu (T14), DPI 125% e 1366x768 (T60), busca com acento/caixa (RF4-03).
+
+### Fechamento estrutural
+
+Todas as 5 tarefas `Concluída`. Dependências da Seção 4 (T16->T07; T17->T08,T12,T03; T18->T16,T17; T19->T14,T15,T18; T20->T14,T15,T18) resolvidas e não órfãs. Nenhuma tarefa `Bloqueada`. Unit e chamada temporárias do teste da T18 (`ERPV.Temp.TesteT18`, `RodarTesteT18`) confirmadas ausentes do repositório. Nota: o cabeçalho do Lote 3 ainda não está marcado `Validado`; não bloqueia o Lote 4. Tarefas criadas em `Refatoração Lote-4` (fim da Seção 3 do `TASK.md`): RF4-01, RF4-02, RF4-03. Nenhuma escalação ao `coordenador`.
+
+### Veredito do lote (chapéu QA)
+
+**Aprovado com ressalvas.** Nenhuma reprovação crítica; 3 ajustes simples viraram tarefas em `Refatoração Lote-4`. Segue para auditoria de segurança.
