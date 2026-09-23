@@ -210,7 +210,7 @@ function Notificar(const ATipo: TUITipoNotificacao; const ATexto: string;
 implementation
 
 uses
-  Winapi.Windows, Winapi.Messages,
+  Winapi.Windows, Winapi.Messages, ERPV.UI.Icones,
   {$IFDEF ERPV_SKIN_DISPONIVEL}
   // TdxSkinController mora em dxSkinsForm (nao em "dxSkinsCore" - esse e o
   // nome do PACOTE dxSkinsCoreRS37.dpk, nao de uma unit; confirmado no
@@ -537,6 +537,8 @@ var
   Rotulo: TLabel;
   Temporizador: TTimer;
   Fechador: TERPVFechadorDeBanner;
+  Icone: TImage;
+  TemIcone: Boolean;
 begin
   Host := AOwnerBanner;
   if Host = nil then
@@ -559,6 +561,15 @@ begin
   Painel.Hint := 'Clique para fechar';
   Painel.ShowHint := True;
 
+  // T69: icone 'info' a esquerda do texto; sem icone, cai no prefixo 'i  '.
+  Icone := TImage.Create(Painel);
+  Icone.Parent := Painel;
+  Icone.Align := alLeft;
+  Icone.Width := TamanhoIconeAtual + ERPVEspaco16;
+  TemIcone := AplicarIconeImagem(Icone, ERPVIconeInfo);
+  if not TemIcone then
+    Icone.Visible := False;
+
   Rotulo := TLabel.Create(Painel);
   Rotulo.Parent := Painel;
   Rotulo.Align := alClient;
@@ -567,7 +578,10 @@ begin
   Rotulo.Font.Name := ERPVFontePrincipal;
   Rotulo.Font.Size := ERPVTamCorpo;
   Rotulo.Font.Color := clERPVInfoTexto;
-  Rotulo.Caption := 'i  ' + ATexto; // icone real (ERPVIconeInfo, T69) plugado nas bases de form
+  if TemIcone then
+    Rotulo.Caption := ATexto
+  else
+    Rotulo.Caption := 'i  ' + ATexto;
   Rotulo.Transparent := True;
 
   // Fechador e criado com o Painel como Owner: quando o Painel for liberado
@@ -582,6 +596,7 @@ begin
 
   Painel.OnClick := Fechador.Fechar;
   Rotulo.OnClick := Fechador.Fechar;
+  Icone.OnClick := Fechador.Fechar;
 
   Painel.BringToFront;
 end;

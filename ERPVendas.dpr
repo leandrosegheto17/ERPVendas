@@ -27,6 +27,7 @@ uses
   ERPV.UI.FormListaProdutos in 'src\UI\ERPV.UI.FormListaProdutos.pas',
   ERPV.UI.FormMain in'src\UI\ERPV.UI.FormMain.pas' {FormMain},
   ERPV.UI.FormTesteTema in 'src\UI\ERPV.UI.FormTesteTema.pas',
+  ERPV.UI.Icones in 'src\UI\ERPV.UI.Icones.pas',
   ERPV.UI.Tema in 'src\UI\ERPV.UI.Tema.pas',
   ERPV.UI.Tokens in 'src\UI\ERPV.UI.Tokens.pas';
 

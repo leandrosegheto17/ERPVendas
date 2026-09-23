@@ -26,7 +26,7 @@ uses
   Winapi.Windows,
   System.SysUtils, System.Classes, System.UITypes,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Graphics,
-  cxButtons, ERPV.UI.Tokens, ERPV.UI.Tema;
+  cxButtons, ERPV.UI.Tokens, ERPV.UI.Tema, ERPV.UI.Icones;
 
 type
   TFormBaseEdicao = class(TForm)
@@ -102,6 +102,10 @@ begin
   FBtnCancelar := CriarBotao('Cancelar', upbSecundario, ClickCancelar);
   FBtnExcluir := CriarBotao('Excluir', upbPerigoso, ClickExcluir);
   FBtnExcluir.Visible := False;
+  // T69: icones (degradam para so texto se faltarem; Caption permanece)
+  AplicarIcone(FBtnSalvar, ERPVIconeSalvar);
+  AplicarIcone(FBtnCancelar, ERPVIconeCancelar);
+  AplicarIcone(FBtnExcluir, ERPVIconeExcluir);
   // TabOrder: campos primeiro, depois rodape (Salvar, Cancelar, Excluir).
   FPnlCampos.TabOrder := 0;
   FPnlRodape.TabOrder := 1;
