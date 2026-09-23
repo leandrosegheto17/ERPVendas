@@ -17,9 +17,10 @@ uses
   ERPV.Core.Validadores in 'src\Core\ERPV.Core.Validadores.pas',
   ERPV.Dados.ClienteRepository in 'src\Dados\ERPV.Dados.ClienteRepository.pas',
   ERPV.Negocio.ClienteService in 'src\Negocio\ERPV.Negocio.ClienteService.pas',
-  ERPV.UI.FormBaseEdicao in'src\UI\ERPV.UI.FormBaseEdicao.pas',
+  ERPV.UI.FormBaseEdicao in 'src\UI\ERPV.UI.FormBaseEdicao.pas',
   ERPV.UI.FormBaseLista in 'src\UI\ERPV.UI.FormBaseLista.pas',
   ERPV.UI.FormMain in 'src\UI\ERPV.UI.FormMain.pas' {FormMain},
+  ERPV.Temp.TesteT15 in 'src\UI\ERPV.Temp.TesteT15.pas',
   ERPV.UI.FormTesteTema in 'src\UI\ERPV.UI.FormTesteTema.pas',
   ERPV.UI.Tema in 'src\UI\ERPV.UI.Tema.pas',
   ERPV.UI.Tokens in 'src\UI\ERPV.UI.Tokens.pas';
@@ -39,6 +40,7 @@ begin
       AplicarTema; // skin uma unica vez, antes de criar qualquer form (T14)
       Application.CreateForm(TFormMain, FormMain);
       FormMain.Configurar(Root.Configuracao.Financeiro.BaseUrl);
+      RodarTesteT15; // TEMPORARIO (remover apos teste)
       RodarTesteT18(Root); // TEMPORARIO (remover apos teste)
       Application.Run;
     finally

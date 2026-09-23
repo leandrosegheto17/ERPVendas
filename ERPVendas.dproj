@@ -103,6 +103,7 @@
         </DCCReference>
         <DCCReference Include="src\UI\ERPV.UI.FormBaseEdicao.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.FormBaseLista.pas"/>
+        <DCCReference Include="src\UI\ERPV.Temp.TesteT15.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.FormTesteTema.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.Tema.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.Tokens.pas"/>
