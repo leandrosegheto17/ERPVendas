@@ -101,6 +101,8 @@
         <DCCReference Include="src\Dados\ERPV.Dados.VendaRepository.pas"/>
         <DCCReference Include="src\Negocio\ERPV.Negocio.ClienteService.pas"/>
         <DCCReference Include="src\Negocio\ERPV.Negocio.ProdutoService.pas"/>
+        <DCCReference Include="src\Negocio\ERPV.Negocio.VendaService.pas"/>
+        <DCCReference Include="src\App\ERPV.Temp.TesteT27.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.FormBaseEdicao.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.FormBaseLista.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.FormEdicaoCliente.pas"/>
