@@ -774,3 +774,9 @@ Sem achados de: segredo/credencial real, dado pessoal real, nome de variável de
 **Aprovado com débito (sem achado bloqueante).** Nenhum alto/crítico e nenhum compliance obrigatório em aberto; SG15-01..05 são de baixa severidade e viram tarefas em `Refatoração Lote-15` (correções só de texto, SG15-01/02 antes da entrega de 25/09). Débitos dos Lotes 11 a 13 mantidos; SG12-01 (TLS) continua bloqueando produção com SMTP real.
 
 Escala para: nenhum bloqueio. Executor: correção via `Refatoração Lote-15`. Gestor: informativo (SG15-05, mais SG11-05 e SG12-05 mantidos). Coordenador: não. DevOps: nenhum requisito novo; o pacote de entrega não deve incluir `erpvendas.ini` real.
+
+## Refatoração Lote-15 — validação (2026-09-24)
+
+Texto novo revisado: sem credencial/host real (só `<senha>` e 127.0.0.1); `ISC_PASSWORD`/prompt orientado corretamente, com limpeza da variável; aviso de rede do mock e `/_modo` sem autenticação (`--host 127.0.0.1`, sem `0.0.0.0`); §5 descreve com fidelidade o alcance de `MascararSensiveis` (CPF/CNPJ, e-mail, chave=valor de senha/apikey/token/secret; não cobre nome, telefone, endereço, formatos atípicos nem texto do Financeiro na UI) e o envio do `motivo` livre no cancelamento. Retenção sem prazo (SG15-05) segue informativo ao Gestor. Sem novos achados; SG15-01..04 tratados.
+
+**Veredito: Aprovado** (sem débito novo; débitos dos Lotes 11 a 13 mantidos).

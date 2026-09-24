@@ -74,11 +74,11 @@ Verificação: `SELECT RDB$CHARACTER_SET_NAME FROM RDB$DATABASE;` deve retornar 
 |---|---|---|
 | `[Banco]` | `Caminho`, `Usuario`, `Senha` | Caminho do `.FDB` |
 | `[Financeiro]` | `BaseUrl`, `TimeoutSegundos`, `ApiKey` | `ApiKey` vazia = não envia `X-Api-Key`. Contrato: `docs/contrato-api-financeiro.md` |
-
-> **Atenção (porta):** o `BaseUrl` do `config/erpvendas.ini.example` aponta para `http://localhost:5000`, mas o mock do Financeiro (seção 4) escuta por padrão na porta **8080** (`--port`). Ao usar o mock, ajuste `BaseUrl=http://127.0.0.1:8080` no seu `erpvendas.ini` (ou inicie o mock com `--port 5000`).
 | `[SMTP]` | `Host`, `Porta`, `Usuario`, `Senha`, `UsaTLS` | Use caixa de teste (Mailtrap/Ethereal) |
 | `[Relatorio]` | `PastaPdfTemp` | Deve existir e ter escrita |
 | `[Log]` | `Pasta` | Deve existir e ter escrita |
+
+> **Atenção (porta):** o `BaseUrl` do `config/erpvendas.ini.example` aponta para `http://localhost:5000`, mas o mock do Financeiro (seção 4) escuta por padrão na porta **8080** (`--port`). Ao usar o mock, ajuste `BaseUrl=http://127.0.0.1:8080` no seu `erpvendas.ini` (ou inicie o mock com `--port 5000`).
 
 Segredos preferencialmente por variável de ambiente (têm prioridade sobre o INI): `ERPV_BANCO_SENHA`, `ERPV_SMTP_PASSWORD`, `ERPV_FINANCEIRO_APIKEY`.
 
