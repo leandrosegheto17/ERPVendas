@@ -123,6 +123,23 @@ Aponte `[Financeiro] BaseUrl=http://127.0.0.1:8080`. O modo muda em tempo de exe
 - **Delphi Community:** licença registrada, 367 dias a partir de 2026-09-22.
 - **OpenSSL:** apenas 1.0.2 Win32 (seção 2).
 
+### 6.1 Pré-requisitos para entrega real (além do processo seletivo)
+
+Este pacote é de processo seletivo/avaliação. Uma entrega real exige, no mínimo:
+
+- **Licenciar DevExpress VCL e ReportBuilder** (SG16-02, decisão do Gestor): hoje trial/demo, não redistribuíveis.
+- **Trocar o OpenSSL 1.0.2 (fora de suporte)** por versão suportada (SG16-04, junto de SG12-01); TLS/SMTP produtivo não foi validado.
+- **Executar a T64** (teste de instalação em máquina limpa seguindo só este README) e **o checklist RF16-01** (UX §5: teclado, TabOrder, Enter/Esc, foco, DPI 100%/125%, contraste AA) (SG16-06).
+
+Tarefas **NÃO verificadas** (concluídas por dispensa/decisão do usuário em 2026-09-24, sem evidência):
+
+| Tarefa | Situação real |
+|---|---|
+| T59 | Roteiro completo não executado; sem `docs/evidencias/` (só smoke da T54 e 78/78 DUnitX) |
+| T60 | Checklist UX §5, contraste AA e DPI 100%/125% não evidenciados |
+| T62 | `db/ERPVENDAS.FBK` não gerado; restore com `gbak` não validado (usar scripts `db/*.sql`) |
+| T64 | Instalação em pasta/máquina limpa seguindo só o README não executada |
+
 ## 7. Mais documentação
 
 - `docs/ambiente-licencas.md`: versões, licenças, spikes (SMTP, PDF, FireDAC).

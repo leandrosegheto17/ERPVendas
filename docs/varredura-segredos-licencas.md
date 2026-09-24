@@ -46,3 +46,18 @@ Achados reais: **nenhum**.
 | `.bpl` da RTL/VCL Delphi (`rtl370`, `vcl370`, ...) | Em `bin/` | Redistribuicao sujeita aos termos da Community; nao documentado. |
 
 Pendente (nao bloqueia a T63): o aviso de expiracao/nao redistribuicao ja esta no README; falta registrar em `ambiente-licencas.md` a licenca/origem do `fbclient.dll`.
+
+## 5. Pre-requisitos para entrega real (RF16-05)
+
+Este pacote serve ao processo seletivo. Entregas alem dele exigem:
+
+- Licenciar DevExpress VCL e ReportBuilder (SG16-02, decisao do Gestor); hoje trial/demo, nao redistribuiveis.
+- Trocar o OpenSSL 1.0.2, fora de suporte (SG16-04, junto de SG12-01); TLS/SMTP produtivo nao validado.
+- Executar a T64 (instalacao em maquina limpa, SG16-06) e o checklist RF16-01 (UX 5 da T60).
+
+Tarefas NAO verificadas (dispensadas/marcadas por decisao do usuario em 2026-09-24, sem evidencia):
+
+- T59: roteiro completo nao executado; sem `docs/evidencias/`.
+- T60: checklist UX 5, contraste AA e DPI 100%/125% nao evidenciados (RF16-01 tambem nao executado).
+- T62: `db/ERPVENDAS.FBK` nao gerado; restore `gbak` nao validado.
+- T64: teste de instalacao em pasta/maquina limpa nao executado.
