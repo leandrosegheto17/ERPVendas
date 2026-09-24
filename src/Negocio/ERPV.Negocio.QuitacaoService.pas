@@ -320,6 +320,9 @@ begin
   // RF10-01: MOTIVO_CANCELAMENTO e VARCHAR(255) (UI ja limita); recorta.
   Motivo := Copy(Trim(AMotivo), 1, 255);
 
+  // RF10-02: o motivo NAO e persistido na FILA_INTEGRACAO (LGPD; opcional no
+  // contrato). Ao enfileirar CANCELAMENTO ele se perde; o reenvio (T50) sai sem
+  // motivo e MOTIVO_CANCELAMENTO fica NULL se concluido localmente no reenvio.
   // HTTP fora de transacao (ADR-006).
   Resp := FFinanceiro.ConfirmarCancelamento(AVendaId, Motivo);
 
