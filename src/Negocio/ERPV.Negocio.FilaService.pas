@@ -19,7 +19,11 @@
     local, ao MarcarConcluido ou ao RegistrarFalha vira rrFalha com mensagem
     amigavel (sem dado pessoal/erro tecnico); item segue PENDENTE e o proximo
     reenvio reconcilia pelo GET. Sem log aqui (o service nao tem logger).
-  - tfEmail e responsabilidade de T51: aqui devolve rrNaoSuportado, sem efeito.
+  - T51 (EMAIL): venda ja Quitada, status intocado. Regenera PDF do banco
+    (IRelatorioPedido), envia (IEmailSender), apaga o PDF sempre; sucesso =>
+    MarcarConcluido; falha (SMTP, sem e-mail, excecao) => rrFalha + RegistrarFalha
+    (PENDENTE, tentativas+1). EInfra/Exception nao escapam; sem log de e-mail.
+    rrNaoSuportado fica so para tipos desconhecidos.
   Roteiro manual T50: 1. mock erro500, Confirmar => item QUITACAO PENDENTE;
   mock ok, Reenviar => rrConcluido, item CONCLUIDO, venda QUITADA. 2. mock
   ainda erro500: rrFalha, TENTATIVAS+1, ULTIMO_ERRO preenchido, item PENDENTE.
@@ -36,7 +40,11 @@ uses
   ERPV.Dominio.Resultados,
   ERPV.Dominio.Contratos.IVendaRepository,
   ERPV.Dominio.Contratos.IFinanceiroGateway,
-  ERPV.Dominio.Contratos.IFilaRepository;
+  ERPV.Dominio.Contratos.IFilaRepository,
+  ERPV.Dominio.Contratos.IClienteRepository,
+  ERPV.Dominio.Contratos.IRelatorioPedido,
+  ERPV.Dominio.Contratos.IEmailSender,
+  ERPV.Dominio.Cliente;
 
 type
   TDesfechoReenvio = (
@@ -57,12 +65,18 @@ type
     FVendaRepositorio: IVendaRepository;
     FFinanceiro: IFinanceiroGateway;
     FFilaRepositorio: IFilaRepository;
+    FClienteRepositorio: IClienteRepository;
+    FRelatorio: IRelatorioPedido;
+    FEmailSender: IEmailSender;
+    function ReenviarEmail(AFilaId, AVendaId: Integer): TResultadoReenvio;
     function Falha(AFilaId: Integer; const AMensagem: string): TResultadoReenvio;
     function ConcluirLocal(AFilaId, AVendaId: Integer; AAlvo: TStatusVenda;
       const AData: TDateTime): TResultadoReenvio;
   public
     constructor Create(const AVendaRepositorio: IVendaRepository;
-      const AFinanceiro: IFinanceiroGateway; const AFilaRepositorio: IFilaRepository);
+      const AFinanceiro: IFinanceiroGateway; const AFilaRepositorio: IFilaRepository;
+      const AClienteRepositorio: IClienteRepository;
+      const ARelatorio: IRelatorioPedido; const AEmailSender: IEmailSender);
 
     /// <summary>Reenvia item PENDENTE de QUITACAO/CANCELAMENTO. Falha esperada
     /// de integracao vira resultado tipado, nunca excecao.</summary>
@@ -81,9 +95,14 @@ begin
 end;
 
 constructor TFilaService.Create(const AVendaRepositorio: IVendaRepository;
-  const AFinanceiro: IFinanceiroGateway; const AFilaRepositorio: IFilaRepository);
+  const AFinanceiro: IFinanceiroGateway; const AFilaRepositorio: IFilaRepository;
+  const AClienteRepositorio: IClienteRepository;
+  const ARelatorio: IRelatorioPedido; const AEmailSender: IEmailSender);
 begin
   inherited Create;
+  FClienteRepositorio := AClienteRepositorio;
+  FRelatorio := ARelatorio;
+  FEmailSender := AEmailSender;
   FVendaRepositorio := AVendaRepositorio;
   FFinanceiro := AFinanceiro;
   FFilaRepositorio := AFilaRepositorio;
@@ -121,6 +140,80 @@ begin
   Result.Mensagem := '';
 end;
 
+function TFilaService.ReenviarEmail(AFilaId, AVendaId: Integer): TResultadoReenvio;
+var
+  Venda: TVenda;
+  Cliente: TCliente;
+  Destino, Erro, Pdf: string;
+  Env: TResultadoEnvioEmail;
+  Enviado: Boolean;
+begin
+  // T51 (RF-22/23, ADR-005/006/007): a venda ja esta Quitada; status nunca muda.
+  // PDF regenerado do banco (nao persiste), sem transacao aberta (PDF/SMTP).
+  // Nada de log/mensagem com e-mail ou dado pessoal. PDF apagado sempre.
+  Enviado := False;
+  Erro := '';
+  Destino := '';
+  Pdf := '';
+  Venda := nil;
+  Cliente := nil;
+  try
+    try
+      Venda := FVendaRepositorio.Obter(AVendaId);
+      if Venda = nil then
+        Erro := 'Venda não encontrada'
+      else if Venda.Status <> svQuitada then
+        Erro := 'A venda não está quitada; e-mail de confirmação não reenviado'
+      else
+      begin
+        Cliente := FClienteRepositorio.Obter(Venda.ClienteId);
+        if Cliente <> nil then
+          Destino := Trim(Cliente.Email);
+        if Destino = '' then
+          Erro := 'Cliente sem e-mail cadastrado'
+        else
+        begin
+          Pdf := FRelatorio.GerarPdf(Venda);
+          Env := FEmailSender.Enviar(Destino,
+            Format('Confirmação de Pedido %d', [AVendaId]),
+            Format('Segue em anexo a confirmação do pedido %d.', [AVendaId]), Pdf);
+          Enviado := Env.Sucesso;
+          if not Enviado then
+            Erro := Env.MensagemErro;
+        end;
+      end;
+    except
+      on E: Exception do
+      begin
+        Enviado := False;
+        Erro := 'Falha ao gerar/enviar e-mail: ' + E.ClassName;
+      end;
+    end;
+  finally
+    Cliente.Free;
+    Venda.Free;
+  end;
+
+  if Pdf <> '' then
+    try
+      FRelatorio.Limpar(Pdf);
+    except
+      // limpeza best-effort
+    end;
+
+  if not Enviado then
+    Exit(Falha(AFilaId, Erro));
+
+  try
+    FFilaRepositorio.MarcarConcluido(AFilaId);
+  except
+    on EInfra do
+      Exit(Falha(AFilaId, MsgFalhaLocal));
+  end;
+  Result.Desfecho := rrConcluido;
+  Result.Mensagem := '';
+end;
+
 function TFilaService.Reenviar(AFilaId, AVendaId: Integer;
   ATipo: TTipoFila): TResultadoReenvio;
 var
@@ -129,6 +222,8 @@ var
   Resp: TResultadoFinanceiro;
   Data: TDateTime;
 begin
+  if ATipo = tfEmail then
+    Exit(ReenviarEmail(AFilaId, AVendaId));
   if not (ATipo in [tfQuitacao, tfCancelamento]) then
   begin
     Result.Desfecho := rrNaoSuportado;
