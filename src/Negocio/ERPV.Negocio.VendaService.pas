@@ -32,7 +32,7 @@ type
     FClienteRepositorio: IClienteRepository;
     FProdutoRepositorio: IProdutoRepository;
     FFilaRepositorio: IFilaRepository;
-    procedure Validar(const AVenda: TVenda);
+    procedure Validar(const AVenda: TVenda; const AAtual: TVenda);
     procedure ExigirPendente(AId: Integer; out AAtual: TVenda);
     procedure AplicarPrecosETotal(const AVenda: TVenda; const AAtual: TVenda);
   public
@@ -77,7 +77,21 @@ begin
   Result := VendaBloqueadaPorFila(FFilaRepositorio, AId);
 end;
 
-procedure TVendaService.Validar(const AVenda: TVenda);
+procedure TVendaService.Validar(const AVenda: TVenda; const AAtual: TVenda);
+  // RF7-02 (decisao A): em edicao, cliente/produto inativado DEPOIS da venda
+  // criada e aceito se NAO foi trocado (igual ao de AAtual); escolher/trocar
+  // para inativo continua recusado.
+  function ProdutoJaNaVenda(AProdutoId: Integer): Boolean;
+  var
+    Antigo: TVendaItem;
+  begin
+    Result := False;
+    if AAtual <> nil then
+      for Antigo in AAtual.Itens do
+        if Antigo.ProdutoId = AProdutoId then
+          Exit(True);
+  end;
+
 var
   Cliente: TCliente;
   Produto: TProduto;
@@ -90,7 +104,8 @@ begin
   try
     if Cliente = nil then
       raise EValidacao.CreateCampo('Cliente', 'Cliente não encontrado');
-    if not Cliente.Ativo then
+    if (not Cliente.Ativo) and
+      not ((AAtual <> nil) and (AAtual.ClienteId = AVenda.ClienteId)) then
       raise EValidacao.CreateCampo('Cliente', 'Cliente inativo não pode receber venda');
   finally
     Cliente.Free;
@@ -108,7 +123,7 @@ begin
     try
       if Produto = nil then
         raise EValidacao.CreateCampo('Produto', 'Produto não encontrado');
-      if not Produto.Ativo then
+      if (not Produto.Ativo) and (not ProdutoJaNaVenda(Item.ProdutoId)) then
         raise EValidacao.CreateCampo('Produto',
           Format('Produto "%s" inativo não pode ser vendido', [Produto.Descricao]));
     finally
@@ -191,7 +206,7 @@ begin
   try
     if AVenda.Id > 0 then
       ExigirPendente(AVenda.Id, Atual);
-    Validar(AVenda);
+    Validar(AVenda, Atual);
     AplicarPrecosETotal(AVenda, Atual);
     if Atual <> nil then
     begin

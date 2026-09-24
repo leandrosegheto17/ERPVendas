@@ -47,6 +47,7 @@ interface
 uses
   Winapi.Windows, Winapi.Messages,
   System.SysUtils, System.Classes, System.Variants,
+  System.Generics.Collections,
   Data.DB,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Graphics,
   cxEdit, cxGraphics, cxControls, cxStyles, cxCustomData, cxDataStorage,
@@ -78,6 +79,10 @@ type
     FDsProdutos: TDataSource;
     FQryClientes: TDataSet;
     FQryProdutos: TDataSet;
+    // RF7-02: cadastros inativos referenciados pela venda Pendente (rotulados
+    // como inativo; a escolha nova de inativo segue recusada pelo service).
+    FInativosProd: TList<Integer>;
+    FClienteInativo: Boolean;
 
     FQuitacaoService: TQuitacaoService;
     FVendaCancelada: Boolean;
@@ -129,6 +134,9 @@ type
     function ValorInt(ALinha: Integer; ACol: TcxGridColumn): Integer;
 
     procedure Carregar(AVenda: TVenda);
+    function VendaTemInativos(AVenda: TVenda): Boolean;
+    procedure ProdutoGetDisplayText(Sender: TcxCustomGridTableItem;
+      ARecord: TcxCustomGridRecord; var AText: string);
     procedure AplicarEstado;
     procedure AtualizarCancelar;
     function MontarVenda: TVenda;
@@ -193,8 +201,14 @@ begin
     FSomenteLeitura := (FStatus <> svPendente) or FBloqueadaFila;
 
     // Somente leitura: inclui inativos para exibir o historico corretamente.
-    FQryClientes := FClienteService.ListarDataSet('', FSomenteLeitura);
-    FQryProdutos := FProdutoService.ListarDataSet('', FSomenteLeitura);
+    // RF7-02: Pendente com cliente/produto inativado depois: inclui inativos
+    // nas listas (senao o lookup mostraria celula vazia). Escolher um inativo
+    // continua sendo recusado por TVendaService.Salvar.
+    FInativosProd := TList<Integer>.Create;
+    FQryClientes := FClienteService.ListarDataSet('',
+      FSomenteLeitura or VendaTemInativos(Venda));
+    FQryProdutos := FProdutoService.ListarDataSet('',
+      FSomenteLeitura or (FInativosProd.Count > 0));
     FDsClientes := TDataSource.Create(Self);
     FDsClientes.DataSet := FQryClientes;
     FDsProdutos := TDataSource.Create(Self);
@@ -219,7 +233,52 @@ begin
     FDsProdutos.DataSet := nil;
   FQryClientes.Free;
   FQryProdutos.Free;
+  FInativosProd.Free;
   inherited Destroy;
+end;
+
+// RF7-02: preenche FInativosProd/FClienteInativo com o que a venda referencia.
+function TFormEdicaoVenda.VendaTemInativos(AVenda: TVenda): Boolean;
+var
+  Item: TVendaItem;
+  Cli: TCliente;
+  Prod: TProduto;
+begin
+  FClienteInativo := False;
+  if (AVenda <> nil) and (AVenda.Status = svPendente) then
+  begin
+    Cli := FClienteService.Obter(AVenda.ClienteId);
+    try
+      FClienteInativo := (Cli <> nil) and (not Cli.Ativo);
+    finally
+      Cli.Free;
+    end;
+    for Item in AVenda.Itens do
+    begin
+      Prod := FProdutoService.Obter(Item.ProdutoId);
+      try
+        if (Prod <> nil) and (not Prod.Ativo) and
+          (FInativosProd.IndexOf(Item.ProdutoId) < 0) then
+          FInativosProd.Add(Item.ProdutoId);
+      finally
+        Prod.Free;
+      end;
+    end;
+  end;
+  Result := FClienteInativo;
+end;
+
+procedure TFormEdicaoVenda.ProdutoGetDisplayText(Sender: TcxCustomGridTableItem;
+  ARecord: TcxCustomGridRecord; var AText: string);
+var
+  V: Variant;
+begin
+  if (FInativosProd = nil) or (FInativosProd.Count = 0) or (ARecord = nil) then
+    Exit;
+  V := ARecord.Values[FColProduto.Index];
+  if (not VarIsNull(V)) and (not VarIsEmpty(V)) and
+    (FInativosProd.IndexOf(Integer(V)) >= 0) and (AText <> '') then
+    AText := AText + ' (inativo)';
 end;
 
 function TFormEdicaoVenda.EnterAcionaSalvar: Boolean;
@@ -529,6 +588,7 @@ begin
     ListColumns.Add.FieldName := 'DESCRICAO';
     ListColumns.Add.FieldName := 'UNIDADE';
   end;
+  FColProduto.OnGetDisplayText := ProdutoGetDisplayText;
 
   FColQtd := FView.CreateColumn;
   FColQtd.Caption := 'Qtd';
@@ -790,6 +850,8 @@ begin
     else
     begin
       FCmbCliente.EditValue := AVenda.ClienteId;
+      if FClienteInativo then
+        FLblErroCliente.Caption := 'Cliente inativo (mantido nesta venda; não é possível escolher outro inativo)';
       FLblDatas.Caption := 'Data: ' + FormatDateTime('dd/mm/yyyy', AVenda.DataVenda);
       if AVenda.TemDataQuitacao then
         FLblDatas.Caption := FLblDatas.Caption + '     Quitada em: ' +
