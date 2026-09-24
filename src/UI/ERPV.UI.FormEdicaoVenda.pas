@@ -23,9 +23,10 @@
     Salvar oculto, Cancelar vira "Fechar", banner info (UX 2.5/4.2).
   - "Cancelar venda" (T43/T44) fora do escopo: botao perigoso (reaproveita o
     botao Excluir da base) exibido DESABILITADO com dica.
-  - "Confirmar venda" (quitacao) e banner de fila pendente dependem de
-    servicos posteriores (T42/T43...) e nao fazem parte do contrato do
-    construtor desta tarefa: nao implementados aqui.
+  - "Confirmar venda" (quitacao, T42): botao no cabecalho, habilitado so para
+    venda Pendente ja gravada e com QuitacaoService injetado (propriedade,
+    setada pela lista; contrato do construtor inalterado). Fluxo/mensagens em
+    ERPV.UI.ConfirmacaoVenda. Banner de fila pendente: T53.
   - Listas de lookup: clientes/produtos ATIVOS quando Pendente; todos quando
     somente leitura (para exibir itens/cliente historicos inativos).
 }
@@ -43,8 +44,9 @@ uses
   ERPV.Dominio.Enums, ERPV.Dominio.Cliente, ERPV.Dominio.Produto,
   ERPV.Dominio.Venda, ERPV.Dominio.VendaItem,
   ERPV.Negocio.VendaService, ERPV.Negocio.ClienteService,
-  ERPV.Negocio.ProdutoService,
-  ERPV.UI.Tokens, ERPV.UI.Tema, ERPV.UI.FormBaseEdicao;
+  ERPV.Negocio.ProdutoService, ERPV.Negocio.QuitacaoService,
+  ERPV.UI.Tokens, ERPV.UI.Tema, ERPV.UI.Icones, ERPV.UI.ConfirmacaoVenda,
+  ERPV.UI.FormBaseEdicao;
 
 type
   TFormEdicaoVenda = class(TFormBaseEdicao)
@@ -64,6 +66,9 @@ type
     FQryClientes: TDataSet;
     FQryProdutos: TDataSet;
 
+    FQuitacaoService: TQuitacaoService;
+    FBtnConfirmar: TcxButton;
+    FLblEspera: TLabel;
     FLblTitulo: TLabel;
     FPnlChip: TPanel;
     FPnlBanner: TPanel;
@@ -94,6 +99,8 @@ type
     procedure ClienteChange(Sender: TObject);
     procedure AdicionarClick(Sender: TObject);
     procedure RemoverClick(Sender: TObject);
+    procedure ConfirmarVendaClick(Sender: TObject);
+    procedure SetQuitacaoService(AValor: TQuitacaoService);
     procedure DadosMudaram(ASender: TObject);
 
     function PrecoDoProduto(AProdutoId: Integer): Currency;
@@ -112,6 +119,9 @@ type
     function Validar: Boolean; override;
     procedure Gravar; override;
   public
+    /// <summary>Injetado pela lista (T42). Sem ele, Confirmar fica desabilitado.</summary>
+    property QuitacaoService: TQuitacaoService read FQuitacaoService
+      write SetQuitacaoService;
     constructor Create(AOwner: TComponent; AVendaService: TVendaService;
       AClienteService: TClienteService; AProdutoService: TProdutoService;
       AVendaId: Integer); reintroduce;
@@ -239,6 +249,25 @@ begin
   FPnlChip.Font.Name := ERPVFontePrincipal;
   FPnlChip.Font.Size := ERPVTamRotuloCampo;
   FPnlChip.Font.Style := [fsBold];
+  // T42: Confirmar venda (quitacao) + rotulo de espera no cabecalho
+  FBtnConfirmar := TcxButton.Create(Self);
+  FBtnConfirmar.Parent := Pnl;
+  FBtnConfirmar.Align := alRight;
+  FBtnConfirmar.Width := EscalarPx(140);
+  FBtnConfirmar.Caption := '&Confirmar venda';
+  FBtnConfirmar.Enabled := False;
+  FBtnConfirmar.OnClick := ConfirmarVendaClick;
+  EstilizarBotao(FBtnConfirmar, upbPrimario);
+  AplicarIcone(FBtnConfirmar, ERPVIconeConfirmar);
+  FLblEspera := TLabel.Create(Self);
+  FLblEspera.Parent := Pnl;
+  FLblEspera.Align := alRight;
+  FLblEspera.AlignWithMargins := True;
+  FLblEspera.Layout := tlCenter;
+  FLblEspera.Font.Name := ERPVFontePrincipal;
+  FLblEspera.Font.Size := ERPVTamCorpo;
+  FLblEspera.Font.Color := clERPVTextoSecundario;
+  FLblEspera.Visible := False;
   FLblTitulo := TLabel.Create(Self);
   FLblTitulo.Parent := Pnl;
   FLblTitulo.Align := alClient;
@@ -789,6 +818,38 @@ begin
     Relida.Free;
   end;
   Result := True;
+end;
+
+procedure TFormEdicaoVenda.SetQuitacaoService(AValor: TQuitacaoService);
+begin
+  FQuitacaoService := AValor;
+  // UX 4.2: so venda Pendente ja gravada (fila pendente = T53)
+  FBtnConfirmar.Enabled := (FQuitacaoService <> nil) and (FVendaId > 0) and
+    not FSomenteLeitura;
+end;
+
+procedure TFormEdicaoVenda.ConfirmarVendaClick(Sender: TObject);
+var
+  Espera: TControlesEspera;
+  Venda: TVenda;
+  Total: Currency;
+begin
+  if (FQuitacaoService = nil) or (FVendaId <= 0) or FSomenteLeitura then
+    Exit;
+  Venda := FVendaService.Obter(FVendaId);
+  try
+    if Venda = nil then
+      raise ERegraNegocio.Create('Venda não encontrada');
+    Total := Venda.ValorTotal;
+  finally
+    Venda.Free;
+  end;
+  Espera.Desabilitar := [FBtnConfirmar, BtnSalvar, BtnCancelar, FBtnAdicionar,
+    FBtnRemover, FCmbCliente, FGrade];
+  Espera.Rotulo := FLblEspera;
+  // Excecoes sobem ao handler global; UI restaurada no finally do helper.
+  if ConfirmarVendaComFeedback(FQuitacaoService, FVendaId, Total, Espera) then
+    ModalResult := mrOk; // quitada: fecha e a lista recarrega
 end;
 
 procedure TFormEdicaoVenda.Gravar;

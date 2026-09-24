@@ -29,7 +29,7 @@ uses
   cxButtons,
   ERPV.UI.Tokens, ERPV.UI.Tema, ERPV.UI.FormBaseLista,
   ERPV.Negocio.VendaService, ERPV.Negocio.ClienteService,
-  ERPV.Negocio.ProdutoService;
+  ERPV.Negocio.ProdutoService, ERPV.Negocio.QuitacaoService;
 
 type
   TFormListaVendas = class(TFormBaseLista)
@@ -46,6 +46,9 @@ type
     FCmbStatus: TComboBox;
     FLblCliente: TLabel;
     FCmbCliente: TComboBox;
+    FQuitacaoService: TQuitacaoService;
+    FBtnConfirmar: TcxButton;
+    FLblEspera: TLabel;
     FMenu: TPopupMenu;
     FItemCancelar: TMenuItem;
     FGrade: TcxGrid;
@@ -80,6 +83,8 @@ type
     procedure AoMudarFiltro(Sender: TObject);
     procedure AoTentarNovamente(Sender: TObject);
     procedure AoCancelarVenda(Sender: TObject);
+    procedure AoConfirmarVenda(Sender: TObject);
+    procedure SetQuitacaoService(AValor: TQuitacaoService);
     procedure AoMudarFoco(Sender: TcxCustomGridTableView;
       APrevFocusedRecord, AFocusedRecord: TcxCustomGridRecord;
       ANewItemRecordFocusingChanged: Boolean);
@@ -105,13 +110,18 @@ type
     /// <summary>Disparado quando o usuario pede Fechar/Esc estando embutida no shell;
     /// o dono decide liberar. Sem handler, fecha como form normal.</summary>
     property OnFechada: TNotifyEvent read FOnFechada write FOnFechada;
+    /// <summary>Injetado pelo root (via FormMain). Sem ele, Confirmar fica
+    /// desabilitado (T42). Servico e do chamador; a tela nao o libera.</summary>
+    property QuitacaoService: TQuitacaoService read FQuitacaoService
+      write SetQuitacaoService;
   end;
 
 implementation
 
 uses
   System.DateUtils,
-  ERPV.Core.Erros, ERPV.Dominio.Enums, ERPV.UI.FormEdicaoVenda;
+  ERPV.Core.Erros, ERPV.Dominio.Enums, ERPV.UI.FormEdicaoVenda,
+  ERPV.UI.ConfirmacaoVenda, ERPV.UI.Icones;
 
 const
   MSG_ERRO_LISTA = 'Não foi possível carregar as vendas.';
@@ -195,6 +205,60 @@ begin
 
   FCmbStatus.TabOrder := 0;
   FCmbCliente.TabOrder := 1;
+
+  // T42: Confirmar (quitacao) a direita do painel + rotulo de espera
+  FBtnConfirmar := TcxButton.Create(Self);
+  FBtnConfirmar.Parent := FPnlFiltros;
+  FBtnConfirmar.Align := alRight;
+  FBtnConfirmar.Width := EscalarPx(120);
+  FBtnConfirmar.AlignWithMargins := True;
+  FBtnConfirmar.Caption := '&Confirmar';
+  FBtnConfirmar.Enabled := False;
+  FBtnConfirmar.TabOrder := 2;
+  FBtnConfirmar.OnClick := AoConfirmarVenda;
+  EstilizarBotao(FBtnConfirmar, upbPrimario);
+  AplicarIcone(FBtnConfirmar, ERPVIconeConfirmar);
+
+  FLblEspera := TLabel.Create(Self);
+  FLblEspera.Parent := FPnlFiltros;
+  FLblEspera.Align := alRight;
+  FLblEspera.AlignWithMargins := True;
+  FLblEspera.Layout := tlCenter;
+  FLblEspera.Font.Color := clERPVTextoSecundario;
+  FLblEspera.Visible := False;
+end;
+
+procedure TFormListaVendas.SetQuitacaoService(AValor: TQuitacaoService);
+begin
+  FQuitacaoService := AValor;
+  AtualizarEstado;
+end;
+
+procedure TFormListaVendas.AoConfirmarVenda(Sender: TObject);
+var
+  Espera: TControlesEspera;
+  Total: Currency;
+  Id, Idx: Integer;
+  V: Variant;
+begin
+  Id := IdSelecionado;
+  if (FQuitacaoService = nil) or (Id <= 0) or
+    not SameText(StatusSelecionado, ST_PENDENTE) then
+    Exit;
+  Total := 0;
+  Idx := FView.DataController.FocusedRecordIndex;
+  V := FView.DataController.Values[Idx, FColTotal.Index];
+  if not VarIsNull(V) then
+    Total := VarAsType(V, varCurrency);
+  Espera.Desabilitar := [FBtnConfirmar, BtnNovo, BtnEditar, BtnExcluir, BtnFechar,
+    FCmbStatus, FCmbCliente, FGrade];
+  Espera.Rotulo := FLblEspera;
+  // Excecoes (ERegraNegocio/EInfra/inesperada) sobem ao handler global; a UI ja
+  // foi restaurada no finally do helper.
+  if ConfirmarVendaComFeedback(FQuitacaoService, Id, Total, Espera, PnlConteudo) then
+    Recarregar
+  else
+    AtualizarEstado;
 end;
 
 procedure TFormListaVendas.CarregarClientesFiltro;
@@ -402,6 +466,8 @@ begin
   else
     BtnEditar.Caption := 'Editar';
   HabilitarAcoes(Sel, Pend);
+  // UX 4.2: Confirmar so para Pendente (fila pendente = T53)
+  FBtnConfirmar.Enabled := Pend and (FQuitacaoService <> nil);
 end;
 
 function TFormListaVendas.IdSelecionado: Integer;
@@ -532,6 +598,7 @@ begin
   Tela := TFormEdicaoVenda.Create(Self, FVendaService, FClienteService,
     FProdutoService, AVendaId);
   try
+    Tela.QuitacaoService := FQuitacaoService;
     if Tela.ShowModal = mrOk then
       Recarregar;
   finally
