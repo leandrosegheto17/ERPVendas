@@ -3,7 +3,7 @@
 {
   T22 - Regras de negócio de Produto (RF-05). Camada Negócio: só depende de
   interfaces do Domínio e do Core (sem Vcl/FireDAC/Dados). Preço em Currency.
-  A regra "excluir = inativar quando há venda" é da T30; aqui a exclusão é física.
+  T30: "excluir = inativar quando há venda" (RN-05) via IVendaRepository.
 }
 
 interface
@@ -89,9 +89,26 @@ begin
   Result := FRepositorio.ListarDataSet(AFiltroBusca, AIncluirInativos);
 end;
 
-procedure TProdutoService.Excluir(AId: Integer);
+function TProdutoService.Excluir(AId: Integer): TResultadoExclusao;
+var
+  Item: TProduto;
 begin
+  if FVendaRepositorio.ExisteVendaPorProduto(AId) then
+  begin
+    Item := FRepositorio.Obter(AId);
+    try
+      if Item <> nil then
+      begin
+        Item.Ativo := False;
+        FRepositorio.Alterar(Item);
+      end;
+    finally
+      Item.Free;
+    end;
+    Exit(reInativado);
+  end;
   FRepositorio.Excluir(AId);
+  Result := reExcluido;
 end;
 
 end.
