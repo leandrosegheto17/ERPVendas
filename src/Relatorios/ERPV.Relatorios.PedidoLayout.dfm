@@ -302,7 +302,7 @@ object DMPedidoLayout: TDMPedidoLayout
     object ppHeaderBand1: TppHeaderBand
       Border.mmPadding = 0
       mmBottomOffset = 0
-      mmHeight = 26458
+      mmHeight = 31750
       mmPrintPosition = 0
       object ppLabel1: TppLabel
         DesignLayer = ppDesignLayer1
@@ -356,11 +356,12 @@ object DMPedidoLayout: TDMPedidoLayout
         Font.Size = 10
         Font.Style = []
         Transparent = True
+        DisplayFormat = 'dd/mm/yyyy hh:nn'
         DataPipelineName = 'plPedido'
         mmHeight = 4233
         mmLeft = 46302
         mmTop = 7144
-        mmWidth = 17198
+        mmWidth = 40000
         BandType = 0
         LayerName = Foreground
       end
@@ -380,7 +381,7 @@ object DMPedidoLayout: TDMPedidoLayout
         mmHeight = 4234
         mmLeft = 94986
         mmTop = 7408
-        mmWidth = 17198
+        mmWidth = 40000
         BandType = 0
         LayerName = Foreground
       end
@@ -399,8 +400,8 @@ object DMPedidoLayout: TDMPedidoLayout
         DataPipelineName = 'plPedido'
         mmHeight = 4233
         mmLeft = 4233
-        mmTop = 14023
-        mmWidth = 17198
+        mmTop = 13229
+        mmWidth = 192000
         BandType = 0
         LayerName = Foreground
       end
@@ -418,9 +419,9 @@ object DMPedidoLayout: TDMPedidoLayout
         Transparent = True
         DataPipelineName = 'plPedido'
         mmHeight = 4234
-        mmLeft = 46567
-        mmTop = 13229
-        mmWidth = 17198
+        mmLeft = 4233
+        mmTop = 18521
+        mmWidth = 35000
         BandType = 0
         LayerName = Foreground
       end
@@ -438,9 +439,9 @@ object DMPedidoLayout: TDMPedidoLayout
         Transparent = True
         DataPipelineName = 'plPedido'
         mmHeight = 4233
-        mmLeft = 94986
-        mmTop = 13229
-        mmWidth = 17198
+        mmLeft = 42000
+        mmTop = 18521
+        mmWidth = 150000
         BandType = 0
         LayerName = Foreground
       end
@@ -459,7 +460,7 @@ object DMPedidoLayout: TDMPedidoLayout
         Transparent = True
         mmHeight = 4233
         mmLeft = 4233
-        mmTop = 21696
+        mmTop = 26988
         mmWidth = 11907
         BandType = 0
         LayerName = Foreground
@@ -479,7 +480,7 @@ object DMPedidoLayout: TDMPedidoLayout
         Transparent = True
         mmHeight = 4234
         mmLeft = 68263
-        mmTop = 21431
+        mmTop = 26723
         mmWidth = 17462
         BandType = 0
         LayerName = Foreground
@@ -499,7 +500,7 @@ object DMPedidoLayout: TDMPedidoLayout
         Transparent = True
         mmHeight = 4233
         mmLeft = 128588
-        mmTop = 21696
+        mmTop = 26988
         mmWidth = 16139
         BandType = 0
         LayerName = Foreground
@@ -519,7 +520,7 @@ object DMPedidoLayout: TDMPedidoLayout
         Transparent = True
         mmHeight = 4233
         mmLeft = 173832
-        mmTop = 21696
+        mmTop = 26988
         mmWidth = 12700
         BandType = 0
         LayerName = Foreground
@@ -583,6 +584,7 @@ object DMPedidoLayout: TDMPedidoLayout
         Font.Size = 10
         Font.Style = []
         Transparent = True
+        DisplayFormat = '#,0.00'
         DataPipelineName = 'plPedido'
         mmHeight = 4233
         mmLeft = 128588
@@ -603,6 +605,7 @@ object DMPedidoLayout: TDMPedidoLayout
         Font.Size = 10
         Font.Style = []
         Transparent = True
+        DisplayFormat = '#,0.00'
         DataPipelineName = 'plPedido'
         mmHeight = 4233
         mmLeft = 173832
@@ -670,6 +673,7 @@ object DMPedidoLayout: TDMPedidoLayout
         Font.Size = 10
         Font.Style = []
         Transparent = True
+        DisplayFormat = '#,0.00'
         DataPipelineName = 'plPedido'
         mmHeight = 4233
         mmLeft = 173567

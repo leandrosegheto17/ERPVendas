@@ -8,9 +8,15 @@
   - Dados: IVendaRepository.RelatorioDataSet(Id), liberado aqui em finally.
   - PDF: DeviceType := dtPDF + TextFileName (padrao confirmado em T67,
     docs/ambiente-licencas.md 3.2), sem dialogo e sem abrir o leitor.
+  - Nome do arquivo: Pedido_<VendaId>_<GUID>.pdf (RF11-03; GUID nao
+    previsivel, sem chaves). PastaPdfTemp exige ACL restrita (README 3.3).
   - Falha de escrita/geracao => EInfra amigavel (detalhe tecnico so no log).
   - Limpar remove apenas arquivos dentro da pasta temp configurada; falha
     ao remover vira aviso no log (nao interrompe o fluxo do e-mail).
+  - Limite (SG11-03, RF11-06): Limpar/LimparAntigos nao seguem nem tratam
+    symlink/junction dentro de PastaPdfTemp; a pasta deve ser local e
+    controlada pelo usuario do app (ver ACL no README). O Config recusa
+    caminho relativo, raiz de unidade e UNC.
 
   ROTEIRO T47 NA IDE (compilacao/execucao pendentes do usuario):
   1. Com venda existente: R := TRelatorioPedido.Create(Pasta, Repo, Logger);
@@ -21,6 +27,8 @@
   3. R.Limpar(Caminho): arquivo some. Limpar de caminho inexistente ou fora
      da pasta temp: nao levanta excecao e nao apaga nada fora da pasta.
   4. Venda inexistente: EInfra amigavel, nenhum arquivo criado.
+
+  RF11-01 (roteiro): GerarPdf(nil) => EInfra amigavel + log "venda nula", sem AV.
 
   ROTEIRO RF11-02 NA IDE (nao compilado):
   5. Simular falha no Print (ex.: forcar excecao apos criar o arquivo): a
@@ -52,6 +60,8 @@ type
     FLogger: TLogger;
     function DentroDaPastaTemp(const ACaminho: string): Boolean;
     procedure LimparAntigos;
+    procedure LogAviso(const AMensagem: string);
+    procedure LogErro(const AMensagem: string; AExcecao: Exception = nil);
   public
     constructor Create(const APastaTemp: string;
       AVendaRepository: IVendaRepository; ALogger: TLogger);
@@ -69,9 +79,24 @@ constructor TRelatorioPedido.Create(const APastaTemp: string;
   AVendaRepository: IVendaRepository; ALogger: TLogger);
 begin
   inherited Create;
+  // RF11-01: repositorio obrigatorio; logger opcional (uso nil-safe)
+  if AVendaRepository = nil then
+    raise EInfra.Create(MSG_FALHA_PDF);
   FPastaTemp := APastaTemp;
   FVendaRepository := AVendaRepository;
   FLogger := ALogger;
+end;
+
+procedure TRelatorioPedido.LogAviso(const AMensagem: string);
+begin
+  if FLogger <> nil then
+    FLogger.Aviso(AMensagem);
+end;
+
+procedure TRelatorioPedido.LogErro(const AMensagem: string; AExcecao: Exception);
+begin
+  if FLogger <> nil then
+    FLogger.Erro(AMensagem, AExcecao);
 end;
 
 function TRelatorioPedido.DentroDaPastaTemp(const ACaminho: string): Boolean;
@@ -103,18 +128,18 @@ begin
           if DeleteFile(Caminho) then
             Inc(Removidos)
           else
-            FLogger.Aviso('Não foi possível remover PDF antigo: ' + Caminho);
+            LogAviso('Não foi possível remover PDF antigo: ' + Caminho);
         end;
       until FindNext(SR) <> 0;
     finally
       FindClose(SR);
     end;
     if Removidos > 0 then
-      FLogger.Aviso(Format('Limpeza de PDFs antigos: %d arquivo(s) removido(s) da pasta temp.',
+      LogAviso(Format('Limpeza de PDFs antigos: %d arquivo(s) removido(s) da pasta temp.',
         [Removidos]));
   except
     on E: Exception do
-      FLogger.Aviso('Falha na limpeza de PDFs antigos: ' + E.Message);
+      LogAviso('Falha na limpeza de PDFs antigos: ' + E.Message);
   end;
 end;
 
@@ -122,10 +147,25 @@ function TRelatorioPedido.GerarPdf(const AVenda: TVenda): string;
 var
   Dados: TDataSet;
   Layout: TDMPedidoLayout;
+  Caminho, Sufixo: string;
+  Guid: TGUID;
 begin
-  Result := IncludeTrailingPathDelimiter(FPastaTemp) +
-    Format('Pedido_%d_%s.pdf', [AVenda.Id, FormatDateTime('yyyymmddhhnnsszzz', Now)]);
+  // RF11-01: venda nula => EInfra amigavel + log sem dado pessoal (sem AV)
+  if AVenda = nil then
+  begin
+    LogErro('GerarPdf: venda nula');
+    raise EInfra.Create(MSG_FALHA_PDF);
+  end;
+  Caminho := '';
+  Result := '';
   try
+    // RF11-03: sufixo GUID (nao previsivel), sem chaves: Pedido_<Id>_<GUID>.pdf
+    CreateGUID(Guid);
+    Sufixo := StringReplace(GUIDToString(Guid), '{', '', [rfReplaceAll]);
+    Sufixo := StringReplace(Sufixo, '}', '', [rfReplaceAll]);
+    Caminho := IncludeTrailingPathDelimiter(FPastaTemp) +
+      Format('Pedido_%d_%s.pdf', [AVenda.Id, Sufixo]);
+    Result := Caminho;
     ForceDirectories(FPastaTemp);
     LimparAntigos;
     Dados := FVendaRepository.RelatorioDataSet(AVenda.Id);
@@ -151,11 +191,11 @@ begin
   except
     on E: Exception do
     begin
-      FLogger.Erro('Falha ao gerar PDF do pedido ' + IntToStr(AVenda.Id), E);
+      LogErro('Falha ao gerar PDF do pedido ' + IntToStr(AVenda.Id), E);
       // RF11-02: nao deixa PDF parcial (Print falhou apos criar o arquivo)
-      if FileExists(Result) and DentroDaPastaTemp(Result) then
-        if not DeleteFile(Result) then
-          FLogger.Aviso('Não foi possível remover o PDF parcial: ' + Result);
+      if (Caminho <> '') and FileExists(Caminho) and DentroDaPastaTemp(Caminho) then
+        if not DeleteFile(Caminho) then
+          LogAviso('Não foi possível remover o PDF parcial: ' + Caminho);
       if E is EInfra then
         raise;
       raise EInfra.Create(MSG_FALHA_PDF);
@@ -169,11 +209,11 @@ begin
     Exit;
   if not DentroDaPastaTemp(ACaminhoArquivo) then
   begin
-    FLogger.Aviso('Limpeza de PDF ignorada: arquivo fora da pasta temp configurada.');
+    LogAviso('Limpeza de PDF ignorada: arquivo fora da pasta temp configurada.');
     Exit;
   end;
   if not DeleteFile(ACaminhoArquivo) then
-    FLogger.Aviso('Não foi possível remover o PDF temporário: ' + ACaminhoArquivo);
+    LogAviso('Não foi possível remover o PDF temporário: ' + ACaminhoArquivo);
 end;
 
 end.
