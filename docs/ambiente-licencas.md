@@ -263,6 +263,22 @@ revisando a diretriz de T61 para aceitar BPLs do DevExpress como exceção
 documentada. Não é bloqueio agora (T61 é do Lote 16, dia D5); só fica
 registrado aqui para o usuário decidir a tempo.
 
+### Criação do banco com charset UTF8 (RF4-03)
+
+**Motivo:** a busca das listas (clientes/produtos) usa `COLUNA COLLATE ERPV_CI_AI LIKE ...`, para ignorar caixa e acento. A collation é criada em `db/01_schema.sql` e só existe em banco com `DEFAULT CHARACTER SET UTF8`. Em banco charset NONE, o `UPPER()` do Firebird e o `UpperCase` do Delphi só tratam ASCII: 'JOÃO' e 'ACUCAR' não achavam.
+
+**Comando** (template em `db/00_criar_banco.sql`, sem senha; usar o prefixo `localhost:` por causa do lock descrito acima):
+
+    CREATE DATABASE 'localhost:C:\ERPVendas\dados\ERPVENDAS.FDB' USER 'SYSDBA' PASSWORD '<senha>' DEFAULT CHARACTER SET UTF8;
+
+**Verificação:** `SELECT RDB$CHARACTER_SET_NAME FROM RDB$DATABASE;` deve retornar `UTF8`.
+
+**Atenção:** enquanto o banco existente for `NONE` (ou não tiver a collation `ERPV_CI_AI`), a busca das listas de clientes e de produtos dá erro no aplicativo ("Não foi possível consultar..."). Recrie o banco em UTF8 e reaplique o `01_schema.sql` atualizado antes de usar essas telas.
+
+**Recriar o banco de desenvolvimento:** `DROP DATABASE` (isql conectado ao banco) -> `CREATE DATABASE` com UTF8 -> `db/01_schema.sql` -> `db/02_seed.sql`.
+
+**Resultado do teste real (banco NONE, antes da correção):** 'joão' achou; 'JOÃO' NÃO; 'açúcar' achou; 'acucar'/'ACUCAR' NÃO; 'joao'/'JOAO' em clientes só achavam via e-mail `joao.teste@example.com`. Re-verificação em banco UTF8 pendente do usuário.
+
 ## 9. Pendências não bloqueantes
 
 1. **Confirmar a data exata de expiração do trial DevExpress** no License
