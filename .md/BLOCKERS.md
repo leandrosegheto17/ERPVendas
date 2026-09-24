@@ -167,7 +167,7 @@
   por item) e um Executor escreve o registro no `.dpr`/`.dproj`, a unit
   consumidora e o roteiro manual; ou (2) usuário fornece unit/`.dfm`/`.rtm` de
   referência para o Executor seguir por código.
-- Status: **Aberto**
+- Status: **Resolvido (2026-09-23)** — usuário desenhou o layout no Report Designer (opção 1); Executor registrou a unit no `.dpr`/`.dproj` e adicionou `AtribuirDados`/`Visualizar` + roteiro. T46 volta a `Concluída` (pendente de compilação na IDE); T47 desbloqueada.
 
 ## Bloqueio 005 — 2026-09-23
 - Reportado por: validador (chapéu QA, validação do Lote 9 — achado A1, crítica)
