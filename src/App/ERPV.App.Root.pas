@@ -221,12 +221,11 @@ begin
 
   FFinanceiro := TFinanceiroClient.Create(FConfiguracao.Financeiro.BaseUrl,
     FConfiguracao.Financeiro.TimeoutMs, FConfiguracao.Financeiro.ApiKey, FLogger); // T34-T36
-  FQuitacaoService := TQuitacaoService.Create(FVendaRepository, FFinanceiro,
-    FFilaRepository); // T43 (T38 acrescenta Confirmar)
-
   FRelatorioPedido := TRelatorioPedido.Create(FConfiguracao.Relatorio.PastaPdfTemp,
     FVendaRepository, FLogger); // T47
   FEmailSender := TEmailSender.Create(FConfiguracao.SMTP, FLogger); // T48
+  FQuitacaoService := TQuitacaoService.Create(FVendaRepository, FFinanceiro,
+    FFilaRepository, FClienteRepository, FRelatorioPedido, FEmailSender); // T43/T49
 
   // Proximos incrementos entram aqui.
 end;
