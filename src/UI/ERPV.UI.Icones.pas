@@ -33,7 +33,10 @@ function TamanhoIconeAtual: Integer;
 implementation
 
 uses
-  Winapi.Windows, Vcl.Forms, Vcl.Imaging.pngimage;
+  // TColorDepth/cd32Bit/TImageList moram em Vcl.ImgList. TBitmap e qualificado
+  // abaixo porque Winapi.Windows tem um record TBitmap que o sombreia (achados
+  // reais de compilacao, T69, 2026-09-23).
+  Winapi.Windows, Vcl.Forms, Vcl.ImgList, Vcl.Imaging.pngimage;
 
 const
   NOMES_ICONES: array[0..15] of string = (
@@ -116,7 +119,7 @@ var
   Idx, I: Integer;
   Lista: TImageList;
   Png: TPngImage;
-  Bmp: TBitmap;
+  Bmp: Vcl.Graphics.TBitmap;
   Arq: string;
 begin
   Idx := IndiceTamanho(ALado);
@@ -137,7 +140,7 @@ begin
       Png := TPngImage.Create;
       try
         Png.LoadFromFile(Arq);
-        Bmp := TBitmap.Create;
+        Bmp := Vcl.Graphics.TBitmap.Create;
         try
           Bmp.Assign(Png);
           if (Bmp.Width = ALado) and (Bmp.Height = ALado) then
