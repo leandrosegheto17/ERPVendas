@@ -736,6 +736,54 @@ Escala para: nenhum bloqueio. Executor: correção via `Refatoração Lote-13` (
 
 ---
 
+## Lote 14 — Integração real com o Financeiro C# (T54, T55) — chapéu DevSecOps (2026-09-24)
+
+Método: leitura estática de `FinanceiroClient` (`Executar`, `Enviar`, `ExtrairErro`, `MapearErroHttp`), `erpvendas.ini.example`, `ERPV.Core.Config` (trecho da ApiKey), `tools/mock-financeiro`, `scripts/montar-bin.ps1`, `.gitignore`, `docs/contrato-api-financeiro.md`, `docs/varredura-segredos-licencas.md` e o `QA-REPORT.md` do lote (A14-01..03). Nada compilado/executado; nenhuma chave reproduzida. Notas do Executor não usadas como base.
+
+### 1. Tratamento do X-Api-Key
+Header montado só se `FApiKey <> ''` (após `Trim`), por requisição, sem cópia em log, exceção ou mensagem: `Executar` guarda só `E.ClassName`; `Enviar` loga apenas método, rota e HTTP; corpo e cabeçalhos nunca vão ao log. `MapearErroHttp` recebe só o Boolean `ATemApiKey`. 401 usa texto fixo (ausente vs. rejeitada), sem eco de chave nem texto do servidor. `HandleRedirects := False` evita reenvio da chave a outro host via 3xx (3xx cai em `Indisponivel`). Lacuna: nada impede `BaseUrl` `http://` com ApiKey real: chave e payload (venda, dados de cliente) trafegam em claro (SG14-01).
+
+### 2. Mensagem do servidor na UI e decisão por `codigo`
+`ExtrairErro`: `codigo` restrito a `[A-Za-z0-9_]` (máx. 64), usado só em decisão (409 CONFLITO_CONCORRENCIA por `SameText`); mensagem em uma linha (controles < espaço viram espaço), truncada em 200 com proteção de par substituto; parse em `try/except`, corpo não-JSON dá fallback fixo com HTTP. Sem HTML/injeção em VCL de texto simples. Resíduos: não remove DEL, U+2028/2029 nem caracteres bidi; a mensagem 4xx não passa por `MascararSensiveis` (mesma classe do SG13-01), e o servidor real pode ecoar dado do payload (SG14-02).
+
+### 3. 409 retentável e duplicidade (Bloqueio 006)
+409 CONFLITO_CONCORRENCIA vira `Indisponivel` e enfileira, o que pode repostar quitação/cancelamento. Mitigações existentes: GET de status antes do repost (ADR-005) e comportamento observado do C# real (quitação e cancelamento repetidos devolvem 200, QA Lote 14). O 409 em si não foi observado contra o C# real (só função pura, A14-02). Idempotência formal e saga seguem adiadas no Bloqueio 006 (deve ser retomado antes de `/deploy` de produção). Sem achado novo; registrado como dependência (SG14-03).
+
+### 4. Configuração, mock, empacotamento, .gitignore
+- INI example: `ApiKey=` vazia, comentário manda usar `ERPV_FINANCEIRO_APIKEY`; demais valores fictícios. Comentário em `ERPV.Core.Config` (l. ~313, "ApiKey opcional") ficou desatualizado após T55/D3 (SG14-04).
+- Mock: escuta `127.0.0.1` por padrão; log só metodo/rota/status; `/_modo` sem autenticação, advertido no README (aceitável, ferramenta de dev). `--host 0.0.0.0` exigiria cuidado; sem achado.
+- `montar-bin.ps1`: copia exe, fbclient, `.example`, `.bpl` importados e OpenSSL opcional; não copia INI real e falha se `erpvendas.ini` estiver em `bin\`. Os `.bpl` DevExpress trial vêm de pasta de instalação: ver redistribuição em SG14-05.
+- `.gitignore`: cobre `erpvendas.ini`, `config/*.ini` (exceto `.example`), `.env*`, `*.key`, `*.fdb`, `*.bpl`.
+- `docs/contrato-api-financeiro.md`: sem segredo; descreve a chave só por nome de header/variável.
+
+### 5. Varredura T63
+`docs/varredura-segredos-licencas.md`: árvore e histórico (227 commits, `--all`) sem ocorrência real; UUIDs encontrados são GUIDs/exemplos; nenhum `*.ini`, log, pdf, fdb, fbk, `.env`, pem ou key versionado. Aceito como evidência (não reexecutada neste chapéu); nenhuma chave real do Financeiro na árvore ou no histórico.
+
+### 6. Compliance (LGPD)
+Sem novo tratamento de dado pessoal. Transporte: sem TLS obrigatório para o Financeiro (SG14-01) afeta segurança do tratamento (art. 46) em produção; não é compliance obrigatório bloqueante em ambiente local. Mailtrap sem TLS (R14-1) segue como SG12-01 (bloqueia produção com SMTP real).
+
+### 7. Requisitos ao chapéu DevOps
+Produção: `BaseUrl` `https://` e `ERPV_FINANCEIRO_APIKEY` por variável de ambiente (não INI); ACL do INI real; rotação da chave se exposta; ensaio de homologação de 5xx/timeout/409 real (A14-02); manter o mock só em máquina de dev.
+
+### Achados do lote
+
+| # | Achado | Severidade | Situação |
+|---|---|---|---|
+| SG14-01 | `FinanceiroClient` aceita `BaseUrl` `http://` com X-Api-Key real: chave e dados de venda em claro na rede | Média (produção; baixa em localhost) | Débito com prazo antes do `/deploy` de produção: avisar/recusar (ou logar aviso) `http://` não-loopback quando `ApiKey <> ''`; documentar `https` no README e no INI example; `Refatoração Lote-14` |
+| SG14-02 | Mensagem 4xx do servidor (200 caracteres) exibida sem `MascararSensiveis`; sanitização não remove DEL/U+2028/bidi | Baixa | Débito: aplicar mascaramento e ampliar filtro de controles em `ExtrairErro`, junto de SG13-01; `Refatoração Lote-14` |
+| SG14-03 | 409 CONFLITO_CONCORRENCIA retentável pode repostar; idempotência não formalizada nem observada no C# real | Baixa (mitigada por GET prévio e 200 repetido observado) | Débito atrelado ao Bloqueio 006 e ao ensaio de A14-02, antes da produção |
+| SG14-04 | Comentário de `ERPV.Core.Config` diz ApiKey "opcional" (desatualizado após D3); sem aviso na inicialização com `ApiKey` vazia (relaciona A14-03) | Baixa | Débito: corrigir comentário e avisar (log sem valor) na inicialização; junto de A14-03 |
+| SG14-05 | Empacotamento copia `.bpl` DevExpress trial: redistribuição do pacote depende da licença (BLOCKERS 008) | Baixa (informativo/compliance de licença) | Confirmar termos antes de distribuir o `bin\`; sinalizar ao Gestor |
+
+Sem achados de: chave em log/mensagem/repositório/histórico, injeção, redirect com credencial, erro técnico exposto, segredo no contrato ou no mock.
+
+### Veredito do lote (chapéu DevSecOps)
+**Aprovado com ressalvas (sem achado bloqueante).** Nenhum alto/crítico e nenhum compliance obrigatório em aberto; SG14-01 (média) precisa estar resolvido antes do deploy de produção. Débitos anteriores (SG12-01 TLS SMTP etc.) mantidos.
+
+Escala para: nenhum bloqueio. Executor: `Refatoração Lote-14` com SG14-01, 02 e 04 (SG14-03 junto do ensaio A14-02/Bloqueio 006). Gestor: informativo (SG14-05, licença trial; Bloqueio 006 antes de produção). Coordenador: não. DevOps: seção 7.
+
+---
+
 ## Lote 15 — Documentação (README.md, docs/roteiro-testes-manuais.md, docs/decisoes.md) — chapéu DevSecOps
 
 Escopo: só documentação; nenhum código alterado. Verificado o que os docs afirmam contra `ERPV.Core.Log`, `ERPV.Core.Config`, `erpvendas.ini.example`, `db/02_seed.sql`, `docs/contrato-api-financeiro.md` e `tools/mock-financeiro`.

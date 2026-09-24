@@ -958,3 +958,54 @@ Chapéu QA, por leitura (nada compilado/executado). Commit 484fe9c (RF6-03, RF8-
 Checagem estrutural: RF6-03, RF8-02, RF9-04 e RF10-04 `Concluída`; dependências coerentes (RF9-04 sobre o cabeçalho do QuitacaoService que RF10-04 já tinha editado: o texto final contém ambos os ajustes, sem conflito); nenhuma tarefa `Bloqueada`; Bloqueio 006 não afeta os lotes. Os lotes 6/8/9/10 têm outras linhas RF já `Concluída` e validadas por leitura antes (RF6-01/02, RF8-01/03, RF9-01/02/03/05, RF10-01/02/03); esta chamada só acrescenta as 4 de documentação.
 
 **Veredito: Aprovado com ressalvas.** Sem reprovação crítica. Liberado ao DevSecOps (feito abaixo, no SECURITY-REVIEW).
+
+
+## Lote 14 — Integração real com o Financeiro C# (T54, T55) — chapéu QA (2026-09-24)
+
+Método: evidências executadas por pessoa (curl contra o C# real em http://localhost:5000; app Delphi na IDE contra o mesmo Financeiro; projeto DUnitX compilado e rodado na IDE, 78/78) aceitas como declaradas; este agente verificou **por leitura** `src/Integracao/ERPV.Integracao.FinanceiroClient.pas` (`ExtrairErro`, `MapearErroHttp`), `tests/ERPV.Testes.FinanceiroClientErros.pas` (19 ocorrências de teste/atributo), `docs/contrato-api-financeiro.md` (§1.5, §3, §3.1). Nada foi reexecutado; nenhum código editado. Notas do Executor não usadas como base de aprovação.
+
+### Critérios (acceptance-criteria-validation)
+
+**T54** (fluxo confirmar e cancelar funciona contra o C#; divergências listadas em §mudanças; se C# indisponível: BLOCKERS + mock)
+- C# disponível. Curl (3 endpoints): health 200; quitação nova/repetida 200 (idempotente); status Quitada/Cancelada 200 e 404 `VENDA_NAO_ENCONTRADA`; cancelamento 200/repetido 200; 409 `VENDA_JA_CANCELADA`, 409 `MOTIVO_OBRIGATORIO`, 400 `VALOR_TOTAL_DIVERGENTE`/`PAYLOAD_INVALIDO`, 401 sem chave/chave errada; alias `/api/v1`. App na IDE: Pendente => Quitada com data local correta (D4), e-mail com PDF no Mailtrap (2525, sem TLS), Pendente => Cancelada; Confirmar venda Cancelada e Cancelar venda Quitada desabilitados na UI (RF-11/INT-05). Conferido por leitura: §3.1 registra o escopo, os resultados e D1-D9 com impacto e ação, e declara os não verificados. Critério atendido; o INI apontando para a URL real é coerente com o smoke declarado.
+- Lacuna declarada e aceita: timeout, 5xx, indisponibilidade real e 409 `CONFLITO_CONCORRENCIA` não observados contra o C# real (só por teste de função pura na T55). D1/D2/D3 vêm de leitura comparada, não observados no app.
+
+**T55** (recusa e indisponibilidade reais tratadas como no mock; contrato atualizado com data e status da confirmação)
+- `ExtrairErro`: lê `erro.mensagem`/`erro.codigo` do envelope, tolera raiz v1.0, `codigo` restrito a `[A-Za-z0-9_]` (<=64), mensagem em uma linha sem controles e truncada a 200 sem partir par substituto; JSON inválido/vazio => vazios, sem exceção. OK (D1).
+- `MapearErroHttp`: 401 => `Recusado` com texto fixo de configuração (distingue chave ausente/rejeitada por `ATemApiKey`; não usa texto do servidor; não enfileira); 409 `CONFLITO_CONCORRENCIA` (só pelo `codigo`, `SameText`) => `Indisponivel` (enfileira); demais 4xx => `Recusado` com mensagem do envelope ou fallback com HTTP; 5xx e códigos inesperados => `Indisponivel`. OK (D2/D3/D8: decisão só por `codigo`). 422 só resta em comentários, não em lógica.
+- Contrato: §1.5, cabeçalho de autenticação (`X-Api-Key` obrigatório no C# real) e §3 ganharam linha datada de 24/09/2026 com status "Confirmada", DEC-08/DEC-09 respondidas, e a base de evidência é declarada honestamente (sem resposta escrita do contato). OK.
+- Testes: 18 novos em `ERPV.Testes.FinanceiroClientErros.pas` (envelope, raiz, 401 com/sem chave, 409 retentável vs. não retentável, 5xx, corpo inválido), executados na IDE: 78/78. Aceito como evidência de execução de terceiros.
+
+### Integração (cross-platform-integration-testing)
+
+Ponta a ponta Delphi <-> C# real coberta por T54 (quitação, cancelamento, GET status, e-mail pós-quitação). Reconciliação por GET/idempotência (Lotes 9, 10, 13) compatível com o comportamento real (quitação e cancelamento repetidos 200). Enfileiramento por `Indisponivel` real (5xx/timeout) e reenvio contra o C# real não exercitados (ver R14-2).
+
+### Requisitos não funcionais
+
+- Segurança/LGPD (para o DevSecOps): chave nunca registrada nas evidências; mensagem de 401 fixa, sem eco de chave; `codigo` saneado e mensagem truncada (evita injeção/vazamento de texto do servidor na UI); e-mail via Mailtrap sem TLS (porta 2525) é ambiente de teste, produção exige SMTP com TLS.
+- Desempenho: timeout de 10 s não medido no C# real (apenas mock).
+
+### Achados (bug-documentation) — nenhum Crítico, 3 Simples
+
+| ID | Sev. | Local | Descrição |
+|---|---|---|---|
+| A14-01 | Simples | `docs/contrato-api-financeiro.md` §3.1 (l. ~249-256) e linha 210 da §3 | Texto desatualizado após a T55: o parágrafo "Quando a confirmação ... chegar ... esta tabela ganha uma nova linha (T55 responsável)" e o status "Proposta ... aguardando confirmação até 23/09" da linha 22/09 seguem como se a confirmação estivesse pendente; a linha D5 ("Ajustar a descrição de `DADOS_DIVERGENTES`") e D7/D9 não registram se a ação foi feita. Sugestão: marcar a linha 22/09 como "Confirmada (ver 24/09)", remover o parágrafo final e fechar a coluna Ação de D5. |
+| A14-02 | Simples | `docs/contrato-api-financeiro.md` §1.5/§3.1 e `TFinanceiroClient` | Comportamentos reais não observados só têm cobertura de função pura: timeout 10 s, 5xx/indisponibilidade real, `409 CONFLITO_CONCORRENCIA` (base = contrato-v1.1 do Financeiro, não observação) e 401 com chave configurada porém rejeitada no app. Sugestão: repetir num ensaio de homologação (derrubar o C#, forçar concorrência) antes de produção e registrar em §3.1. |
+| A14-03 | Simples | `MapearErroHttp` (401) | 401 vira `Recusado` e não enfileira: correto para configuração, mas item enfileirado antes de a chave ser corrigida fica PENDENTE com falha a cada reenvio até o INI ser corrigido (sem distinção de estado "aguarda configuração" na tela Pendências). Sugestão: aviso na tela de Pendências/config na inicialização quando `ApiKey` vazio (verificar antes de produção). |
+| R14-1 | Informativo | Mailtrap 2525 sem TLS | Verificado só em sandbox; SMTP real/TLS fica para o T64/produção. |
+| R14-2 | Informativo | Reenvio contra o C# real | Fila real (erro500 => reenvio) não foi exercitada contra o C#; regressão do Lote 13 (A2 etc.) segue tratada em `Refatoração Lote-13`. |
+
+Reprovações críticas: nenhuma. Nenhum achado compromete o critério de aceite central de T54/T55.
+
+### Fechamento estrutural
+
+T54 e T55 `Concluída`; dependências da Seção 4 (T54 <- T38..T44/T06; T55 <- T54) satisfeitas, sem órfãs e sem tarefa `Bloqueada`; nenhuma inconsistência que exija redesenho. `TASK.md` não alterado por este agente; A14-01 a A14-03 aguardam criação em `Refatoração Lote-14` na consolidação pós-DevSecOps.
+
+### Veredito por tarefa
+
+- T54: **Aprovada com ressalvas** (A14-01, A14-02; timeout/5xx/409 concorrência não observados no C# real).
+- T55: **Aprovada com ressalvas** (A14-01, A14-02, A14-03).
+
+### Veredito do lote (chapéu QA)
+
+**Aprovado com ressalvas.** Nenhuma reprovação crítica; execução (curl, app na IDE, DUnitX 78/78) por pessoa, código/docs verificados por leitura. Liberado ao chapéu DevSecOps. Pontos para auditoria: chave X-Api-Key (fonte INI/variável de ambiente, nunca registrada, mensagem 401 fixa), saneamento de `erro.mensagem`/`codigo`, SMTP sem TLS fora de produção.
