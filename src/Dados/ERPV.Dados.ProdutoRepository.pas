@@ -75,9 +75,10 @@ const
     'SELECT ID, DESCRICAO, UNIDADE, PRECO_UNITARIO, CATEGORIA, ATIVO ' +
     'FROM PRODUTOS WHERE (1 = 1) ';
   SQL_LISTAR_ATIVOS = 'AND ATIVO = TRUE ';
+  { RF4-03: busca sem caixa e sem acento via collation ERPV_CI_AI (db/01_schema.sql). }
   SQL_LISTAR_BUSCA =
-    'AND (UPPER(DESCRICAO) LIKE :BUSCA ESCAPE ''\'' ' +
-    'OR UPPER(CATEGORIA) LIKE :BUSCA ESCAPE ''\'') ';
+    'AND (DESCRICAO COLLATE ERPV_CI_AI LIKE :BUSCA ESCAPE ''\'' ' +
+    'OR CATEGORIA COLLATE ERPV_CI_AI LIKE :BUSCA ESCAPE ''\'') ';
   SQL_LISTAR_ORDEM = 'ORDER BY DESCRICAO, ID';
 
 function EscaparLike(const S: string): string;
@@ -295,7 +296,7 @@ begin
     Q.UpdateOptions.ReadOnly := True; // grade somente leitura (ADR-003)
     Q.SQL.Text := SQL;
     if Busca <> '' then
-      Q.ParamByName('BUSCA').AsString := '%' + EscaparLike(UpperCase(Busca)) + '%';
+      Q.ParamByName('BUSCA').AsString := '%' + EscaparLike(Busca) + '%';
     Q.Open;
     Result := Q;
   except
