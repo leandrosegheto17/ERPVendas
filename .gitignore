@@ -57,4 +57,5 @@ bin/
 # Bancos Firebird e backups (T63) e runtime packages proprietarios (nao redistribuiveis)
 *.fdb
 *.fbk
+!db/ERPVENDAS.FBK
 *.bpl
