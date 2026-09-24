@@ -794,3 +794,22 @@ Escopo: RF12-01..06 (leitura do código; nada executado).
 - Requisito DevOps: produção com `VerificarCertificado=1` + `CaFile` (bundle de CAs), senha só por `ERPV_SMTP_PASSWORD`, SPF/DKIM/DMARC.
 
 **Veredito: Aprovado com débito** (SG12-07 Média em RF12-07; sem achado Alto/Crítico). Gestor: informativo (SG12-07). Deploy segue.
+
+## Refatoração Lote-13 — validação (2026-09-24)
+
+Chapéu DevSecOps, por leitura (nada compilado nem executado), após QA Aprovado com ressalvas.
+
+- **RF13-01 / SG13-02 (fechado)**: `Reenviar` não confia no chamador: item inexistente, não PENDENTE ou com venda/tipo divergentes é recusado com mensagem fixa e sem RegistrarFalha, HTTP ou e-mail. `RegistrarFalha` só altera PENDENTE. Reduz reenvio indevido de e-mail/PDF por Id forjado.
+- **RF13-04 / SG13-01 (fechado)**: o texto do Financeiro/exceções é mascarado (`MascararSensiveis`) uma vez em `Falha`, tanto para `ULTIMO_ERRO` quanto para a UI; teste cobre CPF e e-mail. O limite da máscara (nome, telefone, formatos atípicos) segue documentado no README (RF15-03).
+- **RF13-05 / SG13-03/04 (fechado)**: log de reenvio só com Ids, tipo e desfecho (sem e-mail/CPF/mensagem); limpeza do PDF parcial garantida por RF11-02 (GerarPdf apaga no except, LimparAntigos > 24 h) e `Pdf` só é atribuído no sucesso.
+- **RF13-02**: pós-quitação reaproveita `PosQuitacao` (destinatário e PDF só do cliente da venda, Id vindo do banco; erro gravado na fila sem destinatário; log só de Id); não reposta o Financeiro.
+- **RF13-06**: mensagens fixas (`MSG_FALHA_VERIFICAR_FILA`, `MsgFalhaLocal`, `MsgItemInvalido`) sem dado técnico/pessoal; `EInfra` não escapa.
+- **SQL**: `SQL_OBTER_ITEM` e `SQL_REGISTRAR_FALHA` parametrizados (`:ID`, `:ERRO`); literal `'PENDENTE'` fixo; falhas passam por `TratarFalha` (log completo, UI genérica).
+- Sem novo segredo, sem dado pessoal em log, sem superfície nova de rede.
+
+Achados (finding-severity-classification):
+- **Baixa/Informativo**: mensagem do pós-quitação não chega ao operador (RF13-08, sem impacto de segurança; risco operacional de e-mail perdido silenciosamente); tratamento de `EInfra` no recálculo da tela (RF13-09). Nenhum Alto/Crítico; nenhum compliance obrigatório em aberto.
+- **Bloqueio 006 (aberto/adiado)**: não afeta o lote; RF13-02 e RF12-01 reduzem o risco descrito (M5 e parte de M3) sem fechá-lo.
+- Gestor: sem relevância estratégica nova (informativo).
+
+**Veredito: Aprovado com débito baixo** (RF13-08/09 em `Refatoração Lote-13`). Deploy não afetado por este lote.

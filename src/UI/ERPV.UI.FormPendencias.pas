@@ -401,7 +401,7 @@ begin
   Recarregar;
   if Assigned(FOnFilaAlterada) then
     FOnFilaAlterada(Self);
-  if Msg.Sucesso then
+  if Msg.Sucesso and not Msg.Aviso then
     Notificar(utnInfo, Msg.Texto, PnlConteudo)
   else
     Notificar(utnAviso, Msg.Texto);

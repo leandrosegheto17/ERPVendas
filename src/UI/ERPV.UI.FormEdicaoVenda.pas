@@ -1087,11 +1087,16 @@ begin
   // RF13-03: mesma regra do construtor; so vale para Pendente ja gravada.
   if FBloqueadaFila or (FVendaId <= 0) or (FStatus <> svPendente) then
     Exit;
-  if FVendaService.TemPendenciaFila(FVendaId) then
-  begin
-    FBloqueadaFila := True;
-    FSomenteLeitura := True;
-    AplicarEstado;
+  try
+    if FVendaService.TemPendenciaFila(FVendaId) then
+    begin
+      FBloqueadaFila := True;
+      FSomenteLeitura := True;
+      AplicarEstado;
+    end;
+  except
+    on EInfra do
+      ; // RF13-09: falha da fila/banco no recalculo mantem o estado atual; nao propaga
   end;
 end;
 
