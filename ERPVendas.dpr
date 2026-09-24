@@ -21,8 +21,6 @@ uses
   ERPV.Negocio.ClienteService in 'src\Negocio\ERPV.Negocio.ClienteService.pas',
   ERPV.Negocio.ProdutoService in 'src\Negocio\ERPV.Negocio.ProdutoService.pas',
   ERPV.Negocio.VendaService in 'src\Negocio\ERPV.Negocio.VendaService.pas',
-  ERPV.Temp.TesteT28 in 'src\App\ERPV.Temp.TesteT28.pas', // TEMP T28
-  ERPV.Temp.TesteT30 in 'src\App\ERPV.Temp.TesteT30.pas', // TEMP T30
   ERPV.UI.FormBaseEdicao in 'src\UI\ERPV.UI.FormBaseEdicao.pas',
   ERPV.UI.FormBaseLista in 'src\UI\ERPV.UI.FormBaseLista.pas',
   ERPV.UI.FormEdicaoCliente in 'src\UI\ERPV.UI.FormEdicaoCliente.pas',
@@ -51,8 +49,6 @@ begin
       Application.CreateForm(TFormMain, FormMain);
       FormMain.Configurar(Root.Configuracao.Financeiro.BaseUrl, Root.ClienteService,
         Root.ProdutoService);
-      RodarTesteT28(Root); // TEMP T28
-      RodarTesteT30(Root); // TEMP T30
       Application.Run;
     finally
       Root.Free;
