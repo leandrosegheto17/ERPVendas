@@ -38,7 +38,7 @@ Para **executar** o app (máquina sem IDE), na mesma pasta do `ERPVendas.exe`:
 - `libeay32.dll` e `ssleay32.dll` do **OpenSSL 1.0.2, Win32**. O Indy 10.6.3 do Delphi 13 só carrega esses nomes; DLLs OpenSSL 1.1.x/3.x não funcionam. Só são necessárias para SMTP com TLS (ex.: porta 587); sem TLS (ex.: porta 2525) não são exigidas. Não são versionadas no repositório (binários de terceiros); o spike T02 usou o mirror `IndySockets/OpenSSL-Binaries` (`docs/ambiente-licencas.md` §11).
 - Runtime packages do Delphi/DevExpress: o build Release **usa** runtime packages (o DevExpress trial não traz `.dcu`; ver `.md/BLOCKERS.md`, Bloqueio 008). `scripts/montar-bin.ps1` copia os `.bpl` para `bin` (seção 6).
 
-O pacote `bin/` (exe + DLLs + `erpvendas.ini.example`) e o `db/ERPVENDAS.FBK` **são gerados na entrega** (tarefas T61/T62) e podem não existir no repositório. Sem eles, use os scripts SQL da seção 3 e compile o projeto na IDE.
+O pacote `bin/` (exe + DLLs + `erpvendas.ini.example`) **é gerado na entrega** (T61) e pode não existir no repositório. O `db/ERPVENDAS.FBK` está versionado. Sem o `bin/`, use os scripts SQL da seção 3 e compile o projeto na IDE.
 
 ## 3. Instalação passo a passo
 
@@ -137,7 +137,7 @@ Tarefas **NÃO verificadas** (concluídas por dispensa/decisão do usuário em 2
 |---|---|
 | T59 | Roteiro completo não executado; sem `docs/evidencias/` (só smoke da T54 e 78/78 DUnitX) |
 | T60 | Checklist UX §5, contraste AA e DPI 100%/125% não evidenciados |
-| T62 | `db/ERPVENDAS.FBK` não gerado; restore com `gbak` não validado (usar scripts `db/*.sql`) |
+| T62 | `db/ERPVENDAS.FBK` gerado e restore com `gbak` validado em 2026-09-24 (scripts `db/*.sql` seguem como alternativa) |
 | T64 | Instalação em pasta/máquina limpa seguindo só o README não executada |
 
 ## 7. Mais documentação
