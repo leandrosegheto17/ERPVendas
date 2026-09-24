@@ -36,7 +36,7 @@ Para **executar** o app (máquina sem IDE), na mesma pasta do `ERPVendas.exe`:
 
 - `fbclient.dll` 32 bits (do Firebird 3.0).
 - `libeay32.dll` e `ssleay32.dll` do **OpenSSL 1.0.2, Win32**. O Indy 10.6.3 do Delphi 13 só carrega esses nomes; DLLs OpenSSL 1.1.x/3.x não funcionam. Só são necessárias para SMTP com TLS (ex.: porta 587); sem TLS (ex.: porta 2525) não são exigidas. Não são versionadas no repositório (binários de terceiros); o spike T02 usou o mirror `IndySockets/OpenSSL-Binaries` (`docs/ambiente-licencas.md` §11).
-- Runtime packages do Delphi/DevExpress: a diretriz é build sem eles, mas ver limitação do trial DevExpress na seção 6.
+- Runtime packages do Delphi/DevExpress: o build Release **usa** runtime packages (o DevExpress trial não traz `.dcu`; ver `.md/BLOCKERS.md`, Bloqueio 008). `scripts/montar-bin.ps1` copia os `.bpl` para `bin` (seção 6).
 
 O pacote `bin/` (exe + DLLs + `erpvendas.ini.example`) e o `db/ERPVENDAS.FBK` **são gerados na entrega** (tarefas T61/T62) e podem não existir no repositório. Sem eles, use os scripts SQL da seção 3 e compile o projeto na IDE.
 
@@ -117,7 +117,7 @@ Aponte `[Financeiro] BaseUrl=http://127.0.0.1:8080`. O modo muda em tempo de exe
 ## 6. Limitações do ambiente trial/demo (T01, T67)
 
 - **ReportBuilder Professional (licença demo):** sem prazo de expiração, mas o **PDF exportado traz o bloco de aviso** "ReportBuilder Professional - Demo Copy ... Digital Metaphors Corporation" no rodapé (confirmado em 2026-09-22, `docs/ambiente-licencas.md` §3.2), além do aviso no Designer/Preview. Saída limitada a 5 páginas (o pedido cabe em 1). O aviso só some com licença comprada.
-- **DevExpress VCL (trial):** expira ~30 dias após a instalação (2026-09-22; data exata a confirmar no License Manager). O trial exige compilar com **"Link with runtime packages"**, o que conflita com a diretriz de build sem runtime packages (T61). Não foi confirmado se isso some com licença comprada; enquanto for trial, as BPLs do DevExpress precisam acompanhar o exe.
+- **DevExpress VCL (trial):** expira ~30 dias após a instalação (2026-09-22; data exata a confirmar no License Manager). O trial exige compilar com **"Link with runtime packages"**, o que conflita com a diretriz de build sem runtime packages (T61). Enquanto for trial, as BPLs do DevExpress precisam acompanhar o exe. **Aviso de entrega:** o `bin` só funciona enquanto a trial estiver válida (~2026-10-22); depois disso o exe deixa de abrir. As BPLs do DevExpress (trial) e do ReportBuilder (demo) não são redistribuíveis: o `bin` serve para avaliação local, não para distribuição. Detalhes em `docs/varredura-segredos-licencas.md`.
 - **Delphi Community:** licença registrada, 367 dias a partir de 2026-09-22.
 - **OpenSSL:** apenas 1.0.2 Win32 (seção 2).
 
