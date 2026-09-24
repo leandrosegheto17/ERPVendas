@@ -52,6 +52,7 @@ type
     procedure PreencherMestre(AQuery: TFDQuery; const AVenda: TVenda);
     procedure InserirItens(const AVenda: TVenda);
     procedure TratarFalha(const AOperacao: string; E: Exception);
+    function Existe(const ASQL: string; AId: Integer): Boolean;
   public
     constructor Create(AConexao: TConexao; ALogger: TLogger);
 
@@ -74,7 +75,17 @@ const
   MSG_FALHA_CONSULTAR = 'Não foi possível consultar a venda. Tente novamente.';
   MSG_FALHA_EXCLUIR = 'Não foi possível excluir a venda. Tente novamente.';
   MSG_NAO_ENCONTRADA = 'Venda não encontrada.';
-  MSG_T26 = 'Operação ainda não disponível (T26).';
+
+  // T26: lista (JOIN p/ nome do cliente; VALOR_TOTAL ja e o total da venda)
+  SQL_LISTAR_BASE =
+    'SELECT V.ID, V.CLIENTE_ID, C.NOME AS CLIENTE_NOME, V.DATA_VENDA, ' +
+    'V.VALOR_TOTAL, V.STATUS, V.DATA_QUITACAO, V.MOTIVO_CANCELAMENTO ' +
+    'FROM VENDAS V JOIN CLIENTES C ON C.ID = V.CLIENTE_ID WHERE (1 = 1) ';
+  SQL_LISTAR_STATUS = 'AND V.STATUS = :STATUS ';
+  SQL_LISTAR_CLIENTE = 'AND V.CLIENTE_ID = :CLIENTE_ID ';
+  SQL_LISTAR_ORDEM = 'ORDER BY V.DATA_VENDA DESC, V.ID DESC';
+  SQL_EXISTE_CLIENTE = 'SELECT FIRST 1 ID FROM VENDAS WHERE CLIENTE_ID = :ID';
+  SQL_EXISTE_PRODUTO = 'SELECT FIRST 1 ID FROM VENDA_ITENS WHERE PRODUTO_ID = :ID';
 
   SQL_INCLUIR =
     'INSERT INTO VENDAS (CLIENTE_ID, DATA_VENDA, VALOR_TOTAL, STATUS, DATA_QUITACAO, ' +
@@ -385,18 +396,72 @@ end;
 
 function TVendaRepository.ListarDataSet(const AStatusFiltro: string;
   AClienteIdFiltro: Integer): TDataSet;
+var
+  Q: TFDQuery;
+  SQL: string;
 begin
-  raise EInfra.Create(MSG_T26);
+  SQL := SQL_LISTAR_BASE;
+  if AStatusFiltro <> '' then
+    SQL := SQL + SQL_LISTAR_STATUS;
+  if AClienteIdFiltro > 0 then
+    SQL := SQL + SQL_LISTAR_CLIENTE;
+  SQL := SQL + SQL_LISTAR_ORDEM;
+
+  Q := NovaQuery;
+  try
+    Q.UpdateOptions.ReadOnly := True; // grade somente leitura (ADR-003)
+    Q.SQL.Text := SQL;
+    if AStatusFiltro <> '' then
+      Q.ParamByName('STATUS').AsString := AStatusFiltro;
+    if AClienteIdFiltro > 0 then
+      Q.ParamByName('CLIENTE_ID').AsInteger := AClienteIdFiltro;
+    Q.Open;
+    Result := Q;
+  except
+    on E: Exception do
+    begin
+      Q.Free;
+      if E is EInfra then
+        raise;
+      TratarFalha('listar', E);
+      Result := nil; // inalcancavel (TratarFalha sempre levanta)
+    end;
+  end;
+end;
+
+function TVendaRepository.Existe(const ASQL: string; AId: Integer): Boolean;
+var
+  Q: TFDQuery;
+begin
+  Result := False;
+  Q := NovaQuery;
+  try
+    try
+      Q.SQL.Text := ASQL;
+      Q.ParamByName('ID').AsInteger := AId;
+      Q.Open;
+      Result := not Q.IsEmpty;
+    except
+      on E: Exception do
+      begin
+        if E is EInfra then
+          raise;
+        TratarFalha('obter', E);
+      end;
+    end;
+  finally
+    Q.Free;
+  end;
 end;
 
 function TVendaRepository.ExisteVendaPorCliente(AClienteId: Integer): Boolean;
 begin
-  raise EInfra.Create(MSG_T26);
+  Result := Existe(SQL_EXISTE_CLIENTE, AClienteId);
 end;
 
 function TVendaRepository.ExisteVendaPorProduto(AProdutoId: Integer): Boolean;
 begin
-  raise EInfra.Create(MSG_T26);
+  Result := Existe(SQL_EXISTE_PRODUTO, AProdutoId);
 end;
 
 end.
