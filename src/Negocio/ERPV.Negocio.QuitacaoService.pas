@@ -3,6 +3,13 @@
 (*
   T38 (Lote 9) - QuitacaoService.Confirmar, caminho feliz (RF-12/13, ADR-006).
   Camada Negocio: so depende de interfaces do Dominio e do Core.
+  T49: apos Quitada gravada, PosQuitacao gera PDF, envia e-mail, apaga PDF; falha
+  => venda segue Quitada + item EMAIL na fila; EmailStatus/EmailDestino no
+  resultado (UI mostra UX 4.3 via Notificar). Roteiro manual T49: 1. mock ok +
+  SMTP ok: e-mail com PDF, EmailStatus=eqEnviado, PDF some da pasta temp. 2. SMTP
+  senha errada: STATUS=QUITADA, 1 linha EMAIL PENDENTE, aviso modal UX 4.3, sem
+  excecao. 3. mock recusa/erro500: nenhum e-mail (EmailStatus=eqNaoAplicavel).
+  4. Repetir falha: continua 1 item PENDENTE (tentativas+1). Nao compilado.
   T43 (Lote 10) acrescenta Cancelar nesta mesma classe (ver abaixo).
 
   T43 - QuitacaoService.Cancelar (RF-16/17, RN-02/08, ADR-005/006).
@@ -72,9 +79,16 @@ uses
   ERPV.Dominio.Resultados,
   ERPV.Dominio.Contratos.IVendaRepository,
   ERPV.Dominio.Contratos.IFinanceiroGateway,
-  ERPV.Dominio.Contratos.IFilaRepository;
+  ERPV.Dominio.Contratos.IFilaRepository,
+  ERPV.Dominio.Contratos.IClienteRepository,
+  ERPV.Dominio.Contratos.IRelatorioPedido,
+  ERPV.Dominio.Contratos.IEmailSender,
+  ERPV.Dominio.Cliente;
 
 type
+  /// <summary>T49: resultado do e-mail pos-quitacao (so relevante em qdSucesso).</summary>
+  TEmailQuitacao = (eqNaoAplicavel, eqEnviado, eqFalhou);
+
   TDesfechoQuitacao = (qdSucesso, qdRecusado, qdIndisponivel, qdRespostaInvalida);
 
   TDesfechoCancelamento = (
@@ -99,6 +113,10 @@ type
     CodigoHttp: Integer;
     /// <summary>Preenchida so em qdSucesso.</summary>
     DataQuitacao: TDateTime;
+    /// <summary>T49: eqEnviado (EmailDestino preenchido) ou eqFalhou (item EMAIL
+    /// na fila). A UI exibe (UX 4.3); a quitacao nunca e desfeita.</summary>
+    EmailStatus: TEmailQuitacao;
+    EmailDestino: string;
     function EhSucesso: Boolean;
   end;
 
@@ -107,6 +125,10 @@ type
     FVendaRepositorio: IVendaRepository;
     FFinanceiro: IFinanceiroGateway;
     FFilaRepositorio: IFilaRepository;
+    FClienteRepositorio: IClienteRepository;
+    FRelatorio: IRelatorioPedido;
+    FEmailSender: IEmailSender;
+    procedure PosQuitacao(AVendaId: Integer; var AResultado: TResultadoQuitacao);
     procedure EnfileirarIndisponivel(AVendaId: Integer;
       var AResultado: TResultadoQuitacao);
     function GravarQuitada(AVendaId: Integer; const AData: TDateTime;
@@ -115,7 +137,9 @@ type
       const AMensagem: string = ''): TResultadoCancelamento; static;
   public
     constructor Create(const AVendaRepositorio: IVendaRepository;
-      const AFinanceiro: IFinanceiroGateway; const AFilaRepositorio: IFilaRepository);
+      const AFinanceiro: IFinanceiroGateway; const AFilaRepositorio: IFilaRepository;
+      const AClienteRepositorio: IClienteRepository;
+      const ARelatorio: IRelatorioPedido; const AEmailSender: IEmailSender);
 
     /// <summary>Confirma a quitacao no Financeiro. Falha esperada de
     /// integracao vira resultado tipado, nunca excecao.</summary>
@@ -147,9 +171,14 @@ begin
 end;
 
 constructor TQuitacaoService.Create(const AVendaRepositorio: IVendaRepository;
-  const AFinanceiro: IFinanceiroGateway; const AFilaRepositorio: IFilaRepository);
+  const AFinanceiro: IFinanceiroGateway; const AFilaRepositorio: IFilaRepository;
+  const AClienteRepositorio: IClienteRepository;
+  const ARelatorio: IRelatorioPedido; const AEmailSender: IEmailSender);
 begin
   inherited Create;
+  FClienteRepositorio := AClienteRepositorio;
+  FRelatorio := ARelatorio;
+  FEmailSender := AEmailSender;
   FVendaRepositorio := AVendaRepositorio;
   FFinanceiro := AFinanceiro;
   FFilaRepositorio := AFilaRepositorio;
@@ -199,6 +228,81 @@ begin
   end;
 end;
 
+procedure TQuitacaoService.PosQuitacao(AVendaId: Integer;
+  var AResultado: TResultadoQuitacao);
+var
+  Venda: TVenda;
+  Cliente: TCliente;
+  Destino, Erro, Pdf: string;
+  Env: TResultadoEnvioEmail;
+begin
+  // T49 (RF-13/21/22, RN-06, ADR-006): so chamado APOS o commit local de Quitada.
+  // Sem transacao aberta (PDF/SMTP). Nada aqui levanta excecao nem desfaz a
+  // quitacao; falha => item EMAIL na fila (1 PENDENTE por venda+tipo, RN-08).
+  // Nao loga e-mail/CPF; o erro gravado na fila nao inclui o destinatario.
+  AResultado.EmailStatus := eqFalhou;
+  AResultado.EmailDestino := '';
+  Erro := '';
+  Destino := '';
+  Pdf := '';
+  Venda := nil;
+  Cliente := nil;
+  try
+    try
+      Venda := FVendaRepositorio.Obter(AVendaId);
+      if Venda = nil then
+        Erro := 'Venda não encontrada para envio de e-mail'
+      else
+      begin
+        Cliente := FClienteRepositorio.Obter(Venda.ClienteId);
+        if Cliente <> nil then
+          Destino := Trim(Cliente.Email);
+        if Destino = '' then
+          Erro := 'Cliente sem e-mail cadastrado'
+        else
+        begin
+          Pdf := FRelatorio.GerarPdf(Venda);
+          Env := FEmailSender.Enviar(Destino,
+            Format('Confirmação de Pedido %d', [AVendaId]),
+            Format('Segue em anexo a confirmação do pedido %d.', [AVendaId]), Pdf);
+          if Env.Sucesso then
+          begin
+            AResultado.EmailStatus := eqEnviado;
+            AResultado.EmailDestino := Destino;
+          end
+          else
+            Erro := Env.MensagemErro;
+        end;
+      end;
+    except
+      on E: Exception do
+        Erro := 'Falha ao gerar/enviar e-mail: ' + E.ClassName;
+    end;
+  finally
+    Cliente.Free;
+    Venda.Free;
+  end;
+
+  if Pdf <> '' then
+    try
+      // Apaga em sucesso e em falha (T51 regenera do banco; PDF nao persiste).
+      FRelatorio.Limpar(Pdf);
+    except
+      // limpeza best-effort
+    end;
+
+  if AResultado.EmailStatus = eqFalhou then
+  begin
+    if Trim(Erro) = '' then
+      Erro := 'Falha no envio de e-mail';
+    try
+      FFilaRepositorio.Enfileirar(AVendaId, tfEmail, Erro);
+    except
+      // Sem fila: a venda segue Quitada; a UI ainda avisa da falha.
+    end;
+  end;
+end;
+
 function TQuitacaoService.Confirmar(AVendaId: Integer): TResultadoQuitacao;
 var
   Venda: TVenda;
@@ -224,6 +328,8 @@ begin
   Result.Mensagem := Resp.Mensagem;
   Result.CodigoHttp := Resp.CodigoHttp;
   Result.DataQuitacao := 0;
+  Result.EmailStatus := eqNaoAplicavel;
+  Result.EmailDestino := '';
 
   case Resp.Categoria of
     rfSucesso:
@@ -237,6 +343,7 @@ begin
         begin
           Result.Desfecho := qdSucesso;
           Result.DataQuitacao := Data;
+          PosQuitacao(AVendaId, Result);
         end;
       end
       else
@@ -274,6 +381,7 @@ begin
             Result.DataQuitacao := Data;
             Result.Mensagem := 'Quitação já registrada no Financeiro; ' +
               'venda concluída localmente (reconciliação por consulta de status)';
+            PosQuitacao(AVendaId, Result);
           end;
         end
         else

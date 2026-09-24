@@ -90,7 +90,16 @@ function TextoDesfechoQuitacao(const AResultado: TResultadoQuitacao;
 begin
   case AResultado.Desfecho of
     qdSucesso:
-      Result := Format('Venda %d quitada.', [AVendaId]);
+      case AResultado.EmailStatus of
+        eqEnviado:
+          Result := Format('Venda %d quitada. Relatório enviado para %s.',
+            [AVendaId, AResultado.EmailDestino]);
+        eqFalhou:
+          Result := Format('Venda %d quitada, mas o e-mail não pôde ser enviado. ' +
+            'Ele ficou na fila; reenvie em Pendências.', [AVendaId]);
+      else
+        Result := Format('Venda %d quitada.', [AVendaId]);
+      end;
     qdIndisponivel:
       Result := Format('Financeiro indisponível. A venda %d continua Pendente e ' +
         'foi colocada na fila. Tente novamente em Pendências.', [AVendaId]);
@@ -152,7 +161,10 @@ begin
 
   case Resultado.Desfecho of
     qdSucesso:
-      Notificar(utnInfo, TextoDesfechoQuitacao(Resultado, AVendaId), AOwnerBanner);
+      if Resultado.EmailStatus = eqFalhou then
+        Notificar(utnAviso, TextoDesfechoQuitacao(Resultado, AVendaId))
+      else
+        Notificar(utnInfo, TextoDesfechoQuitacao(Resultado, AVendaId), AOwnerBanner);
     qdIndisponivel:
       Notificar(utnAviso, TextoDesfechoQuitacao(Resultado, AVendaId));
   else
