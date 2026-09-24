@@ -84,6 +84,7 @@ uses
 
 const
   MSG_AGUARDANDO = 'Aguardando Financeiro...';
+  MARCADOR_AVISO_FILA = ' | Aviso:'; // anexado por TQuitacaoService.EnfileirarIndisponivel
 
 function TextoDesfechoQuitacao(const AResultado: TResultadoQuitacao;
   AVendaId: Integer): string;
@@ -101,8 +102,15 @@ begin
         Result := Format('Venda %d quitada.', [AVendaId]);
       end;
     qdIndisponivel:
-      Result := Format('Financeiro indisponível. A venda %d continua Pendente e ' +
-        'foi colocada na fila. Tente novamente em Pendências.', [AVendaId]);
+      // A2: marcador do service quando o Enfileirar falhou; detalhe tecnico
+      // (apos o marcador) nunca e exibido ao operador.
+      if Pos(MARCADOR_AVISO_FILA, AResultado.Mensagem) > 0 then
+        Result := Format('Financeiro indisponível. A venda %d continua Pendente, ' +
+          'mas não foi possível registrar o reenvio na fila de pendências. ' +
+          'Confirme a venda novamente mais tarde.', [AVendaId])
+      else
+        Result := Format('Financeiro indisponível. A venda %d continua Pendente e ' +
+          'foi colocada na fila. Tente novamente em Pendências.', [AVendaId]);
     qdRecusado:
       Result := 'Quitação recusada pelo Financeiro: ' + AResultado.Mensagem +
         '. A venda continua Pendente.';
