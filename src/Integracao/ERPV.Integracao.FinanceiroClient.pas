@@ -115,6 +115,10 @@ type
     /// aceita [A-Za-z0-9_] (max. 64), senao ''.</summary>
     class procedure ExtrairErro(const ACorpo: string; out ACodigo,
       AMensagem: string);
+    /// <summary>RF14-01/SG14-01: True quando ABaseUrl e http:// (nao https) com
+    /// host NAO-loopback e AApiKey <> '' (chave e dados de venda em claro na
+    /// rede). Loopback = localhost, 127.x.x.x, ::1. Funcao pura, sem rede.</summary>
+    class function UrlInseguraComChave(const ABaseUrl, AApiKey: string): Boolean;
     /// <summary>Mapeia resposta NAO-2xx ja recebida (funcao pura, sem rede).
     /// 4xx => Recusado (401 => mensagem de configuracao; 409
     /// CONFLITO_CONCORRENCIA => Indisponivel); demais => Indisponivel.</summary>
@@ -153,6 +157,87 @@ end;
 function TFinanceiroClient.MontarUrl(const ARota: string): string;
 begin
   Result := FBaseUrl + ARota;
+end;
+
+// True so para IPv4 valido 127.a.b.c: exatamente 4 octetos numericos 0-255,
+// primeiro = 127 (rejeita hostnames DNS como 127.evil.com).
+function EhIPv4Loopback(const AHost: string): Boolean;
+var
+  LI, LQtd, LVal, LDigitos: Integer;
+begin
+  Result := False;
+  LQtd := 0;
+  LVal := 0;
+  LDigitos := 0;
+  for LI := 1 to Length(AHost) + 1 do
+  begin
+    if (LI <= Length(AHost)) and CharInSet(AHost[LI], ['0'..'9']) then
+    begin
+      LVal := LVal * 10 + (Ord(AHost[LI]) - Ord('0'));
+      Inc(LDigitos);
+      if (LDigitos > 3) or (LVal > 255) then
+        Exit;
+    end
+    else if (LI > Length(AHost)) or (AHost[LI] = '.') then
+    begin
+      if LDigitos = 0 then
+        Exit;
+      if (LQtd = 0) and (LVal <> 127) then
+        Exit;
+      Inc(LQtd);
+      LVal := 0;
+      LDigitos := 0;
+    end
+    else
+      Exit; // caractere invalido (letra etc.)
+  end;
+  Result := LQtd = 4;
+end;
+
+class function TFinanceiroClient.UrlInseguraComChave(const ABaseUrl,
+  AApiKey: string): Boolean;
+const
+  CHttp = 'http://';
+var
+  LUrl, LHost: string;
+  LI, LFim: Integer;
+begin
+  Result := False;
+  if Trim(AApiKey) = '' then
+    Exit;
+  LUrl := Trim(ABaseUrl);
+  if not LUrl.StartsWith(CHttp, True) then
+    Exit; // https (ou outro esquema): nao e o caso desta regra
+  LUrl := Copy(LUrl, Length(CHttp) + 1, MaxInt);
+  LFim := Length(LUrl) + 1;
+  for LI := 1 to Length(LUrl) do
+    if CharInSet(LUrl[LI], ['/', '?', '#']) then
+    begin
+      LFim := LI;
+      Break;
+    end;
+  LHost := Copy(LUrl, 1, LFim - 1);
+  LI := LHost.LastIndexOf('@'); // descarta user:pass@
+  if LI >= 0 then
+    LHost := Copy(LHost, LI + 2, MaxInt);
+  if LHost.StartsWith('[') then
+  begin
+    LI := LHost.IndexOf(']');
+    if LI > 0 then
+      LHost := Copy(LHost, 2, LI - 1)
+    else
+      LHost := Copy(LHost, 2, MaxInt);
+  end
+  else
+  begin
+    LI := LHost.IndexOf(':'); // descarta :porta
+    if LI >= 0 then
+      LHost := Copy(LHost, 1, LI);
+  end;
+  LHost := LowerCase(LHost);
+  if (LHost = 'localhost') or (LHost = '::1') or EhIPv4Loopback(LHost) then
+    Exit;
+  Result := True; // inclui host vazio/malformado: falha fechada
 end;
 
 class procedure TFinanceiroClient.ExtrairErro(const ACorpo: string;
@@ -331,6 +416,20 @@ var
   LCodigo: Integer;
   LCorpo, LErro: string;
 begin
+  // RF14-01/SG14-01: recusa ANTES de qualquer rede; a chave nunca sai em claro.
+  // Recusado (nao enfileira): e erro de configuracao, repetir nao adianta.
+  if UrlInseguraComChave(FBaseUrl, FApiKey) then
+  begin
+    if FLogger <> nil then
+      FLogger.Aviso(Format('Financeiro %s %s: recusado (BaseUrl http:// nao-loopback com ApiKey)',
+        [AMetodo, ARota]));
+    Result := TResultadoFinanceiro.Recusado(0,
+      'BaseUrl do Financeiro usa http:// fora de localhost com ApiKey configurada: ' +
+      'a chave e os dados da venda trafegariam sem criptografia. ' +
+      'Use https:// no BaseUrl do INI.');
+    Exit;
+  end;
+
   if not Executar(AMetodo, ARota, ACorpoEnvio, LCodigo, LCorpo, LErro) then
   begin
     if FLogger <> nil then

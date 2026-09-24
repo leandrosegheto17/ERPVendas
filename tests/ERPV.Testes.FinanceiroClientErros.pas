@@ -44,6 +44,13 @@ type
     [Test] procedure D3_401SemChave_MensagemDeConfiguracao;
     [Test] procedure D3_401ComChave_MensagemChaveRejeitada;
     [Test] procedure D3_401_NaoUsaMensagemDoServidor;
+    // RF14-01 / SG14-01 - http:// nao-loopback com ApiKey
+    [Test] procedure RF1401_HttpLoopback_ComChave_Permitido;
+    [Test] procedure RF1401_HttpRemoto_ComChave_Recusado;
+    [Test] procedure RF1401_HttpRemoto_SemChave_Permitido;
+    [Test] procedure RF1401_Https_ComChave_Permitido;
+    [Test] procedure RF1401_HostDisfarcado_Recusado;
+    [Test] procedure RF1401_Recusa_NaoVazaChaveEMensagemClara;
   end;
 
 implementation
@@ -284,6 +291,65 @@ begin
     '{"erro":{"codigo":"NAO_AUTORIZADO","mensagem":"TEXTO_DO_SERVIDOR"}}',
     'Quitacao', True);
   Assert.IsFalse(R.Mensagem.Contains('TEXTO_DO_SERVIDOR'));
+end;
+
+procedure TTestesFinanceiroClientErros.RF1401_HttpLoopback_ComChave_Permitido;
+begin
+  Assert.IsFalse(TFinanceiroClient.UrlInseguraComChave('http://localhost:5000', 'k'));
+  Assert.IsFalse(TFinanceiroClient.UrlInseguraComChave('HTTP://LocalHost', 'k'));
+  Assert.IsFalse(TFinanceiroClient.UrlInseguraComChave('http://127.0.0.1:8080/', 'k'));
+  Assert.IsFalse(TFinanceiroClient.UrlInseguraComChave('http://[::1]:5000', 'k'));
+end;
+
+procedure TTestesFinanceiroClientErros.RF1401_HttpRemoto_ComChave_Recusado;
+begin
+  Assert.IsTrue(TFinanceiroClient.UrlInseguraComChave('http://host-remoto', 'k'));
+  Assert.IsTrue(TFinanceiroClient.UrlInseguraComChave('http://192.168.0.10:5000/api', 'k'));
+  Assert.IsTrue(TFinanceiroClient.UrlInseguraComChave('http://financeiro.empresa.com', 'k'));
+end;
+
+procedure TTestesFinanceiroClientErros.RF1401_HttpRemoto_SemChave_Permitido;
+begin
+  Assert.IsFalse(TFinanceiroClient.UrlInseguraComChave('http://host-remoto', ''));
+  Assert.IsFalse(TFinanceiroClient.UrlInseguraComChave('http://host-remoto', '   '));
+end;
+
+procedure TTestesFinanceiroClientErros.RF1401_Https_ComChave_Permitido;
+begin
+  Assert.IsFalse(TFinanceiroClient.UrlInseguraComChave('https://host-remoto', 'k'));
+  Assert.IsFalse(TFinanceiroClient.UrlInseguraComChave('https://financeiro.empresa.com:443', 'k'));
+end;
+
+procedure TTestesFinanceiroClientErros.RF1401_HostDisfarcado_Recusado;
+begin
+  // "localhost" so como prefixo/usuario nao vale
+  Assert.IsTrue(TFinanceiroClient.UrlInseguraComChave('http://localhost.evil.com', 'k'));
+  Assert.IsTrue(TFinanceiroClient.UrlInseguraComChave('http://localhost@evil.com', 'k'));
+  Assert.IsTrue(TFinanceiroClient.UrlInseguraComChave('http://', 'k'));
+  Assert.IsTrue(TFinanceiroClient.UrlInseguraComChave('http://127.evil.com', 'k'));
+  Assert.IsTrue(TFinanceiroClient.UrlInseguraComChave('http://127.0.0.1.evil.com', 'k'));
+  Assert.IsTrue(TFinanceiroClient.UrlInseguraComChave('http://127.0.0.256', 'k'));
+  Assert.IsTrue(TFinanceiroClient.UrlInseguraComChave('http://127.1', 'k'));
+  // IPv4 127.a.b.c valido segue permitido
+  Assert.IsFalse(TFinanceiroClient.UrlInseguraComChave('http://127.0.0.1:8080/', 'k'));
+  Assert.IsFalse(TFinanceiroClient.UrlInseguraComChave('http://127.1.2.3', 'k'));
+end;
+
+procedure TTestesFinanceiroClientErros.RF1401_Recusa_NaoVazaChaveEMensagemClara;
+var
+  R: TResultadoFinanceiro;
+  C: TFinanceiroClient;
+begin
+  C := TFinanceiroClient.Create('http://host-remoto', 1000, 'CHAVE_SECRETA_XYZ');
+  try
+    // Falha antes de qualquer rede: o retorno e imediato
+    R := C.ConsultarStatus(1);
+  finally
+    C.Free;
+  end;
+  Assert.AreEqual(Ord(rfRecusado), Ord(R.Categoria));
+  Assert.IsTrue(R.Mensagem.Contains('https://'));
+  Assert.IsFalse(R.Mensagem.Contains('CHAVE_SECRETA_XYZ'));
 end;
 
 initialization
