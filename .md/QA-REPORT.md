@@ -667,3 +667,64 @@ Compilação (usuário confirmou); tipos FMTBCD reais no pipeline; estouro visua
 ### Veredito do lote (chapéu QA)
 
 **Aprovado com ressalvas.** Nenhuma reprovação crítica; `TASK.md` não alterado (T45-T47 seguem `Concluída`). Liberado ao chapéu DevSecOps. Pontos para a auditoria: path traversal em `Limpar`, vazamento de caminho em log/mensagem, dados de cliente no PDF em pasta temp.
+
+## Lote 12 — E-mail pós-quitação (T48, T49) — chapéu QA (2026-09-24)
+
+Método: inspeção estática de `ERPV.Integracao.EmailSender.pas`, `ERPV.Negocio.QuitacaoService.pas` (`PosQuitacao`, `Confirmar`), `ERPV.UI.ConfirmacaoVenda.pas`, `ERPV.App.Root.pas`, `ERPV.Relatorios.RelatorioPedido.pas`, `ERPV.Dados.FilaRepository.pas` (`Enfileirar`), `.dpr`/`.dproj`, UX-SPEC §4.3. Nada compilado/executado por este agente (sem IDE Delphi). Notas de implementação do Executor não foram usadas como base de aprovação.
+
+### Critérios (acceptance-criteria-validation)
+
+**T48** (Mailtrap com anexo chega; senha errada => Falha sem crash e sem senha no log)
+- Resultado tipado, sem exceção para falha esperada: `Enviar` valida destinatário vazio e anexo inexistente antes de conectar; todo o resto em `try/except` com ordem correta (`EIdSMTPReplyError` > `EIdOSSLException` > `EIdException` > `Exception`); 535/534/530 => `MSG_CREDENCIAL`. Mensagens fixas e seguras. OK.
+- Log: só etapa + `ClassName` (e código de resposta SMTP); sem senha, corpo, destinatário nem `E.Message`. OK.
+- TLS/sem TLS conforme spike T02 (explícito TLS 1.2 / `IOHandler=nil`+`utNoTLSSupport`); timeouts 15 s/30 s; anexo `application/pdf`; multipart/mixed com parte de texto utf-8. Liberação de `LSmtp/LSsl/LMsg` no `finally` (partes pertencem a `MessageParts`). Desconexão protegida. OK.
+- Config via record por construtor (INI/env resolvidos em `Core.Config`); Root instancia `TEmailSender.Create(Cfg.SMTP, Logger)`; unit no `.dpr` (l.36) e `.dproj` (l.107). OK.
+- Depende de execução real (Mailtrap, DLLs OpenSSL): ver "Não verificável".
+
+**T49** (após commit local gera PDF, envia, apaga PDF; falha => Quitada + fila EMAIL; nunca antes da quitação)
+- Ordem: `PosQuitacao` só é chamado dentro de `GravarQuitada(...) = True`, tanto no caminho `rfSucesso` quanto na reconciliação T41; nunca em recusa/indisponível/resposta inválida (`EmailStatus=eqNaoAplicavel`). OK. Sem transação aberta durante PDF/SMTP (ADR-006). OK.
+- Nada levanta exceção: `try/except` cobre `Obter`, `Cliente.Obter`, `GerarPdf`, `Enviar`; `Limpar` best-effort; `Enfileirar` em try/except. Quitação nunca é desfeita. OK.
+- PDF apagado em sucesso e em falha (`Limpar` sempre que `Pdf<>''`); PDF parcial na falha de `GerarPdf` é removido pelo próprio `RelatorioPedido` (RF11-02, corrige A11-02) e `Pdf` fica vazio nesse caso, sem dupla limpeza. OK.
+- Falha => `Enfileirar(tfEmail)`: `FilaRepository` deduplica por (venda,tipo) PENDENTE e incrementa tentativas (RN-08). Erro gravado não inclui e-mail/CPF. OK.
+- Cliente sem e-mail/inexistente => `eqFalhou` + fila (coerente com UX §1). OK.
+- UI: `TextoDesfechoQuitacao` reproduz literalmente UX 4.3 (enviado: Info/banner; falha: Aviso modal). `qdIndisponivel` Aviso, `qdRecusado` Erro. OK. Os dois chamadores (`FormEdicaoVenda`, `FormListaVendas`) usam `ConfirmarVendaComFeedback`, sem quebra de assinatura.
+- Composition root: ordem `Relatorio -> EmailSender -> QuitacaoService(…, ClienteRepo, Relatorio, EmailSender)`; destrutor libera `FEmailSender`/`FRelatorioPedido` (interfaces) antes de `FQuitacaoService.Free` e dos repositórios; ver A12-04.
+
+### Integração (cross-platform-integration-testing)
+
+T48 (`IEmailSender`/`TResultadoEnvioEmail.Sucesso/MensagemErro`) <-> T49 (`Env.Sucesso`, `Env.MensagemErro`); T47 (`GerarPdf` devolve caminho dentro da pasta temp, `Limpar` restrito a ela; caminho passado direto como anexo); T37 (`Enfileirar` `tfEmail`, mesmo enum/`TIPO_FILA_STR`); T38/T41 (dois pontos de `PosQuitacao`); UI (`EmailStatus/EmailDestino` mapeados nas mensagens 4.3). Contratos consistentes por leitura estática. Roteiro de reenvio (T51) fora do lote.
+
+### Requisitos não funcionais
+
+- Segurança/LGPD: sem senha/e-mail/corpo em log ou fila; mensagens genéricas ao usuário. Para o DevSecOps: `TIdSSLIOHandlerSocketOpenSSL` sem verificação de certificado (`VerifyMode` padrão), PDF com dados do cliente na pasta temp durante o envio (apagado em seguida; retenção 24 h em falha de limpeza), `From` fixo.
+- Desempenho/usabilidade: chamada síncrona na thread da UI; pior caso conecta 15 s + leitura 30 s por operação SMTP, somando-se ao timeout do Financeiro (ver A12-03).
+
+### Achados (bug-documentation) — nenhum Crítico, 4 Simples
+
+| ID | Sev. | Local | Descrição |
+|---|---|---|---|
+| A12-01 | Simples | `QuitacaoService.pas:298-302` | Falha ao enfileirar EMAIL é engolida sem log e sem sinal ao chamador; a UI diz "Ele ficou na fila" mesmo sem item na fila. `TQuitacaoService` não tem logger. Sugestão: registrar (log/Logger opcional) e/ou novo estado no resultado (ex.: `EmailNaFila: Boolean`) com texto sem promessa de fila. Registrar também no log a falha de e-mail (só a `Erro` fixa) para diagnóstico. |
+| A12-02 | Simples | `EmailSender.pas:84,147` | `From` fixo `nao-responder@erpvendas.local` (domínio inexistente): servidores reais podem recusar/marcar spam; a Root não passa `ARemetente` e o INI não tem campo. Sugestão: campo `[SMTP] Remetente` opcional. Deve ser tratado antes do smoke T54 com SMTP real. |
+| A12-03 | Simples | `ConfirmacaoVenda.pas:143-149` + `PosQuitacao` | Rótulo "Aguardando Financeiro..." permanece durante PDF + SMTP (até ~45 s+) e a UI fica bloqueada; o texto engana na fase de e-mail. Sugestão: trocar o rótulo antes do e-mail (callback/estado) ou reduzir timeouts; documentar. |
+| A12-04 | Simples | `QuitacaoService.pas:305-309`, `ERPV.App.Root.pas:224-228` | `TQuitacaoService` recebe `FRelatorio`/`FEmailSender` nil sem checagem (AV bruta capturada pelo `except` de `PosQuitacao` como `EAccessViolation`, resultando em e-mail "falhou" + fila, sem diagnóstico). Sugestão: `Assert`/`EInfra` no construtor e teste de composição. |
+| R12-1 | Informativo | `EmailSender.pas:172-178` | `utUseExplicitTLS` cobre 587/2525; porta 465 (TLS implícito) não suportada (fora do escopo T48/ADR-007; documentar). |
+| R12-2 | Informativo | `EmailSender.pas:148` | Destinatário vem do cadastro; CR/LF no e-mail dependeria de validação do cadastro (T18/UI) — Indy tende a sanear cabeçalhos; conferir no DevSecOps. |
+
+Reprovações críticas: nenhuma. Resolvido neste lote: A11-02 (PDF parcial) confirmado no RelatorioPedido; A11-01 (nil) permanece aberto, mas T49 nunca passa nil (Venda checada antes).
+
+### Não verificável por falta de IDE (ressalva, não reprovação)
+
+Compilação (units novas, uses `IdSMTPBase`/`IdExplicitTLSClientServerBase`/`IdSSLOpenSSL`, nome exato de `E.ErrorCode`); envio real ao Mailtrap com anexo abrível (roteiro 1-3 do cabeçalho de T48); senha errada => 535 => Falha e log sem senha; host inválido/timeout; DLLs OpenSSL ausentes; `ERPV_SMTP_PASSWORD` com prioridade; roteiros 1-4 de T49 (e-mail com PDF, `STATUS=QUITADA` + 1 linha EMAIL PENDENTE, tentativas+1 na repetição, PDF removido da pasta temp); exibição do modal/banner.
+
+### Fechamento estrutural
+
+T48 e T49 `Concluída`; dependências da Seção 4 do TASK.md (T48<-T02,T09; T49<-T38,T47,T48,T37,T68) satisfeitas e sem órfãs; sem tarefa `Bloqueada`. Nenhuma inconsistência que exija redesenho. `TASK.md` não alterado por este agente; A12-01 a A12-04 aguardam criação em `Refatoração Lote-12` pelo orquestrador.
+
+### Veredito por tarefa
+
+- T48: **Aprovada com ressalvas** (A12-02; execução Mailtrap pendente).
+- T49: **Aprovada com ressalvas** (A12-01, A12-03, A12-04; execução na IDE pendente).
+
+### Veredito do lote (chapéu QA)
+
+**Aprovado com ressalvas.** Nenhuma reprovação crítica; código não compilado/executado por este agente. Liberado ao chapéu DevSecOps. Pontos para auditoria: verificação de certificado TLS, PDF com PII em pasta temp, logs/fila sem PII, sanitização do destinatário.
