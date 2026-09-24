@@ -22,6 +22,7 @@ uses
   ERPV.Negocio.ClienteService in 'src\Negocio\ERPV.Negocio.ClienteService.pas',
   ERPV.Negocio.ProdutoService in 'src\Negocio\ERPV.Negocio.ProdutoService.pas',
   ERPV.Negocio.VendaService in 'src\Negocio\ERPV.Negocio.VendaService.pas',
+  ERPV.Negocio.QuitacaoService in 'src\Negocio\ERPV.Negocio.QuitacaoService.pas',
   ERPV.UI.FormBaseEdicao in 'src\UI\ERPV.UI.FormBaseEdicao.pas',
   ERPV.UI.FormBaseLista in 'src\UI\ERPV.UI.FormBaseLista.pas',
   ERPV.UI.FormEdicaoCliente in 'src\UI\ERPV.UI.FormEdicaoCliente.pas',
