@@ -375,3 +375,42 @@ Sem dado pessoal em Produto; nada novo para LGPD. Nenhum requisito operacional n
 
 ### Veredito do lote (chapéu DevSecOps)
 **Aprovado com débito baixo** (achado 1, já coberto por RF5-01; nenhuma tarefa nova). Sem achado alto/crítico nem compliance em aberto. Libera para `/deploy` quando o usuário decidir.
+
+## Lote 6 — Vendas: dados e regras (D3)
+
+Escopo: `ERPV.Dados.VendaRepository`, `ERPV.Negocio.VendaService`, `TClienteService.Excluir`/`TProdutoService.Excluir` (T30), `ERPV.App.Root` e as chamadas de `Excluir` em `FormListaClientes`/`FormListaProdutos`/`FormListaVendas`. QA do lote: Aprovado com ressalvas (RF6-01..RF6-03, não duplicados aqui). Análise por leitura de código (sem SAST automatizado disponível); sem recompilação.
+
+### 1. Segredo/credencial no repositório
+Nenhum segredo nas units do Lote 6. Sem achado.
+
+### 2. SQL parametrizado e injeção (regra 11)
+Todo valor entra por `ParamByName` (INSERT/UPDATE/DELETE/SELECT/existência). A única montagem dinâmica é `ListarDataSet` (T26): concatena apenas as constantes `SQL_LISTAR_STATUS`/`SQL_LISTAR_CLIENTE`/`SQL_LISTAR_ORDEM`, escolhidas por `<> ''`/`> 0`; o texto de `AStatusFiltro` entra só como `:STATUS` e o cliente como `:CLIENTE_ID` (inteiro). Sem ordenação ou coluna vinda do chamador. Sem injeção possível. Sem SQL em Service/UI. Valores monetários em `Currency`; `CK_VENDAS_STATUS` e `CK_ITENS_QTD` como 2ª barreira. Sem achado.
+
+### 3. Integridade de estado (RF6-01)
+Confirmado por leitura: em `TVendaService.Salvar` (Id > 0), `ExigirPendente` lê o status do banco (correto), mas `Alterar` grava `Status`, `DataQuitacao` e `MotivoCancelamento` do objeto do chamador (`PreencherMestre`/`SQL_ALTERAR`). Um chamador pode transitar Pendente -> Quitada/Cancelada por fora de `AtualizarStatus`/fluxo de quitação; o CHECK só valida o domínio do texto, não a transição. Consequência: contorna RN-02/RN-06 (efeitos da quitação/cancelamento, como fila de e-mail e data/motivo consistentes, ficam de fora) e pode deixar venda Quitada sem `DataQuitacao` ou Cancelada sem motivo. Achado correlato **RF6-04**: em `Incluir`, o `Status` é forçado a Pendente, mas `DataQuitacao`/`MotivoCancelamento` do chamador são gravados assim mesmo.
+Classificação: **Média** (RF6-01) e **Baixa** (RF6-04). Justificativa: o serviço é o único ponto de entrada, hoje só a UI o consome e ela não expõe status na edição; app desktop monousuário, sem fronteira de confiança nem exploração externa; sem perda de dado sensível. Não é alta/crítica, então não bloqueia. Sobe para Alta se algum consumidor externo (importação, API, novo form) passar a montar `TVenda` a partir de entrada não confiável, ou se o Lote 9 (`QuitacaoService`) depender de a quitação ser exclusiva de `AtualizarStatus`. Correção (poucas linhas, no Service): em `Salvar`, copiar `Status/DataQuitacao/MotivoCancelamento` de `Atual` para `AVenda` antes de `Alterar`; em Id = 0, zerar `DataQuitacao` e `MotivoCancelamento`. Prazo: antes de iniciar o Lote 9 (T38).
+
+### 4. Log e dados sensíveis (regra 17, LGPD)
+O repositório só loga operação + exceção FireDAC via `TLogger.Erro` (mascara CPF/CNPJ/e-mail e redige senha, verificado na T10); nenhum valor de parâmetro vai ao log. A lista (T26) traz `CLIENTE_NOME` para a grade, mas nome não é logado nem entra em mensagem. Service não loga. Mensagens de validação incluem só a descrição do produto (dado não pessoal); não incluem nome, CPF/CNPJ ou e-mail do cliente. Os diálogos de confirmação de exclusão mostram nome/descrição só na tela do operador. Sem achado.
+
+### 5. Mensagens ao usuário e EInfra
+Mensagens do repositório são fixas e amigáveis, sem SQL, caminho ou credencial; o detalhe técnico vai só ao log. `ERegraNegocio`/`EValidacao` têm texto em português sem dado técnico. As três chamadas de `Excluir` na UI usam `E.Message` só para `EErpVendas` e `MSG_ERRO_GENERICO` para o resto (lado seguro). **Achado 2 (baixa):** o repositório levanta `EInfra` e não `EInfraMensagemSegura` (padrão RF4-02/RF5-01, RF6-02 do QA); já coberto, sem tarefa nova. Observação: `Excluir` de venda inexistente é silencioso (integridade, não segurança; RF6-02).
+
+### 6. Camadas ADR-001/010 e Root
+`VendaService`, `ClienteService` e `ProdutoService` usam só Core/Domínio/`Data.DB`; `Negocio` não referencia `Dados`. `ERPV.App.Root` cria `VendaRepository` antes dos serviços que o recebem e libera na ordem inversa antes da conexão. A UI só depende dos Services. Transação única mestre+itens. Sem achado.
+
+### 7. Compliance (LGPD básica) e operacional
+CPF/CNPJ/e-mail continuam mascarados em log e ausentes de mensagens. Nenhum requisito operacional novo para o chapéu DevOps. Nada de relevância estratégica para o Gestor; a observação de regra do QA (inativado depois da criação bloqueia editar venda Pendente) é decisão de negócio já sinalizada por ele, sem componente de segurança.
+
+### Achados do lote
+
+| # | Achado | Severidade | Situação |
+|---|---|---|---|
+| RF6-01 | `Salvar` em edição grava Status/DataQuitacao/Motivo do chamador (transição fora do fluxo de quitação) | Média | Débito com prazo: antes do Lote 9 (T38); tarefa em `Refatoração Lote-6` |
+| RF6-04 | `Incluir` grava DataQuitacao/Motivo do chamador com Status forçado Pendente | Baixa | Débito, mesma correção e prazo de RF6-01 |
+| Achado 2 | `EInfra` em vez de `EInfraMensagemSegura` | Baixa | Coberto por RF6-02; antes do Lote 16 |
+
+### Veredito do lote (chapéu DevSecOps)
+**Aprovado com débito** (RF6-01 média; RF6-04 e achado 2 baixos). Sem achado alto/crítico nem compliance obrigatório em aberto; sem risco de injeção; sem vazamento de dado sensível. Não bloqueia deploy. Pendente no fechamento estrutural: registrar RF6-01 e RF6-04 em `Refatoração Lote-6` com o prazo acima.
+
+Escala para: nenhum (sem bloqueio). Gestor: sem relevância estratégica. Coordenador: não. Executor: correção de RF6-01/RF6-04 via `Refatoração Lote-6`, não imediata.
