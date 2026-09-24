@@ -1,6 +1,6 @@
 unit ERPV.Relatorios.PedidoLayout;
 
-{
+(*
   T46 (Lote 11) - Layout ReportBuilder "Confirmacao de Pedido" (desenhado no
   Report Designer pelo usuario; Bloqueio 004). Bandas: cabecalho (venda +
   cliente + titulos de coluna), detalhe (1 linha por item), resumo (total) e
@@ -18,7 +18,7 @@ unit ERPV.Relatorios.PedidoLayout;
      total. Sem texto cortado (e-mail, descricao longa) nem colunas sobrepostas.
   4. Venda inexistente (DataSet vazio): o preview nao deve estourar excecao.
   A faixa "Demo Copy" e a marca d'agua do trial (T67), esperada.
-}
+*)
 
 interface
 

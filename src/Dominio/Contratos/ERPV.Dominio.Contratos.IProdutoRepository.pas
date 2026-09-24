@@ -1,11 +1,11 @@
 ﻿unit ERPV.Dominio.Contratos.IProdutoRepository;
 
-{
+(*
   Interface de fronteira do Domínio (ADR-010) — só assinaturas; a
   implementação FireDAC é ProdutoRepository (T21). Unit pura, sem
   Vcl/FireDAC/System.Net/Id*; TDataSet (Data.DB) é a única exceção,
   conforme ADR-010.
-}
+*)
 
 interface
 

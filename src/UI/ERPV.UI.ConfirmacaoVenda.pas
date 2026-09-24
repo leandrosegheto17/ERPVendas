@@ -1,6 +1,6 @@
 ﻿unit ERPV.UI.ConfirmacaoVenda;
 
-{
+(*
   T42 (Lote 9) - Fluxo de UI "Confirmar venda" (quitacao), compartilhado pela
   lista (T31) e pela edicao (T32) de venda. Form fino: sem SQL/HTTP/regra;
   so pergunta, espera visual e traducao do desfecho em mensagem (UX-SPEC 4.3).
@@ -51,7 +51,7 @@
      handler global; UI restaurada. Responder "Nao" na pergunta => nada ocorre.
   6. Mesmos passos na tela de edicao (botao "Confirmar venda" no cabecalho);
      sucesso fecha a edicao (mrOk) e a lista recarrega.
-}
+*)
 
 interface
 

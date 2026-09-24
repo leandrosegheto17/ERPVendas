@@ -1,6 +1,6 @@
 ﻿unit ERPV.Dominio.Enums;
 
-{
+(*
   Enums do Domínio (T08, Lote 2). Unit pura, sem Vcl/FireDAC/System.Net/Id*
   (ADR-001/010, TASK.md Seção 1 "Camadas e dependência").
 
@@ -8,7 +8,7 @@
   (db/01_schema.sql, CK_VENDAS_STATUS / CK_FILA_TIPO) e no contrato de API
   (docs/contrato-api-financeiro.md): 'Pendente'/'Quitada'/'Cancelada' para
   status de venda e 'QUITACAO'/'CANCELAMENTO'/'EMAIL' para tipo de fila.
-}
+*)
 
 interface
 

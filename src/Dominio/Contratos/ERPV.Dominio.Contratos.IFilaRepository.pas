@@ -1,6 +1,6 @@
 ﻿unit ERPV.Dominio.Contratos.IFilaRepository;
 
-{
+(*
   Interface de fronteira do Domínio (ADR-010) — só assinaturas; a
   implementação FireDAC é FilaRepository (T37). Unit pura, sem
   Vcl/FireDAC/System.Net/Id*; TDataSet (Data.DB) é a única exceção,
@@ -9,7 +9,7 @@
   Regra de negócio de Enfileirar (no máximo 1 item PENDENTE por
   venda+tipo, senão incrementa tentativas — RN-08, T37) é responsabilidade
   da implementação, não desta assinatura.
-}
+*)
 
 interface
 

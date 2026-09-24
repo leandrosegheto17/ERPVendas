@@ -1,11 +1,11 @@
 ﻿unit ERPV.Dominio.Produto;
 
-{
+(*
   Entidade de Domínio TProduto (T08, Lote 2). Campos batendo com
   db/01_schema.sql (tabela PRODUTOS, criada em T03). Unit pura, sem
   Vcl/FireDAC/System.Net/Id* (ADR-001/010). Preço unitário em Currency —
   nunca Double/Extended (TASK.md Seção 1 "Dados").
-}
+*)
 
 interface
 

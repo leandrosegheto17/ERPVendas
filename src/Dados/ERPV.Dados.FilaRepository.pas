@@ -1,6 +1,6 @@
 ﻿unit ERPV.Dados.FilaRepository;
 
-{
+(*
   T37 (Lote 9) - Implementacao FireDAC de IFilaRepository (ADR-005/010).
 
   Convencoes iguais a Cliente/ProdutoRepository: SQL parametrizado,
@@ -25,7 +25,7 @@
   ContarPendencias = 1; RegistrarFalha => TENTATIVAS=3; MarcarConcluido =>
   STATUS CONCLUIDO, CONCLUIDO_EM preenchido, Contar = 0, Existe = False,
   Listar(True) vazio e Listar(False) com a linha. Compilacao pendente.
-}
+*)
 
 interface
 

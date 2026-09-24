@@ -1,10 +1,10 @@
 ﻿unit ERPV.Dominio.Contratos.IRelatorioPedido;
 
-{
+(*
   Interface de fronteira do Domínio (ADR-001/010) — só assinaturas; a
   implementação real (ReportBuilder) é RelatorioPedido (T47), fora do
   Domínio. Esta unit não referencia unit alguma do ReportBuilder/Vcl.
-}
+*)
 
 interface
 

@@ -1,12 +1,12 @@
 ﻿unit ERPV.Negocio.VendaService;
 
-{
+(*
   T27 - Regras de negocio de Venda (CRUD + validacoes, RF-07/08, RN-01/03).
   Camada Negocio: so depende de interfaces do Dominio e do Core.
   T28: total = Soma(qtd x preco) recalculado; preco do item e snapshot do
   produto (valores vindos do chamador sao ignorados).
   T29: so venda Pendente e alteravel/excluivel (status lido do banco).
-}
+*)
 
 interface
 

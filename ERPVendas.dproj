@@ -109,6 +109,7 @@
             <FormType>dfm</FormType>
             <DesignClass>TDataModule</DesignClass>
         </DCCReference>
+        <DCCReference Include="src\Relatorios\ERPV.Relatorios.RelatorioPedido.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.FormBaseEdicao.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.FormBaseLista.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.FormEdicaoCliente.pas"/>

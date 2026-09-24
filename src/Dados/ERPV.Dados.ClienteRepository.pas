@@ -1,6 +1,6 @@
 ﻿unit ERPV.Dados.ClienteRepository;
 
-{
+(*
   T17 (Lote 4) - Implementacao FireDAC de IClienteRepository (ADR-003/010).
 
   - Usa somente a API de TConexao (Connection, IniciarTransacao, Confirmar,
@@ -24,7 +24,7 @@
   -> ListarDataSet('', False) e com AIncluirInativos True apos inativar ->
   Excluir. Incluir mesmo CPF duas vezes deve mostrar mensagem amigavel e
   registrar detalhe no log. Compilacao pendente de confirmacao na IDE.
-}
+*)
 
 interface
 

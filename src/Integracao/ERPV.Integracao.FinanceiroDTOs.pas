@@ -1,6 +1,6 @@
 ﻿unit ERPV.Integracao.FinanceiroDTOs;
 
-{
+(*
   DTOs + serializacao/desserializacao JSON do contrato Vendas x Financeiro
   (T33, Lote 8; RNF-05, ADR-004). Fonte unica do formato:
   docs/contrato-api-financeiro.md v1.0.
@@ -39,7 +39,7 @@
    5. SerializarCancelamentoRequest(1042, '') nao deve conter "motivo".
    6. TryParseStatusResponse('{"vendaId":"1042","status":"Quitada"}') e sem
       vendaId: ambos True.
-}
+*)
 
 interface
 

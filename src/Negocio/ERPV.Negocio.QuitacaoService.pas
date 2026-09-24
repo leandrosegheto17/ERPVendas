@@ -1,6 +1,6 @@
 ﻿unit ERPV.Negocio.QuitacaoService;
 
-{
+(*
   T38 (Lote 9) - QuitacaoService.Confirmar, caminho feliz (RF-12/13, ADR-006).
   Camada Negocio: so depende de interfaces do Dominio e do Core.
   T43 (Lote 10) acrescenta Cancelar nesta mesma classe (ver abaixo).
@@ -60,7 +60,7 @@
      do Financeiro (se vazia: "Quitação recusada pelo Financeiro (código HTTP
      xxx)"), CodigoHttp preenchido; venda segue Pendente e a fila de pendencias
      fica vazia (nenhum item QUITACAO).
-}
+*)
 
 interface
 

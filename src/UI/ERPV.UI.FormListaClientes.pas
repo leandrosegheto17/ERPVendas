@@ -1,6 +1,6 @@
 ﻿unit ERPV.UI.FormListaClientes;
 
-{
+(*
   T19 (Lote 4) - Lista de Clientes (UX-SPEC 2.2, 3.3, 4.1). Herda TFormBaseLista.
   Sem SQL/regra: tudo via TClienteService. Construida 100% em codigo.
 
@@ -11,7 +11,7 @@
   - Busca (filtra ao digitar, com debounce) e "Mostrar inativos".
   - Vazio: "Nenhum registro. Use Novo."; erro: banner + "Tentar novamente".
   - O TDataSet devolvido pelo servico e de posse desta tela (liberado ao trocar/fechar).
-}
+*)
 
 interface
 

@@ -1,6 +1,6 @@
 ﻿unit ERPV.UI.FormEdicaoCliente;
 
-{
+(*
   T20 (Lote 4) - Edicao de Cliente (UX-SPEC 2.3, 5; ADR-011).
   Herda TFormBaseEdicao (T15). 100% em codigo (sem .dfm).
 
@@ -26,7 +26,7 @@
     o servico nao valida nem normaliza telefone). Guardado como digitado.
   - Mudar o tipo de pessoa limpa o documento e a mascara e remove o erro do
     campo (revalidar um campo recem-limpo so geraria "Informe o CPF/CNPJ").
-}
+*)
 
 interface
 

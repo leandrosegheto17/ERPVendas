@@ -1,6 +1,6 @@
 ﻿unit ERPV.Dominio.Contratos.IVendaRepository;
 
-{
+(*
   Interface de fronteira do Domínio (ADR-010) — só assinaturas; a
   implementação FireDAC é VendaRepository (T25/T26). Unit pura, sem
   Vcl/FireDAC/System.Net/Id*; TDataSet (Data.DB) é a única exceção,
@@ -10,7 +10,7 @@
   (inseparável, T25); AtualizarStatus é usado pelo fluxo de
   quitação/cancelamento (ADR-006) para o commit curto de status,
   fora da chamada HTTP.
-}
+*)
 
 interface
 

@@ -1,10 +1,10 @@
 unit ERPV.Negocio.ClienteService;
 
-{
+(*
   T18 - Regras de negocio de Cliente (RF-01/02/03). Camada Negocio: so
   depende de interfaces do Dominio e do Core (sem Vcl/FireDAC/Dados).
   T30: "excluir = inativar quando ha venda" (RN-05) via IVendaRepository.
-}
+*)
 
 interface
 

@@ -1,6 +1,6 @@
 ﻿unit ERPV.UI.Tema;
 
-{
+(*
   T68 (Lote 3) - AplicarTema / ConfigurarGrade / EstilizarBotao / Notificar
   (UX-SPEC.md Secao 3.2/3.3/8, ADR-011).
 
@@ -152,7 +152,7 @@
   - Pergunta devolve `Boolean` (True = usuario confirmou/"Sim") para quem
     chamou decidir a acao; os demais tipos sempre devolvem True (mensagem
     exibida com sucesso).
-}
+*)
 
 {$DEFINE ERPV_SKIN_DISPONIVEL}
 

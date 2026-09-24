@@ -1,6 +1,6 @@
 ﻿unit ERPV.UI.FormListaVendas;
 
-{
+(*
   T31 (Lote 7) - Lista de Vendas (UX-SPEC 2.4, 4.1, 4.2). Herda TFormBaseLista.
   Mesmo desenho de TFormListaClientes/TFormListaProdutos. Sem SQL/regra: tudo via
   TVendaService (lista/exclusao) e TClienteService (opcoes do filtro de cliente).
@@ -18,7 +18,7 @@
     Sucesso = banner Info "Venda N cancelada.".
   - Novo/Editar/Visualizar: TFormEdicaoVenda (T32), ShowModal = mrOk se gravou.
   - O TDataSet devolvido pelo servico e de posse desta tela.
-}
+*)
 
 interface
 

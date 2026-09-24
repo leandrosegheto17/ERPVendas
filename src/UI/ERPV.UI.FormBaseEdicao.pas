@@ -1,6 +1,6 @@
 ﻿unit ERPV.UI.FormBaseEdicao;
 
-{
+(*
   T15 (Lote 3) - TFormBaseEdicao (UX-SPEC 2.3, 3.3, 5, 2.6; ADR-011).
   Modal, 100% em codigo (sem .dfm; construtor chama CreateNew).
 
@@ -18,7 +18,7 @@
   (UX 2.6), senao fecha com mrCancel.
   Modificado: o filho marca via MarcarModificado (ex.: OnChange dos editores).
   Icones (T69) nao plugados aqui; botoes mantem texto.
-}
+*)
 
 interface
 

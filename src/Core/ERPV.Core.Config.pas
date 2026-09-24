@@ -1,6 +1,6 @@
 unit ERPV.Core.Config;
 
-{
+(*
   ERPV.Core.Config
   -----------------
   Le a configuracao da aplicacao a partir de um arquivo INI (System.IniFiles,
@@ -45,7 +45,7 @@ unit ERPV.Core.Config;
     LerObrigatoria, acima) e escrita para orientar o usuario final e nao
     contem SQL/credencial, entao MensagemAmigavel agora mostra ela literal
     ao inves do texto generico usado para EInfra em geral.
-}
+*)
 
 interface
 

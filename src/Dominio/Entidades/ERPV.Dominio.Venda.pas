@@ -1,6 +1,6 @@
 ﻿unit ERPV.Dominio.Venda;
 
-{
+(*
   Entidade de Domínio TVenda (T08, Lote 2). Campos batendo com
   db/01_schema.sql (tabela VENDAS, criada em T03). Unit pura, sem
   Vcl/FireDAC/System.Net/Id* (ADR-001/010). ValorTotal em Currency — nunca
@@ -11,7 +11,7 @@
   Quitada/Cancelada; sem framework de "nullable" de terceiros (proibido em
   Bibliotecas), o "não preenchido" é representado por 0 (TDateTime) / ''
   (string) e exposto via TemDataQuitacao/TemMotivoCancelamento.
-}
+*)
 
 interface
 

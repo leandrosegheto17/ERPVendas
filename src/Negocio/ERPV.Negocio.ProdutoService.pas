@@ -1,10 +1,10 @@
 ﻿unit ERPV.Negocio.ProdutoService;
 
-{
+(*
   T22 - Regras de negócio de Produto (RF-05). Camada Negócio: só depende de
   interfaces do Domínio e do Core (sem Vcl/FireDAC/Dados). Preço em Currency.
   T30: "excluir = inativar quando há venda" (RN-05) via IVendaRepository.
-}
+*)
 
 interface
 

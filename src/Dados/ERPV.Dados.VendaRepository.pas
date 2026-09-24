@@ -1,6 +1,6 @@
 ﻿unit ERPV.Dados.VendaRepository;
 
-{
+(*
   T25 (Lote 6) - Implementacao FireDAC de IVendaRepository (ADR-002/003/010):
   gravacao/leitura de VENDAS + VENDA_ITENS.
 
@@ -22,7 +22,7 @@
      VENDA_ITENS. Obter(Id) devolve os 2 itens e valores Currency identicos.
   2. Rollback: repetir Incluir com o 2o item com ProdutoId inexistente (FK) ou
      Quantidade 0 (CHECK); deve levantar EInfra e NAO existir venda nova
-     (SELECT COUNT(*) FROM VENDAS igual ao anterior).
+     (SELECT COUNT(1) FROM VENDAS igual ao anterior).
   3. Alterar (trocar itens) e conferir; AtualizarStatus(Id, svQuitada, Now, '')
      e depois svCancelada com motivo; Obter reflete.
   4. Excluir(Id): VENDAS e VENDA_ITENS da venda ficam vazios.
@@ -37,7 +37,7 @@
      VALOR_TOTAL contra SELECT direto no banco (Currency identicos; SUBTOTAL =
      QUANTIDADE*PRECO_UNITARIO; soma dos SUBTOTAL = VALOR_TOTAL).
   6. Id inexistente: DataSet vazio (IsEmpty). Tentar Edit/Post: deve recusar.
-}
+*)
 
 interface
 

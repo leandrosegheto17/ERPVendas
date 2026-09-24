@@ -1,6 +1,6 @@
 ﻿unit ERPV.UI.FormEdicaoProduto;
 
-{
+(*
   T24 (Lote 5) - Edição de Produto (UX-SPEC 2.3, 5; ADR-011).
   Herda TFormBaseEdicao (T15). 100% em código (sem .dfm). Modelo: T20.
 
@@ -21,7 +21,7 @@
     2 casas; lido como Currency (VarAsType varCurrency, arredondado a 2 casas),
     nunca Double na entidade.
   - Borda: painel-moldura (1 px normal/erro, 2 px em foco), cores só de Tokens.
-}
+*)
 
 interface
 

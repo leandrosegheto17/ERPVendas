@@ -1,6 +1,6 @@
 ﻿unit ERPV.Dominio.VendaItem;
 
-{
+(*
   Entidade de Domínio TVendaItem (T08, Lote 2). Campos batendo com
   db/01_schema.sql (tabela VENDA_ITENS, criada em T03). Unit pura, sem
   Vcl/FireDAC/System.Net/Id* (ADR-001/010).
@@ -9,7 +9,7 @@
   (RN-04, T28): mudar o preço do produto depois não altera itens já
   gravados. Subtotal é sempre calculado (Quantidade * PrecoUnitario),
   nunca um campo editável — espelha a coluna COMPUTED do banco.
-}
+*)
 
 interface
 

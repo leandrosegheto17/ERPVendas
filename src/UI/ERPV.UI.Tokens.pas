@@ -1,6 +1,6 @@
 ﻿unit ERPV.UI.Tokens;
 
-{
+(*
   T68 (Lote 3) - Design tokens da UI (UX-SPEC.md Secao 3/8, ADR-011).
 
   ==========================================================================
@@ -52,7 +52,7 @@
   UX-SPEC continuam valendo. Se o usuario, ao abrir a IDE, medir um valor
   diferente com um verificador de contraste real, o achado deve ser
   registrado aqui e no UX-SPEC (nao decidido sozinho pelo Executor).
-}
+*)
 
 interface
 

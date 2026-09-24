@@ -1,6 +1,6 @@
 ﻿unit ERPV.Core.Log;
 
-{
+(*
   T10 (Lote 2) — Log em arquivo por dia, com níveis e mascaramento
   automático de CPF/CNPJ/e-mail (ADR-008, RF-24, SDD §7).
 
@@ -73,7 +73,7 @@
   3. Repetir no dia seguinte (ou mudando a data do Windows, só para o
      teste) e confirmar que um novo arquivo `erpvendas-<outra-data>.log`
      é criado (arquivo por dia).
-}
+*)
 
 interface
 

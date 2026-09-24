@@ -1,6 +1,6 @@
 unit ERPV.Integracao.FinanceiroClient;
 
-{
+(*
   FinanceiroClient (T34, Lote 8; RF-12/13, ADR-004). Implementa
   IFinanceiroGateway sobre THTTPClient SINCRONO (sem threads, sem Vcl).
 
@@ -57,7 +57,7 @@ unit ERPV.Integracao.FinanceiroClient;
    4. m=timeout / offline-simulado / mock parado => rfIndisponivel.
    5. Resposta 2xx com status diferente de Cancelada (ex.: Quitada) ou corpo
       invalido => rfRespostaInvalida.
-}
+*)
 
 interface
 

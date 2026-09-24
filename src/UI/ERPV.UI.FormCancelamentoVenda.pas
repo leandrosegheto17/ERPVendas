@@ -1,6 +1,6 @@
 ﻿unit ERPV.UI.FormCancelamentoVenda;
 
-{
+(*
   T44 (Lote 10) - Dialogo de cancelamento de venda (UX-SPEC 2.6) e mensagens de
   desfecho (UX-SPEC 4.3). Herda TFormBaseEdicao (T15); 100% em codigo.
 
@@ -48,13 +48,13 @@
      mesmo fluxo; sucesso fecha a edicao e a lista mostra o banner.
      Quitada/Cancelada aberta como Visualizar: botao desabilitado.
   7. Teclado: Tab percorre Motivo > Confirmar > Voltar; Esc = Voltar.
-}
+*)
 
 interface
 
 uses
   System.SysUtils, System.Classes,
-  Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
+  Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Graphics,
   cxButtons, cxEdit, cxTextEdit,
   ERPV.Core.Erros,
   ERPV.Negocio.QuitacaoService,

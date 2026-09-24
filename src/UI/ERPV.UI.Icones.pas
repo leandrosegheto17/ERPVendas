@@ -1,6 +1,6 @@
 ﻿unit ERPV.UI.Icones;
 
-{
+(*
   T69 (Lote 3) - Carga e aplicacao dos icones (UX-SPEC 3; ambiente-licencas 13).
 
   Le assets\icones\{16,24,32\<nome>.png (nomes = constantes ERPVIcone* de
@@ -13,7 +13,7 @@
   DEGRADA SEM ERRO: pasta ou arquivo ausente/invalido => o icone simplesmente
   nao e aplicado (botao fica so com texto). Nenhuma rotina publica levanta
   excecao. O Caption do botao NUNCA e alterado (regra: nenhum botao so icone).
-}
+*)
 
 interface
 

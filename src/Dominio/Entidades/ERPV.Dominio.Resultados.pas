@@ -1,6 +1,6 @@
 ﻿unit ERPV.Dominio.Resultados;
 
-{
+(*
   Resultados tipados do Domínio (T08, Lote 2; TASK.md Seção 1
   "Integração"). Usados no lugar de exceção para falha esperada de
   integração externa (Financeiro/e-mail) — exceção continua reservada para
@@ -11,7 +11,7 @@
   IFinanceiroGateway/IEmailSender devolvem. Sem biblioteca de "Result type"
   de terceiros (proibido em TASK.md Seção 1 "Bibliotecas") — record +
   enum é a opção idiomática em Object Pascal sem framework externo.
-}
+*)
 
 interface
 

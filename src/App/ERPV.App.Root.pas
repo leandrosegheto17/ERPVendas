@@ -1,6 +1,6 @@
 unit ERPV.App.Root;
 
-{
+(*
   T13 (Lote 2) - Composition root da aplicacao (ADR-001).
 
   Unica unit autorizada a instanciar diretamente classes concretas de
@@ -96,7 +96,7 @@ unit ERPV.App.Root;
   Compilacao/execucao real pendente de confirmacao do usuario na IDE (ver
   nota no TASK.md, Secao 3, linhas T12/T13): o ambiente de automacao nao
   compila projeto Delphi Community Edition via linha de comando.
-}
+*)
 
 interface
 
@@ -121,7 +121,9 @@ uses
   ERPV.Negocio.VendaService,
   ERPV.Dominio.Contratos.IFinanceiroGateway,
   ERPV.Integracao.FinanceiroClient,
-  ERPV.Negocio.QuitacaoService;
+  ERPV.Negocio.QuitacaoService,
+  ERPV.Dominio.Contratos.IRelatorioPedido,
+  ERPV.Relatorios.RelatorioPedido;
 
 type
   /// <summary>
@@ -147,6 +149,7 @@ type
     FFilaRepository: IFilaRepository;
     FFinanceiro: IFinanceiroGateway;
     FQuitacaoService: TQuitacaoService;
+    FRelatorioPedido: IRelatorioPedido;
   public
     /// <exception cref="EConfiguracao">INI ausente ou invalido (T09).</exception>
     /// <exception cref="EInfra">Falha ao conectar ao banco (T12).</exception>
@@ -166,6 +169,7 @@ type
     property FilaRepository: IFilaRepository read FFilaRepository;
     property Financeiro: IFinanceiroGateway read FFinanceiro;
     property QuitacaoService: TQuitacaoService read FQuitacaoService;
+    property RelatorioPedido: IRelatorioPedido read FRelatorioPedido;
 
     // Proximos incrementos (T17 ClienteRepository, T21 ProdutoRepository,
     // T25 VendaRepository, T37 FilaRepository, servicos de negocio etc.):
@@ -216,6 +220,9 @@ begin
   FQuitacaoService := TQuitacaoService.Create(FVendaRepository, FFinanceiro,
     FFilaRepository); // T43 (T38 acrescenta Confirmar)
 
+  FRelatorioPedido := TRelatorioPedido.Create(FConfiguracao.Relatorio.PastaPdfTemp,
+    FVendaRepository, FLogger); // T47
+
   // Proximos incrementos entram aqui.
 end;
 
@@ -228,6 +235,7 @@ begin
   if Assigned(Application) then
     Application.OnException := nil;
 
+  FRelatorioPedido := nil; // T47
   FQuitacaoService.Free; // T43, antes dos repositorios/gateway
   FFinanceiro := nil; // T34
   FVendaService.Free; // T27, antes dos repositorios

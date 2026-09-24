@@ -1,13 +1,13 @@
 ﻿unit ERPV.Dominio.Contratos.IFinanceiroGateway;
 
-{
+(*
   Interface de fronteira do Domínio (ADR-001/010) — só assinaturas; a
   implementação real (THTTPClient síncrono, System.JSON) é FinanceiroClient
   (T33-T36), fora do Domínio. Esta unit não referencia THTTPClient/
   System.Net/System.JSON — só o "formato de resultado" (TResultadoFinanceiro,
   ERPV.Dominio.Resultados), conforme ADR-004/010 e TASK.md Seção 1
   "Integração".
-}
+*)
 
 interface
 

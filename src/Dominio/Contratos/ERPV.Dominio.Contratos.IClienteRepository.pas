@@ -1,6 +1,6 @@
 ﻿unit ERPV.Dominio.Contratos.IClienteRepository;
 
-{
+(*
   Interface de fronteira do Domínio (ADR-010) — só assinaturas, sem
   implementação (a implementação FireDAC é ClienteRepository, T17).
   Unit pura, sem Vcl/FireDAC/System.Net/Id*; a única referência fora do
@@ -8,7 +8,7 @@
   de escrita/edição usam entidade, métodos de listagem devolvem TDataSet
   somente leitura (acesso híbrido do ADR-003), com o form dono liberando
   o DataSet.
-}
+*)
 
 interface
 

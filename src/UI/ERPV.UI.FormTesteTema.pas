@@ -1,6 +1,6 @@
 ﻿unit ERPV.UI.FormTesteTema;
 
-{
+(*
   T68 (Lote 3) - Form de teste manual do tema/tokens (criterio de aceite:
   "form de teste com grade zebra, 3 papeis de botao e Notificar nos 4
   tipos"). NAO faz parte do fluxo real do app (nao e criado por
@@ -32,7 +32,7 @@
 
   Formulas de conversao de cor e demais decisoes: ver cabecalhos de
   ERPV.UI.Tokens.pas e ERPV.UI.Tema.pas.
-}
+*)
 
 interface
 

@@ -1,6 +1,6 @@
 unit ERPV.Core.Validadores;
 
-{
+(*
   T16 (Lote 4) - Validadores puros: CPF, CNPJ (digitos verificadores) e
   e-mail (RF-02). Sem Vcl/FireDAC; so System.SysUtils.
 
@@ -38,7 +38,7 @@ unit ERPV.Core.Validadores;
     a b@c.com          -> invalido (espaco)
     a@@b.com           -> invalido (dois '@')
     ''                 -> invalido
-}
+*)
 
 interface
 

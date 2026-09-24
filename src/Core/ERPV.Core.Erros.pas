@@ -1,6 +1,6 @@
 ﻿unit ERPV.Core.Erros;
 
-{
+(*
   T11 (Lote 2) - Hierarquia de excecoes, tradutor de mensagem amigavel e
   handler central de Application.OnException (ADR-008, RF-24).
 
@@ -68,7 +68,7 @@
   OnException e MessageDlg sao, por definicao, APIs de UI (Vcl.Forms /
   Vcl.Dialogs). Nao ha como implementar o handler central de excecao sem
   tocar Vcl. Todas as outras units de Dominio/Core (ERPV.Core.Log,
-  ERPV.Core.Config, Dominio.*) continuam proibidas de importar Vcl.* - essa
+  ERPV.Core.Config, Dominio.xxx) continuam proibidas de importar Vcl.* - essa
   excecao vale só para ERPV.Core.Erros.
 
   TTratadorDeExcecoes recebe um TLogger (ERPV.Core.Log, T10) por construtor
@@ -137,7 +137,7 @@
   solta no meio de um bloco `type` que tambem declara classes; se precisar,
   colocar a funcao por ultimo ou, mais seguro, so depois que o bloco `type`
   terminar (nova secao antes do `implementation`).
-}
+*)
 
 interface
 

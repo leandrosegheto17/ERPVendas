@@ -1,6 +1,6 @@
 ﻿unit ERPV.UI.FormEdicaoVenda;
 
-{
+(*
   T32 (Lote 7) - Venda mestre/detalhe (UX-SPEC 2.5, 4.1, 4.2, 5; ADR-011).
   Herda TFormBaseEdicao (T15). 100% em codigo (sem .dfm). Modelo: T20/T24.
 
@@ -34,7 +34,7 @@
     ERPV.UI.ConfirmacaoVenda. Banner de fila pendente: T53.
   - Listas de lookup: clientes/produtos ATIVOS quando Pendente; todos quando
     somente leitura (para exibir itens/cliente historicos inativos).
-}
+*)
 
 interface
 

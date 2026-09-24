@@ -1,6 +1,6 @@
 ﻿unit ERPV.UI.FormMain;
 
-{
+(*
   T14 (Lote 3) - Shell do form principal (UX-SPEC.md Secao 1 e 2.1).
 
   Form fino: nenhum SQL, HTTP ou regra de negocio. Toda a interface e
@@ -33,7 +33,7 @@
 
   Compilacao/execucao real pendente de confirmacao do usuario na IDE (o
   ambiente de automacao nao compila Delphi).
-}
+*)
 
 {$DEFINE ERPV_NAV_LATERAL}
 

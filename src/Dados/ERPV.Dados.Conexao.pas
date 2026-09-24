@@ -1,6 +1,6 @@
 ﻿unit ERPV.Dados.Conexao;
 
-{
+(*
   T12 (Lote 2) - Conexao FireDAC/Firebird via INI, helper de transacao e
   mapeamento de falha de banco para EInfra (ADR-002, RF-25).
 
@@ -172,7 +172,7 @@
   Compilacao/execucao real pendente de confirmacao do usuario na IDE
   (ver nota no TASK.md, Secao 3, linha T12): o ambiente de automacao nao
   compila projeto Delphi Community Edition via linha de comando.
-}
+*)
 
 interface
 

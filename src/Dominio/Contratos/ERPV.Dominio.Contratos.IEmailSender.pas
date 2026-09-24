@@ -1,12 +1,12 @@
 ﻿unit ERPV.Dominio.Contratos.IEmailSender;
 
-{
+(*
   Interface de fronteira do Domínio (ADR-001/010) — só assinaturas; a
   implementação real (Indy TIdSMTP + OpenSSL) é EmailSender (T48), fora do
   Domínio. Esta unit não referencia Id*/Indy — só o "formato de resultado"
   (TResultadoEnvioEmail, ERPV.Dominio.Resultados), conforme TASK.md
   Seção 1 "Integração".
-}
+*)
 
 interface
 

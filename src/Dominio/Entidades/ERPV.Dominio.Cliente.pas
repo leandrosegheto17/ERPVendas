@@ -1,10 +1,10 @@
 ﻿unit ERPV.Dominio.Cliente;
 
-{
+(*
   Entidade de Domínio TCliente (T08, Lote 2). Campos batendo com
   db/01_schema.sql (tabela CLIENTES, criada em T03). Unit pura, sem
   Vcl/FireDAC/System.Net/Id* (ADR-001/010).
-}
+*)
 
 interface
 

@@ -1,6 +1,6 @@
 ﻿unit ERPV.Dados.ProdutoRepository;
 
-{
+(*
   T21 (Lote 5) - Implementacao FireDAC de IProdutoRepository (ADR-003/010).
 
   Mesmas convencoes de ERPV.Dados.ClienteRepository (T17):
@@ -17,7 +17,7 @@
   Obter -> Alterar (preco 10,55) -> ListarDataSet('', False) e com True apos
   inativar -> busca por trecho de descricao/categoria -> Excluir. Confirmar
   que o preco volta identico (Currency). Compilacao pendente na IDE.
-}
+*)
 
 interface
 

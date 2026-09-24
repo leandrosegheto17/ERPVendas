@@ -1,6 +1,6 @@
 unit ERPV.UI.FormBaseLista;
 
-{
+(*
   T15 (Lote 3) - TFormBaseLista (UX-SPEC 2.2, 3.3, 4.1; ADR-011).
   Construido 100% em codigo (sem .dfm), mesmo padrao de FormTesteTema:
   o construtor chama CreateNew, entao o form filho pode ser criado por
@@ -20,7 +20,7 @@ unit ERPV.UI.FormBaseLista;
   Ganchos virtuais para o filho: AoNovo, AoEditar, AoExcluir, AoFechar.
   Icones (T69) NAO sao plugados aqui (arquivos de outra tarefa); botoes
   mantem texto, entao nada quebra quando os icones chegarem.
-}
+*)
 
 interface
 

@@ -1,6 +1,6 @@
 ﻿unit ERPV.UI.FormListaProdutos;
 
-{
+(*
   T23 (Lote 5) - Lista de Produtos (UX-SPEC 2.2, 4.1). Herda TFormBaseLista.
   Mesmo desenho de TFormListaClientes (T19). Sem SQL/regra: tudo via TProdutoService.
 
@@ -10,7 +10,7 @@
   - Vazio: "Nenhum registro. Use Novo."; erro: banner + "Tentar novamente".
   - Edicao: TFormEdicaoProduto (T24), Create(Owner, Service, Produto|nil), mrOk se gravou.
   - O TDataSet devolvido pelo servico e de posse desta tela.
-}
+*)
 
 interface
 
