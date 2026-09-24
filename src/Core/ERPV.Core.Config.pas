@@ -151,7 +151,7 @@ const
     'sem espacos, virgulas ou ponto e virgula.';
   MSG_PASTA_PDF_TEMP_INVALIDA = 'Configuracao invalida: o campo "PastaPdfTemp" da ' +
     'secao "[Relatorio]" deve ser uma pasta local com caminho absoluto (ex.: ' +
-    'C:\ERPVendas\temp\pdf), nao a raiz de uma unidade nem um caminho de rede (UNC).';
+    'C:\ERPVendas\temp\pdf), sem "..", nao a raiz de uma unidade nem um caminho de rede (UNC).';
 
 implementation
 
@@ -257,8 +257,11 @@ end;
 function PastaPdfTempValida(const AValor: string): Boolean;
 var
   i: Integer;
-  LResto: string;
+  LResto, LSeg: string;
 begin
+  // LIMITE (RF11-09): unidade MAPEADA de rede (ex.: Z: -> \\srv\share) nao e
+  // detectada, pois exigiria consultar o Windows (GetDriveType); a unit nao
+  // usa Winapi. Documentado no README: use disco local.
   // RF11-06 (SG11-04): so pasta local absoluta com unidade ("C:\dir" ou
   // "C:/dir"); recusa relativo, raiz de unidade, UNC (\\servidor\...) e
   // caracteres invalidos/de controle. Nao toca o disco (a pasta e criada
@@ -274,6 +277,18 @@ begin
   for i := 1 to Length(LResto) do
     if (LResto[i] < ' ') or CharInSet(LResto[i], ['*', '?', '<', '>', '|', '"', ':']) then
       Exit;
+  // RF11-09: recusa segmento EXATAMENTE ".." (ex.: C:\a\..\b); nomes como
+  // "temp..old" continuam validos. Varredura simples, sem consultar o disco.
+  LSeg := '';
+  for i := 1 to Length(LResto) + 1 do
+    if (i > Length(LResto)) or CharInSet(LResto[i], ['\', '/']) then
+    begin
+      if LSeg = '..' then
+        Exit;
+      LSeg := '';
+    end
+    else
+      LSeg := LSeg + LResto[i];
   // Raiz de unidade: nada alem de separadores depois de "C:".
   for i := 1 to Length(LResto) do
     if not CharInSet(LResto[i], ['\', '/']) then
