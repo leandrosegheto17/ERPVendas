@@ -18,7 +18,6 @@ uses
   ERPV.Dados.ClienteRepository in 'src\Dados\ERPV.Dados.ClienteRepository.pas',
   ERPV.Dados.ProdutoRepository in 'src\Dados\ERPV.Dados.ProdutoRepository.pas',
   ERPV.Dados.VendaRepository in 'src\Dados\ERPV.Dados.VendaRepository.pas',
-  ERPV.Temp.TesteT25 in 'src\App\ERPV.Temp.TesteT25.pas',
   ERPV.Negocio.ClienteService in 'src\Negocio\ERPV.Negocio.ClienteService.pas',
   ERPV.Negocio.ProdutoService in 'src\Negocio\ERPV.Negocio.ProdutoService.pas',
   ERPV.UI.FormBaseEdicao in 'src\UI\ERPV.UI.FormBaseEdicao.pas',
@@ -45,7 +44,6 @@ begin
   if TentarIniciarAplicacao(Root) then
   begin
     try
-      RodarTesteT25(Root); // TEMPORARIO T25 - remover
       AplicarTema; // skin uma unica vez, antes de criar qualquer form (T14)
       Application.CreateForm(TFormMain, FormMain);
       FormMain.Configurar(Root.Configuracao.Financeiro.BaseUrl, Root.ClienteService,
