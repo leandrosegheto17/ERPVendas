@@ -940,3 +940,7 @@ Conferido por amostragem: `git grep` de atribuição literal de senha/chave/toke
 **Aprovado com ressalvas (sem achado bloqueante).** Nenhum alto/crítico, nenhum segredo real, nenhum compliance obrigatório em aberto que impeça o pacote de desenvolvimento. SG16-02, 04, 07 e 08 (médias) devem estar resolvidos antes de produção/entrega a terceiros; demais baixas com prazo antes da entrega.
 
 Escala para: nenhum bloqueio. Executor: `Refatoração Lote-16` com SG16-01, 03, 05, 06, 07, 08 (e SG16-04 junto de SG12-01). Gestor: informativo/decisão (SG16-02 licenciamento DevExpress/ReportBuilder/Delphi; SG15-05). Coordenador: não. DevOps: pacote não deve incluir INI real; ACL e https antes de produção.
+
+## Lote 17 — Acabamento (T65, T66) — chapéu DevSecOps (2026-09-24)
+
+**Veredito: Aprovado (sem superfície nova).** T65 e T66 foram dispensadas e não implementadas; nenhuma mudança de código, dependência, configuração ou dado no lote, portanto nenhum achado de segurança, compliance ou exposição de dado sensível. Auditoria feita pelo orquestrador sem dispatch do `validador`, por ausência de artefato.

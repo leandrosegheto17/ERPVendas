@@ -1065,3 +1065,7 @@ Todas as 6 tarefas constam `Concluída` (3 com dispensa; T60 sem verificação);
 ### Veredito do lote (chapéu QA)
 
 **Aprovado com ressalvas**, somente sob a decisão de escopo do usuário (projeto de processo seletivo); não é aprovação de aceite completo. Nenhuma reprovação crítica. Efetivamente verificados: T61 (com desvio) e T63. Não verificados: T59, T60, T62, T64. Liberado ao chapéu DevSecOps; pontos: varredura de segredos, `.bpl` não redistribuíveis, TLS/SMTP produtivo não testado, licença do `fbclient.dll`.
+
+## Lote 17 — Acabamento (T65, T66) — chapéu QA (2026-09-24)
+
+**Veredito: Validado (sem entrega).** As duas tarefas (P2, cortáveis) foram **dispensadas por decisão do usuário** (projeto de processo seletivo) e **não foram implementadas**; o único commit do lote (`86fdf1a`) altera apenas o `TASK.md`. Não há código, teste nem documento novo a validar: critérios de aceite de T65 ("Reenviar todos" na tela de Pendências) e T66 (atalhos extras, máscaras, ícone de check) **não atendidos**, por escolha de escopo. Efeito no produto: "Reenviar selecionado" (T52) segue como único meio de reenvio; sem perda de requisito obrigatório (ambas P2/SUG). Nenhum achado. Validação feita pelo orquestrador sem dispatch do `validador`, por não haver artefato a auditar.
