@@ -21,8 +21,30 @@ type
     Sucesso: Boolean;
   end;
 
+  /// <summary>T53 (UX 4.2): habilitacao dos botoes da lista de vendas.
+  /// Visualizar = Editar vira "Visualizar" (mesma tela, somente leitura).</summary>
+  TAcoesVenda = record
+    EditarExcluir: Boolean;
+    Visualizar: Boolean;
+    Confirmar: Boolean;
+    Cancelar: Boolean;
+  end;
+
 const
   MSG_PENDENCIAS_VAZIO = 'Nenhuma pendência.';
+  TEXTO_SINC = '(!)';
+  HINT_SINC = 'Sincronização pendente';
+  HINT_PENDENCIAS_STATUS = 'Abrir Pendências de Integração';
+
+/// <summary>Texto da status bar; o texto acompanha sempre o icone (UX 5).</summary>
+function TextoPendenciasStatus(ATotal: Integer): string;
+/// <summary>Chip "N" da navegacao: vazio se N &lt;= 0 (so aparece se N &gt; 0).</summary>
+function TextoChipPendencias(ATotal: Integer): string;
+/// <summary>Coluna Sinc: "(!)" se a venda tem QUITACAO/CANCELAMENTO pendente.</summary>
+function TextoSincVenda(ATemFilaPendente: Boolean): string;
+/// <summary>UX 4.2. AStatus = Pendente/Quitada/Cancelada (texto da lista).</summary>
+function AcoesDaVenda(const AStatus: string; ATemFilaPendente,
+  ATemQuitacaoService: Boolean): TAcoesVenda;
 
 function TextoTipoFila(const ATipo: string): string;
 function TextoSituacaoFila(const AStatus: string): string;
@@ -30,6 +52,44 @@ function SubtituloPendencias(ATotal: Integer; ASomentePendentes: Boolean): strin
 function MensagemDeReenvio(const AResultado: TResultadoReenvio): TMensagemReenvio;
 
 implementation
+
+function TextoPendenciasStatus(ATotal: Integer): string;
+begin
+  if ATotal < 0 then
+    ATotal := 0;
+  Result := 'Pendências: ' + IntToStr(ATotal);
+end;
+
+function TextoChipPendencias(ATotal: Integer): string;
+begin
+  if ATotal <= 0 then
+    Result := ''
+  else if ATotal > 99 then
+    Result := '99+'
+  else
+    Result := IntToStr(ATotal);
+end;
+
+function TextoSincVenda(ATemFilaPendente: Boolean): string;
+begin
+  if ATemFilaPendente then
+    Result := TEXTO_SINC
+  else
+    Result := '';
+end;
+
+function AcoesDaVenda(const AStatus: string; ATemFilaPendente,
+  ATemQuitacaoService: Boolean): TAcoesVenda;
+var
+  Pendente: Boolean;
+begin
+  Pendente := SameText(AStatus, 'Pendente');
+  Result.EditarExcluir := Pendente and not ATemFilaPendente;
+  // Sem selecao/status vazio nao visualiza; Pendente com fila abre so leitura.
+  Result.Visualizar := (AStatus <> '') and not Result.EditarExcluir;
+  Result.Confirmar := Result.EditarExcluir and ATemQuitacaoService;
+  Result.Cancelar := Result.EditarExcluir and ATemQuitacaoService;
+end;
 
 function TextoTipoFila(const ATipo: string): string;
 begin

@@ -39,6 +39,7 @@ type
     FDataSet: TDataSet;
     FDataSource: TDataSource;
     FOnFechada: TNotifyEvent;
+    FOnFilaAlterada: TNotifyEvent;
     FPnlFiltros: TPanel;
     FBtnReenviar: TcxButton;
     FBtnAtualizar: TcxButton;
@@ -89,6 +90,9 @@ type
     destructor Destroy; override;
     /// <summary>Disparado em Fechar/Esc quando embutida no shell; o dono libera.</summary>
     property OnFechada: TNotifyEvent read FOnFechada write FOnFechada;
+    /// <summary>T53: disparado apos cada Reenviar (a fila mudou) para o shell
+    /// atualizar o contador "Pendencias: N".</summary>
+    property OnFilaAlterada: TNotifyEvent read FOnFilaAlterada write FOnFilaAlterada;
   end;
 
 implementation
@@ -364,6 +368,8 @@ begin
 
   // Recarrega antes da mensagem modal: item concluido some do filtro.
   Recarregar;
+  if Assigned(FOnFilaAlterada) then
+    FOnFilaAlterada(Self);
   if Msg.Sucesso then
     Notificar(utnInfo, Msg.Texto, PnlConteudo)
   else

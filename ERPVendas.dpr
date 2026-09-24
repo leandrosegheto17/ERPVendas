@@ -24,6 +24,7 @@ uses
   ERPV.Negocio.VendaService in 'src\Negocio\ERPV.Negocio.VendaService.pas',
   ERPV.Negocio.QuitacaoService in 'src\Negocio\ERPV.Negocio.QuitacaoService.pas',
   ERPV.Negocio.FilaService in 'src\Negocio\ERPV.Negocio.FilaService.pas',
+  ERPV.Negocio.PendenciaFila in 'src\Negocio\ERPV.Negocio.PendenciaFila.pas',
   ERPV.UI.FormBaseEdicao in 'src\UI\ERPV.UI.FormBaseEdicao.pas',
   ERPV.UI.FormBaseLista in 'src\UI\ERPV.UI.FormBaseLista.pas',
   ERPV.UI.FormCancelamentoVenda in 'src\UI\ERPV.UI.FormCancelamentoVenda.pas',

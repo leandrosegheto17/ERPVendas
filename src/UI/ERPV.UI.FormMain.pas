@@ -47,7 +47,8 @@ uses
   ERPV.Negocio.ClienteService, ERPV.UI.FormListaClientes,
   ERPV.Negocio.ProdutoService, ERPV.UI.FormListaProdutos,
   ERPV.Negocio.VendaService, ERPV.Negocio.QuitacaoService, ERPV.UI.FormListaVendas,
-  ERPV.Dominio.Contratos.IFilaRepository, ERPV.Negocio.FilaService, ERPV.UI.FormPendencias;
+  ERPV.Dominio.Contratos.IFilaRepository, ERPV.Negocio.FilaService, ERPV.UI.FormPendencias,
+  ERPV.UI.PendenciasApresentacao;
 
 const
   WM_ERPV_FECHAR_LISTA = WM_USER + 101;
@@ -79,6 +80,8 @@ type
     FStatusFinanceiro: TPanel;
     FStatusEstado: TPanel;
     FStatusPendencias: TPanel;
+    FChipPendencias: TPanel; // T53: chip "N" no item Pendencias da navegacao
+    FTotalPendencias: Integer;
     FDestinoAtivo: Integer;
     FBarrasAtivas: array[TDestinoShell] of TPanel;
     FBotoesNav: array[TDestinoShell] of TcxButton;
@@ -109,6 +112,8 @@ type
     procedure AoClicarSobre(Sender: TObject);
     procedure AoClicarSair(Sender: TObject);
     procedure AoClicarPendencias(Sender: TObject);
+    procedure AoFilaAlterada(Sender: TObject);
+    procedure AplicarContadorPendencias;
   public
     constructor Create(AOwner: TComponent); override;
 
@@ -129,6 +134,12 @@ type
     /// </summary>
     procedure AbrirDestino(const ADestino: TDestinoShell);
 
+    /// <summary>T53: recarrega o contador (IFilaRepository.ContarPendencias) e
+    /// atualiza status bar e chip da navegacao. Chamado na abertura, apos
+    /// enfileirar (Confirmar/Cancelar) e apos Reenviar. Falha de banco mantem
+    /// o ultimo valor (sem mensagem tecnica, sem log de dado pessoal).</summary>
+    procedure AtualizarContadorPendencias;
+
     /// <summary>Estado exibido no centro da status bar ("Pronto", "Aguardando Financeiro...").</summary>
     procedure DefinirEstado(const ATexto: string);
 
@@ -146,7 +157,6 @@ implementation
 const
   TAG_SEM_DESTINO = -1;
   ESTADO_PRONTO = 'Pronto';
-  PENDENCIAS_FIXO = 'Pendências: 0'; // valor fixo ate T53 (contador real)
   LARGURA_STATUS_LATERAL = 280;
   LARGURA_STATUS_PENDENCIAS = 200;
   LARGURA_BARRA_ATIVA = 3;
@@ -174,7 +184,39 @@ begin
   MontarAreaConteudo;
 
   DefinirEstado(ESTADO_PRONTO);
-  DefinirTextoStatus(FStatusPendencias, PENDENCIAS_FIXO);
+  AplicarContadorPendencias; // 0 ate Configurar carregar o valor real (T53)
+end;
+
+procedure TFormMain.AplicarContadorPendencias;
+var
+  Chip: string;
+begin
+  // Icone (T69) + texto sempre presentes na status bar (UX 5: nunca so icone/cor).
+  DefinirTextoStatus(FStatusPendencias, TextoPendenciasStatus(FTotalPendencias));
+  if FChipPendencias <> nil then
+  begin
+    Chip := TextoChipPendencias(FTotalPendencias);
+    FChipPendencias.Caption := Chip;
+    FChipPendencias.Visible := Chip <> '';
+  end;
+end;
+
+procedure TFormMain.AtualizarContadorPendencias;
+begin
+  if FFilaRepository = nil then
+    Exit;
+  try
+    FTotalPendencias := FFilaRepository.ContarPendencias;
+  except
+    on Exception do
+      Exit; // mantem o ultimo valor; a tela Pendencias mostra o erro amigavel
+  end;
+  AplicarContadorPendencias;
+end;
+
+procedure TFormMain.AoFilaAlterada(Sender: TObject);
+begin
+  AtualizarContadorPendencias;
 end;
 
 procedure TFormMain.Configurar(const ABaseUrlFinanceiro: string;
@@ -190,6 +232,7 @@ begin
   FClienteService := AClienteService;
   FProdutoService := AProdutoService;
   DefinirTextoStatus(FStatusFinanceiro, 'Financeiro: ' + FBaseUrlFinanceiro);
+  AtualizarContadorPendencias;
 end;
 
 procedure TFormMain.DefinirEstado(const ATexto: string);
@@ -267,7 +310,7 @@ begin
   // Ordem: direita primeiro para o alClient ocupar o miolo.
   FStatusPendencias := CriarAreaStatus(alRight, LARGURA_STATUS_PENDENCIAS, taRightJustify);
   FStatusPendencias.Cursor := crHandPoint;
-  FStatusPendencias.Hint := 'Abrir Pendências de Integração';
+  FStatusPendencias.Hint := HINT_PENDENCIAS_STATUS;
   FStatusPendencias.ShowHint := True;
   FStatusPendencias.OnClick := AoClicarPendencias;
   // T69: icone 'sinc' ao lado do texto (o texto "Pendencias: N" permanece)
@@ -373,6 +416,31 @@ begin
   Barra.ParentBackground := False;
   Barra.Color := clERPVDestaque;
   Barra.Visible := False;
+
+  if ATag = Ord(dsPendencias) then
+  begin
+    // T53: chip "N" (so aparece com N > 0), texto + cor de aviso, clicavel.
+    FChipPendencias := TPanel.Create(Linha);
+    FChipPendencias.Parent := Linha;
+    FChipPendencias.Align := alRight;
+    FChipPendencias.Width := EscalarPx(36);
+    FChipPendencias.AlignWithMargins := True;
+    FChipPendencias.Margins.Top := EscalarPx(ERPVEspaco8);
+    FChipPendencias.Margins.Bottom := EscalarPx(ERPVEspaco8);
+    FChipPendencias.Margins.Right := EscalarPx(ERPVEspaco8);
+    FChipPendencias.BevelOuter := bvNone;
+    FChipPendencias.ParentBackground := False;
+    FChipPendencias.Color := clERPVAvisoFundo;
+    FChipPendencias.Font.Name := ERPVFontePrincipal;
+    FChipPendencias.Font.Size := ERPVTamCorpo;
+    FChipPendencias.Font.Style := [fsBold];
+    FChipPendencias.Font.Color := clERPVAvisoTexto;
+    FChipPendencias.Cursor := crHandPoint;
+    FChipPendencias.Hint := HINT_PENDENCIAS_STATUS;
+    FChipPendencias.ShowHint := True;
+    FChipPendencias.OnClick := AoClicarPendencias;
+    FChipPendencias.Visible := False;
+  end;
 
   Botao := TcxButton.Create(Linha);
   Botao.Parent := Linha;
@@ -493,6 +561,8 @@ begin
     FListaVendas := TFormListaVendas.Create(Self, FVendaService, FClienteService,
       FProdutoService);
     FListaVendas.QuitacaoService := FQuitacaoService;
+    FListaVendas.OnFilaAlterada := AoFilaAlterada;
+    FListaVendas.DefinirFilaRepository(FFilaRepository); // T53: Sinc + bloqueio
     FListaVendas.BorderStyle := bsNone;
     FListaVendas.Parent := FAreaConteudo;
     FListaVendas.Align := alClient;
@@ -539,6 +609,8 @@ begin
     FPendencias.Parent := FAreaConteudo;
     FPendencias.Align := alClient;
     FPendencias.OnFechada := AoFecharListaVendas;
+    FPendencias.OnFilaAlterada := AoFilaAlterada;
+    AtualizarContadorPendencias;
     FPendencias.Show;
   end
   else
