@@ -539,3 +539,9 @@ RF10-02, RF10-04 e RF10-05: sem implicação de segurança adicional além do re
 **Aprovado com débito** (SG10-01 média; SG10-02..04 baixos). Sem achado alto/crítico e sem compliance obrigatório em aberto: motivo não vai a log, fila ou mensagem; mensagens de exceção são fixas; SQL parametrizado; autorização revalidada no service antes do POST; ApiKey/corpo fora de log. Não bloqueia deploy. Pendente no fechamento estrutural: registrar SG10-01 e SG10-04 (e SG10-03 junto a SG8-02) em `Refatoração Lote-10` com os prazos acima. Nota: SG10-01 sobe para Alta se a divergência de estado com o Financeiro puder ocorrer em produção sem reconciliação (T50 ausente) com Financeiro real. Evidência apenas estática (nada compilado/executado).
 
 Escala para: nenhum (sem bloqueio). Gestor: apenas SG10-02 (retenção/anonimização do motivo), informativo e em paralelo. Coordenador: não. Executor: correção de SG10-01/SG10-04 via `Refatoração Lote-10`, não imediata.
+
+### Revalidação (2026-09-23)
+
+Delta do Lote 10 após a correção do BOM: o único diff em `src` desde a auditoria é a inserção de EF BB BF na linha 1 de `QuitacaoService.pas` (e das units do Bloqueio 005), sem mudança de lógica. Sem código novo, a superfície de segurança não mudou: SG10-01 (média) e SG10-02..04 (baixas) continuam válidos, sem alteração de severidade nem de prazo. Nenhum achado novo.
+
+**Veredito DevSecOps: APROVADO COM DÉBITO (inalterado).** Não bloqueia deploy. Evidência apenas estática (nada compilado/executado).
