@@ -33,6 +33,7 @@ uses
   ERPV.UI.FormListaClientes in 'src\UI\ERPV.UI.FormListaClientes.pas',
   ERPV.UI.FormListaProdutos in 'src\UI\ERPV.UI.FormListaProdutos.pas',
   ERPV.UI.FormListaVendas in 'src\UI\ERPV.UI.FormListaVendas.pas',
+  ERPV.Integracao.EmailSender in 'src\Integracao\ERPV.Integracao.EmailSender.pas',
   ERPV.Relatorios.PedidoLayout in 'src\Relatorios\ERPV.Relatorios.PedidoLayout.pas' {DMPedidoLayout: TDataModule},
   ERPV.Relatorios.RelatorioPedido in 'src\Relatorios\ERPV.Relatorios.RelatorioPedido.pas',
   ERPV.UI.FormMain in'src\UI\ERPV.UI.FormMain.pas' {FormMain},
