@@ -498,3 +498,44 @@ Produção: BaseUrl com `https://` e certificado válido (validar contra o cert,
 **Aprovado com débito** (SG8-01 média; SG8-02..04 baixos). Sem achado alto/crítico nem compliance obrigatório em aberto; ApiKey e corpos fora de log/URL/mensagem, redirects desligados, timeouts aplicados, payload minimizado. Não bloqueia deploy. Pendente no fechamento estrutural: registrar SG8-01 (junto com RF8-01) e SG8-02 em `Refatoração Lote-8` com os prazos acima. Nota: sobe para Alta se o SG8-01 deixar de ser tratado antes de a quitação ir a produção com Financeiro real, pelo risco de divergência de estado entre sistemas.
 
 Escala para: nenhum (sem bloqueio). Gestor: sem relevância estratégica. Coordenador: não. Executor: correção de SG8-01/SG8-02 via `Refatoração Lote-8`, não imediata.
+
+## Lote 10 — Cancelamento de venda (D4)
+
+Escopo: `ERPV.Negocio.QuitacaoService` (T43, `Cancelar`), `ERPV.UI.FormCancelamentoVenda` (T44) e a integração em `FormListaVendas`/`FormEdicaoVenda`; caminho até `FinanceiroClient.ConfirmarCancelamento`, `VendaRepository.AtualizarStatus` e `FilaRepository.Enfileirar` lido só para rastrear o motivo. QA do lote: RF10-01..05 (não duplicados). Análise **estática por leitura** (sem SAST automatizado, sem Delphi, nada executado). Referências: SDD §7, GUARDRAILS 16/17/18, ADR-005/006/007/008, LGPD.
+
+### 1. Segredo/credencial e dependências (regra 16, ADR-007)
+Nenhum segredo literal nas units do lote; `ApiKey` só entra no `TFinanceiroClient` pelo `Root` (env sobre INI), como no Lote 8. Sem dependência de terceiros nova (UI usa só VCL/DevExpress já existentes). Sem achado.
+
+### 2. Autorização e integridade do fluxo (RN-02, ADR-005/006)
+Status lido do banco e checado antes de qualquer POST (Quitada/Cancelada/inexistente => `dcNaoPermitida`, sem HTTP); a UI só habilita o botão/menu como conveniência e o service revalida (a UI não é o controle). `AVendaId` é inteiro (sem injeção; rota = `IntToStr`); gravação por parâmetros nomeados (`:MOTIVO`, `:ID`), sem concatenação SQL. HTTP fora de transação. Motivo aparado e limitado a 255 na UI (`MaxLength`), coluna VARCHAR(255). Observação: o service em si não trunca o motivo (limite só na UI); um chamador futuro poderia estourar a coluna, resultando em `EInfra` (ver SG10-01). Sem achado de segurança.
+
+### 3. Motivo livre e LGPD (SG8-03, RF10-03)
+- **Fluxo do motivo:** digitado no `TcxTextEdit` => `Trim` => POST ao Financeiro (`motivo` no corpo, HTTPS obrigatório em produção, seção 6) => em sucesso gravado em `VENDAS.MOTIVO_CANCELAMENTO` (dado pessoal potencial persistido localmente, mesma finalidade do Financeiro). Não vai para log (nenhuma chamada a `Logger` em `QuitacaoService` nem em `FormCancelamentoVenda`; o `FinanceiroClient` loga só método, rota, código HTTP e `E.ClassName`), não vai para `ULTIMO_ERRO` da fila (recebe `Resp.Mensagem`, texto fixo do cliente para indisponível) e não aparece em mensagem de UI (a UI mostra id da venda e textos fixos; em `dcRecusada` mostra a `Mensagem` do Financeiro, ver SG10-03). Confirmado por leitura: **ausência de log do motivo está correta**.
+- **Orientação ao operador:** ausente (RF10-03). É a pendência prometida em SG8-03: campo livre pode receber CPF/e-mail/telefone/dado de saúde do cliente digitado, e a base legal/minimização (LGPD art. 6º III, necessidade) depende de orientação e, idealmente, de limite de uso. Ainda sem validação de conteúdo. Severidade Baixa (dado voluntário, finalidade legítima, canal HTTPS, sem exposição em log), mas é **item de compliance de minimização não implementado**; não é "compliance obrigatório" bloqueante porque o SDD §7/RN não exige filtro e o tratamento tem base contratual/legítimo interesse; vira tarefa com prazo.
+- **Retenção:** motivo fica por tempo indeterminado em `VENDAS`; sem política de retenção/anonimização no SDD. Nota para o Gestor (SG10-02), não bloqueia.
+- **Perda do motivo na fila (RF10-02):** sem vazamento; risco inverso (dado não persistido). Nota de segurança: se T50 decidir guardar o motivo na fila/venda para reenvio, o mesmo tratamento LGPD (sem log, orientação) vale para a nova coluna.
+
+### 4. Exposição de dado sensível em mensagens/exceções (RF10-01)
+`EInfra` que escapa em `Cancelar` (`:297`, `:307`) chega a `FormCancelamentoVenda.Validar`, que exibe `E.Message` com `Notificar(utnErro)` quando `E is EErpVendas`. Verificado na origem: todos os `EInfra.Create` do `VendaRepository`/`FilaRepository`/`Conexao` usam constantes de mensagem fixas e amigáveis (`MSG_FALHA_GRAVAR`, `MSG_NAO_ENCONTRADA`, `MSG_FALHA_TRANSACAO`...), e o detalhe técnico (E original) vai só para `FLogger.Erro` com mascaramento (`TratarFalha`). Portanto **não há vazamento de SQL, caminho, credencial nem do motivo**; a "mensagem técnica" é só texto genérico e o impacto é de UX/integridade (RF10-01), não de confidencialidade. Exceção não-`EErpVendas` recebe texto genérico (`:165`) e o log fica com o tratador global (T13). Ressalva: como `Validar` não loga, e o texto do log depende de `TLogger` mascarar; o mascaramento existe (`ERPV.Core.Log`, CPF/CNPJ/e-mail/senha/apikey). Sem achado de confidencialidade. Integridade: a possibilidade de o operador repetir o POST após o Financeiro já ter cancelado é risco de divergência de estado (mesma classe de SG8-01); tratada por RF10-01.
+
+### 5. ApiKey, corpo e log (regra 17)
+Sem mudança no cliente neste lote. `ConfirmarCancelamento` reutiliza `Enviar`: `X-Api-Key` só em cabeçalho, corpo (com o `motivo`) nunca logado, log = método/rota/HTTP/`ClassName`. O log inclui `ARota`, que contém `vendaId` numérico (identificador, não dado pessoal). Sem achado.
+
+### 6. Requisitos de segurança operacional para o chapéu DevOps
+Idênticos ao Lote 8 e reforçados: `https://` com certificado válido em produção (o `motivo` pode conter dado pessoal e trafega no corpo); ApiKey só por variável de ambiente; log da aplicação sem corpo de requisição/resposta (manter assim ao configurar níveis de log de produção); backup do Firebird tratado como dado pessoal (contém `MOTIVO_CANCELAMENTO`).
+
+### Achados do lote
+
+| # | Achado | Severidade | Situação |
+|---|---|---|---|
+| SG10-01 (= RF10-01) | `EInfra` escapa de `Cancelar` (`AtualizarStatus`/`Enfileirar`); sem vazamento (mensagens fixas), mas permite repetir POST e divergir de estado com o Financeiro; o service também não trunca o motivo a 255 (só a UI) | Média (robustez/integridade; segurança: baixa) | Débito com prazo: antes do fechamento do Lote 11 / antes de T50 (reenvio); mesma correção do QA (capturar `EInfra`, desfecho "cancelado no Financeiro, falha ao gravar local"; aparar `Copy(Motivo,1,255)` no service); tarefa em `Refatoração Lote-10` |
+| SG10-02 | `MOTIVO_CANCELAMENTO` retido indefinidamente, sem política de retenção/anonimização | Baixa (observação) | Sinalizado ao Gestor (decisão de negócio/LGPD); sem código |
+| SG10-03 | Mensagem 4xx do Financeiro exibida em `dcRecusada` sem limite/sanitização (continuação de SG8-02) e pode ecoar o `motivo` que o Financeiro devolver | Baixa | Débito: mesma correção de SG8-02 em `ExtrairMensagem` (truncar e limpar controles); prazo antes do Lote 16 |
+| SG10-04 (= RF10-03, SG8-03) | Diálogo não orienta a não digitar dado pessoal no motivo | Baixa (minimização LGPD) | Débito com prazo: hint curto "Não informe dados pessoais" em `FormCancelamentoVenda`; antes do Lote 16; tarefa em `Refatoração Lote-10` |
+
+RF10-02, RF10-04 e RF10-05: sem implicação de segurança adicional além do registrado acima (RF10-02 ver seção 3).
+
+### Veredito do lote (chapéu DevSecOps)
+**Aprovado com débito** (SG10-01 média; SG10-02..04 baixos). Sem achado alto/crítico e sem compliance obrigatório em aberto: motivo não vai a log, fila ou mensagem; mensagens de exceção são fixas; SQL parametrizado; autorização revalidada no service antes do POST; ApiKey/corpo fora de log. Não bloqueia deploy. Pendente no fechamento estrutural: registrar SG10-01 e SG10-04 (e SG10-03 junto a SG8-02) em `Refatoração Lote-10` com os prazos acima. Nota: SG10-01 sobe para Alta se a divergência de estado com o Financeiro puder ocorrer em produção sem reconciliação (T50 ausente) com Financeiro real. Evidência apenas estática (nada compilado/executado).
+
+Escala para: nenhum (sem bloqueio). Gestor: apenas SG10-02 (retenção/anonimização do motivo), informativo e em paralelo. Coordenador: não. Executor: correção de SG10-01/SG10-04 via `Refatoração Lote-10`, não imediata.
