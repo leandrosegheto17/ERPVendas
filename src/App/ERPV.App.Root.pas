@@ -226,9 +226,10 @@ begin
     FConfiguracao.Financeiro.TimeoutMs, FConfiguracao.Financeiro.ApiKey, FLogger); // T34-T36
   FRelatorioPedido := TRelatorioPedido.Create(FConfiguracao.Relatorio.PastaPdfTemp,
     FVendaRepository, FLogger); // T47
-  FEmailSender := TEmailSender.Create(FConfiguracao.SMTP, FLogger); // T48
+  FEmailSender := TEmailSender.Create(FConfiguracao.SMTP, FLogger,
+    FConfiguracao.SMTP.Remetente); // T48
   FQuitacaoService := TQuitacaoService.Create(FVendaRepository, FFinanceiro,
-    FFilaRepository, FClienteRepository, FRelatorioPedido, FEmailSender); // T43/T49
+    FFilaRepository, FClienteRepository, FRelatorioPedido, FEmailSender, FLogger); // T43/T49, RF12-01
 
   FFilaService := TFilaService.Create(FVendaRepository, FFinanceiro,
     FFilaRepository, FClienteRepository, FRelatorioPedido, FEmailSender); // T50/T51/T52

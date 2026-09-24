@@ -86,6 +86,9 @@ type
     Usuario: string;
     Senha: string;   // resolvida: ERPV_SMTP_PASSWORD (env, ADR-007) tem prioridade sobre o INI
     UsaTLS: Boolean;
+    Remetente: string; // [SMTP] Remetente (opcional; padrao SMTP_REMETENTE_PADRAO)
+    CaFile: string;    // [SMTP] CaFile (opcional): .pem com as CAs confiaveis (RF12-05)
+    VerificarCertificado: Boolean; // [SMTP] VerificarCertificado (opcional; padrao True; 0 = so dev)
   end;
 
   TConfiguracaoRelatorio = record
@@ -142,6 +145,10 @@ const
 
   TIMEOUT_FINANCEIRO_PADRAO_SEGUNDOS = 10;
   SMTP_PORTA_PADRAO = 587;
+  SMTP_REMETENTE_PADRAO = 'nao-responder@erpvendas.local';
+  MSG_REMETENTE_INVALIDO = 'Configuracao invalida: o campo "Remetente" da secao ' +
+    '"[SMTP]" deve ser um endereco de e-mail (ex.: nao-responder@empresa.com.br), ' +
+    'sem espacos, virgulas ou ponto e virgula.';
 
 implementation
 
@@ -229,6 +236,21 @@ begin
   Result := AIni.ReadString(ASecao, AChave, APadrao);
 end;
 
+function RemetenteValido(const AValor: string): Boolean;
+var
+  i, LArroba: Integer;
+begin
+  // Formato minimo (RF12-02): "@" com texto antes e depois; sem espacos, tab,
+  // CR/LF, virgula nem ponto e virgula.
+  LArroba := Pos('@', AValor);
+  Result := (LArroba > 1) and (LArroba < Length(AValor));
+  if not Result then
+    Exit;
+  for i := 1 to Length(AValor) do
+    if CharInSet(AValor[i], [' ', #9, #13, #10, ',', ';']) then
+      Exit(False);
+end;
+
 procedure TConfiguracao.Carregar(AIni: TIniFile);
 begin
   // [Banco] - conexao Firebird (ADR-002). Senha nunca obrigatoria no INI: se
@@ -254,6 +276,16 @@ begin
   FSMTP.Usuario := LerObrigatoria(AIni, 'SMTP', 'Usuario');
   FSMTP.Senha := LerComVariavelDeAmbiente(AIni, 'SMTP', 'Senha', ENV_SMTP_SENHA, '');
   FSMTP.UsaTLS := AIni.ReadBool('SMTP', 'UsaTLS', True);
+  // RF12-02: Remetente opcional; ausente/vazio => padrao. Mensagem fixa (nao ecoa o valor).
+  FSMTP.Remetente := Trim(AIni.ReadString('SMTP', 'Remetente', ''));
+  if FSMTP.Remetente = '' then
+    FSMTP.Remetente := SMTP_REMETENTE_PADRAO
+  else if not RemetenteValido(FSMTP.Remetente) then
+    raise EConfiguracao.Create(MSG_REMETENTE_INVALIDO);
+
+  // RF12-05: TLS estrito por padrao; CaFile opcional; relaxar so em dev.
+  FSMTP.CaFile := Trim(AIni.ReadString('SMTP', 'CaFile', ''));
+  FSMTP.VerificarCertificado := AIni.ReadBool('SMTP', 'VerificarCertificado', True);
 
   // [Relatorio] - pasta de PDF temporario (T47).
   FRelatorio.PastaPdfTemp := LerObrigatoria(AIni, 'Relatorio', 'PastaPdfTemp');

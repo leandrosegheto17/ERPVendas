@@ -39,6 +39,16 @@ Usuario=usuario_ficticio_mailtrap
 ; Senha ficticia - use ERPV_SMTP_PASSWORD em ambientes reais (ADR-007).
 Senha=senha_ficticia_smtp
 UsaTLS=1
+; Remetente (opcional; padrao nao-responder@erpvendas.local). Em producao use
+; um endereco de dominio autorizado a enviar (SPF/DKIM/DMARC, ver README).
+;Remetente=nao-responder@erpvendas.local
+; TLS (RF12-05). Com UsaTLS=1 o STARTTLS e exigido e o certificado verificado.
+; CaFile: caminho de um .pem com as CAs confiaveis (OBRIGATORIO com
+; VerificarCertificado=1, pois o OpenSSL 1.0.2 nao usa o repositorio do Windows).
+;CaFile=C:ERPVendasconfigcacert.pem
+; VerificarCertificado (padrao 1). 0 = nao verifica (SOMENTE dev: Mailtrap/Ethereal).
+; Producao: VerificarCertificado=1 e CaFile apontando para o bundle de CAs.
+;VerificarCertificado=1
 
 [Relatorio]
 ; Pasta onde o PDF do pedido/quitacao e gerado temporariamente antes do

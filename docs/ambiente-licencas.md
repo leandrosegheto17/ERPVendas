@@ -553,3 +553,20 @@ Seção 2 — o caminho principal (com TLS) já está validado. Para T48
 (`EmailSender` real), usar os mesmos parâmetros: DLLs OpenSSL 1.0.2 Win32
 junto ao `.exe`, `sslvTLSv1_2`, `utUseExplicitTLS`, porta configurável pelo
 INI (padrão 587).
+
+### 11.6 Lote 12 / E-mail — notas de segurança e DevOps (SG12-02, SG12-05)
+
+- **OpenSSL 1.0.2 está sem suporte (fim de vida desde 2019).** Usar a última
+  da série, **1.0.2u** (`libeay32.dll` + `ssleay32.dll`, Win32). Uso restrito
+  a cliente SMTP para o host fixo configurado. Origem registrada até agora:
+  mirror `IndySockets/OpenSSL-Binaries` (GitHub), usado no spike T02 (§11.5).
+  Versão exata e SHA-256 do pacote efetivamente usado: **a preencher na T61
+  (build/pacote): registrar origem e SHA-256 das DLLs.** Migração futura:
+  Indy/OpenSSL 1.1+.
+- **Mailtrap/Ethereal só com dados fictícios.** Nunca usar e-mail, CPF ou PDF
+  de cliente real na caixa de teste: ela retém as mensagens e é um terceiro
+  externo (SG12-05).
+- **Produção:** senha SMTP somente pela variável de ambiente
+  `ERPV_SMTP_PASSWORD` (tem prioridade sobre o INI; ver
+  `src/Core/ERPV.Core.Config.pas`), nunca no `erpvendas.ini`. SPF/DKIM/DMARC:
+  ver README (SMTP).
