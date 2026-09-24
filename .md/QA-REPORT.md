@@ -453,3 +453,69 @@ T33-T36 `Concluída` (pendentes de confirmação na IDE). Dependências da Seç�
 ### Veredito do lote (chapéu QA)
 
 **Aprovado com ressalvas.** Nenhuma reprovação crítica; T35 e T36 aprovadas, T33 e T34 aprovadas com ressalva (RF8-01); 2 ajustes simples; ressalva geral de compilação/execução pendente na IDE/mock. Segue para auditoria de segurança (chapéu DevSecOps), que deve olhar em especial `X-Api-Key`, logs e a exceção que escapa em RF8-01.
+
+---
+
+## Lote 9 — Fluxo Confirmar venda (T37-T42) — chapéu QA (2026-09-23)
+
+Método: inspeção estática rigorosa (Delphi Community não compila via CLI; T37-T42 seguem "pendente de confirmação na IDE"). Lido: `ERPV.Dados.FilaRepository`, `ERPV.Negocio.QuitacaoService` (Confirmar T38-T41; Cancelar/T43 só para coerência), `ERPV.UI.ConfirmacaoVenda`, trechos de `FormListaVendas`/`FormEdicaoVenda`/`FormMain`, `ERPV.App.Root`, `.dpr`/`.dproj`, contra `db/01_schema.sql`, UX-SPEC §4.2/§4.3, ADR-005/006. Nada foi executado.
+
+### Critérios (acceptance-criteria-validation)
+
+| Tarefa | Critério | Resultado (por leitura) |
+|---|---|---|
+| T37 | 1 PENDENTE por venda+tipo; 2x => 1 linha, tentativas 2; CONCLUIDO seta `CONCLUIDO_EM`; `ULTIMO_ERRO` truncado em 500 | OK. SQL confere com o schema (tabela `FILA_INTEGRACAO`; colunas `VENDA_ID, TIPO, STATUS, TENTATIVAS, ULTIMO_ERRO, PROXIMA_TENTATIVA, CRIADO_EM, CONCLUIDO_EM`; literais `PENDENTE/CONCLUIDO/QUITACAO`). Busca de PENDENTE + UPDATE (+1) ou INSERT (TENTATIVAS=1) na mesma transação curta (só abre/fecha se o chamador não abriu); `Copy(...,1,500)`; `MarcarConcluido`/`RegistrarFalha` com `RowsAffected=0 => EInfra`; falha FireDAC => `EInfra` amigável + log, sem SQL. Unicidade só no código (sem índice único parcial; aceitável monousuário, ADR-005). |
+| T38 | Exige Pendente antes do POST; sem transação durante HTTP; commit curto | OK. `Obter` do banco, `ERegraNegocio` se nulo/não Pendente antes do POST; entidade liberada no `finally`; `AtualizarStatus(Quitada, Data)` isolado; `Data=0 => Now`; 200 com status diferente de Quitada => `qdRespostaInvalida` sem efeito. |
+| T39 | Recusa não grava nem enfileira | OK. Ramo `rfRecusado` só mapeia; mensagem íntegra, fallback com código HTTP. |
+| T40 | Indisponível enfileira QUITACAO; falha ao enfileirar não mascara | OK no service: `EnfileirarIndisponivel` grava `tfQuitacao` com `ULTIMO_ERRO`; `EInfra` capturado => segue `qdIndisponivel` com aviso na Mensagem. Ver A2 (texto da UI). |
+| T41 | GET status antes de enfileirar; Quitada => conclui local sem repostar | Lógica OK (`ConsultarStatus` em `rfIndisponivel`; Quitada => `AtualizarStatus` + `qdSucesso`, sem fila, sem novo POST). Não provável de ponta a ponta com o mock atual (R1). |
+| T42 | Textos UX 4.3 literais via `Notificar`; cursor/botões restaurados em `finally`; Confirmar só para Pendente | Textos idênticos ao 4.3 (pergunta com `R$ 350,00` pt-BR, indisponível, recusa, resposta inválida); Info=banner, Aviso/Erro=modal, sem `MessageDlg` direto; cursor, `Enabled` e rótulo restaurados em `finally`; lista habilita só Pendente + service injetado; edição só venda gravada e não somente-leitura. Reprovada por A1. |
+
+Lacunas conhecidas e aceitas (não são reprovação): e-mail no texto de sucesso = T49; bloqueio de Confirmar por fila pendente = T53.
+
+### Achados (bug-documentation)
+
+- **A1 — CRÍTICA (T42; afeta mensagens de T37-T41): fontes com acentos sem BOM.** `ERPV.UI.ConfirmacaoVenda.pas` (8 linhas não ASCII), `ERPV.Negocio.QuitacaoService.pas` (10) e `ERPV.Dados.FilaRepository.pas` (3) estão em UTF-8 sem BOM; todas as demais units com acento têm BOM. O Delphi 10.3 lê fonte sem BOM como ANSI: "indisponível", "Quitação", "Ação", "Pendências" saem com mojibake, e o critério central de T42 é o texto literal de UX 4.3 (também afeta fallback do service, `ULTIMO_ERRO` e mensagens de `EInfra` da fila). É o RF7-05 do Lote 7, ainda em aberto. Correção: regravar as 3 units em UTF-8 com BOM (esforço mínimo) e conferir os textos no modal na IDE. Crítica por comprometer o aceite literal; T42 volta a `Em andamento`.
+- **A2 — Simples (T40/T42):** a UI diz "foi colocada na fila" mesmo quando enfileirar falhou; `TextoDesfechoQuitacao` ignora o aviso que o service põe em `Mensagem`. O service não mascara (critério de T40 cumprido), a UI sim. Sugestão: flag `Enfileirado` no resultado e Aviso alternativo.
+- **A3 — Simples (T42, RF7-05, edição):** `ConfirmarVendaClick` usa `FVendaService.Obter(...).ValorTotal` do banco; alterações não salvas na grade são ignoradas na pergunta. Exigir salvar antes ou desabilitar com grade suja.
+- **A4 — Simples (T40):** em timeout/5xx o fluxo faz POST (até `TimeoutMs`) e depois GET de reconciliação (mais até `TimeoutMs`): pior caso ~2x o timeout (~20 s), UI síncrona travada. Considerar timeout menor no GET ou aviso; verificar na IDE.
+- **A5 — Simples (documentação):** cabeçalho de `QuitacaoService` cita `FILA_SINCRONIZACAO` (tabela real: `FILA_INTEGRACAO`) e `STATUS=QUITADA` (literal do banco: `Quitada`).
+- Cosmético: recusa concatena `mensagem + '. '`; se o Financeiro já terminar com ponto, sai "..".
+
+### RF6-01 e RF8-01: risco para este lote
+
+- **RF6-01: risco BAIXO, não bloqueia T38.** `Confirmar` lê o status do banco e só aceita Pendente; `AtualizarStatus` é o único caminho de quitação; a UI de edição nunca atribui `Status` (default `svPendente`), então a brecha (Salvar com objeto Quitada marcar quitada sem POST) não é atingível pela UI atual. Manter como defesa em profundidade antes do Lote 16/T54.
+- **RF8-01: risco MÉDIO-BAIXO, alcançável.** Um 200 do POST com `dataQuitacao` malformada faz `EDateTimeException` atravessar `TFinanceiroClient.Enviar` e `Confirmar`: o Financeiro pode ter quitado, a venda local segue Pendente, nada é gravado nem enfileirado, e a UI mostra o "erro inesperado" genérico (sem "Resposta inesperada", sem fila), quebrando "falha esperada vira resultado tipado". Exige Financeiro mal-comportado; o GET da reconciliação não é afetado (`ConsultarStatus` ignora `dataQuitacao`). Corrigir antes do smoke T54.
+
+### Integração entre lotes
+
+- Root: Conexão -> repositórios (Venda, Cliente, Produto) -> serviços -> `FilaRepository` -> `FinanceiroClient` -> `QuitacaoService`; destruição em ordem inversa (Quitacao, Financeiro, VendaService, repositórios por interface, Conexão) — consistente.
+- `.dpr`/`.dproj`: `FilaRepository`, `QuitacaoService`, `ConfirmacaoVenda` registrados uma vez cada; sem marcadores de merge em `src`, `.dpr`, `.dproj`. `Root.QuitacaoService` -> `FormMain.Configurar` -> lista -> edição.
+- Unit combinada `QuitacaoService`: Confirmar (T38-T41) e Cancelar (T43) coerentes (mesma injeção Venda/Financeiro/Fila; Cancelar não reconcilia por GET, escopo de T50).
+- HTTP sem transação e gravações de status e fila separadas: aderente a ADR-005/006. Não aplicável: `API-CONTRACT.yaml`/cross-platform.
+
+### Requisitos não funcionais
+
+Sem threads, chamada síncrona com cursor/rótulo (DEC-14), SQL parametrizado, mensagem ao usuário sem SQL. Não verificados: tempo real de bloqueio, repaint do rótulo, compilação em 10.3.
+
+### Ressalvas de verificação (não são reprovação)
+
+- **R1 — T41 sem prova ponta a ponta:** o modo `timeout` do mock atrasa também o `GET /status`, então a reconciliação sempre estoura e cai na fila. Sugestão: modo `timeout-post` no mock (atrasa só POST). Roteiro: quitar via curl, `_modo?m=timeout-post`, Confirmar => venda Quitada, fila vazia, 1 único POST no log. Alternativa: teste unitário com `IFinanceiroGateway` falso (POST=Indisponível, GET=Quitada).
+- **R2:** compilação e roteiros de T37-T42 na IDE contra o mock (ok, recusa, erro500, timeout) seguem pendentes.
+
+### Fechamento estrutural
+
+T37-T42 `Concluída` (pendentes de IDE); dependências da Seção 4 resolvidas; nenhuma tarefa `Bloqueada`. A2-A5 devem entrar em `Refatoração Lote-9`; A1 exige retorno de T42 ao `executor` (`Em andamento` no `TASK.md` e entrada em `BLOCKERS.md`). Este relatório não alterou o `TASK.md`. Padrão recorrente: acento sem BOM no Lote 7 (RF7-05) e neste lote; sugerir ao `coordenador` verificação de BOM no roteiro do Executor.
+
+### Veredito por tarefa (chapéu QA)
+
+- T37: **Aprovada** (verificar na IDE; BOM no mesmo commit de A1).
+- T38: **Aprovada com ressalva** (RF8-01 alcançável; A1 nas mensagens; A5).
+- T39: **Aprovada.**
+- T40: **Aprovada com ressalva** (A2, A4).
+- T41: **Aprovada com ressalva** (R1).
+- T42: **Reprovada, crítica (A1)**; A3 simples. Revalidar só T42 e os textos de T38-T41 após regravar com BOM.
+
+### Veredito do lote (chapéu QA)
+
+**Reprovado até correção de A1** (uma reprovação crítica de correção trivial: BOM em 3 units). Sem A1 o lote seria Aprovado com ressalvas (A2-A5, R1, R2). O chapéu DevSecOps só audita após a revalidação de A1.

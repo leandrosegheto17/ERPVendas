@@ -168,3 +168,12 @@
   consumidora e o roteiro manual; ou (2) usuário fornece unit/`.dfm`/`.rtm` de
   referência para o Executor seguir por código.
 - Status: **Aberto**
+
+## Bloqueio 005 — 2026-09-23
+- Reportado por: validador (chapéu QA, validação do Lote 9 — achado A1, crítica)
+- Escalado para: executor
+- Artefato/trecho afetado: `TASK.md` — Lote 9, T42 (voltou a `Em andamento`); mesma correção vale para as units de T37/T38-T41
+- Descrição: `src/UI/ERPV.UI.ConfirmacaoVenda.pas`, `src/Negocio/ERPV.Negocio.QuitacaoService.pas` e `src/Dados/ERPV.Dados.FilaRepository.pas` têm caracteres acentuados e estão gravadas em UTF-8 **sem BOM**; as demais units acentuadas do projeto têm BOM. O Delphi 10.3+ lê arquivo sem BOM como ANSI, então os textos literais de UX 4.3 (e as mensagens de erro/fila) sairiam com mojibake. É o mesmo problema de RF7-05 (Lote 7).
+- Impacto se não resolvido: mensagens de desfecho da Confirmação ilegíveis; T42 não cumpre "texto literal de UX 4.3". DevSecOps do Lote 9 não foi executado (fluxo parou na reprovação crítica).
+- Sugestão: regravar as 3 units em UTF-8 com BOM (sem alterar o conteúdo), conferir que nenhuma outra unit nova acentuada ficou sem BOM (varredura `src/`), e rodar `/executar_tarefa T42` (ou `/executar` no Lote 9); depois `/validar lote 9` de novo. Achados simples A2-A5 do QA serão agendados em `Refatoração Lote-9` na revalidação.
+- Status: **Aberto**
