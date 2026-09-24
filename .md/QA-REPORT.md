@@ -801,3 +801,67 @@ T50-T53 `Concluída`; dependências da Seção 4 do TASK.md satisfeitas, sem ór
 ### Veredito do lote (chapéu QA)
 
 **Aprovado com ressalvas.** Nenhuma reprovação crítica; código não compilado/executado por este agente. Liberado ao chapéu DevSecOps. Pontos para auditoria: `ULTIMO_ERRO` exibido na grade (mascaramento), reenvio de e-mail duplicado (A1), PDF com PII em pasta temp no reenvio, guarda de bloqueio no Service (não só na UI), ausência de log nos novos services.
+
+
+## Lote 15 — Documentação (T56, T57, T58) — chapéu QA (2026-09-24)
+
+Escopo: `docs/roteiro-testes-manuais.md`, `README.md`, `docs/decisoes.md`. Evidência estática (leitura + cruzamento com `src/`, `config/`, `db/`, `tools/`, `.md/adr/`); nada compilado/executado.
+
+### Critérios (acceptance-criteria-validation)
+
+**T56** (cada cenário com passos, dado de entrada e esperado verificáveis; 12 cenários SDD §7)
+- C1-C12 presentes e cobrem a lista do SDD §7. Mensagens amostradas contra `src/` e conferidas: "CPF/CNPJ/E-mail invalido", "Documento ja cadastrado", "Informe o nome/CPF/CNPJ/e-mail", "Informe a descrição/unidade", "Informe o cliente", "ao menos um item", "maior que zero", "Cliente inativo não pode receber venda", `Produto "%s" inativo não pode ser vendido`, banners "Venda Quitada/Cancelada: somente leitura", "Venda já quitada não pode ser alterada nem excluída" / "cancelada...", diálogo de confirmação (R$ + "Esta ação envia a quitação ao Financeiro."), assunto "Confirmação de Pedido N", "Segue em anexo...", "Financeiro indisponível. A venda N continua Pendente e foi colocada na fila. Tente novamente em Pendências.", "Resolva em Pendências antes de continuar.", "Ainda não foi possível reenviar este item. Tente novamente.", "Ele ficou na fila; reenvie em Pendências.", "Falha SMTP", "reconciliada pela fila de pendências", "colocado na fila de pendências", "Venda já quitada não pode ser cancelada" / "Venda já está cancelada", "Arquivo de configuracao nao encontrado", "ausente ou vazia", botão "Confirmar cancelamento", status bar "Financeiro: <BaseUrl>". OK.
+- Modos do mock (`ok|recusa|erro500|timeout|timeout-post|offline-simulado`), `--port`/`--modo`, rota `/_modo?m=` e variáveis `ERPV_*` conferem com `mock_financeiro.py` e `ERPV.Core.Config.pas`. Seed (2 clientes, 3 produtos) coerente com README.
+- Divergências: banner da venda bloqueada (D2), preço 0 (D3), C11 sem "Dado" e C6 sem passos numerados (D4), motivo de cancelamento (D5).
+- Motivo de cancelamento: `FormCancelamentoVenda` coleta "Motivo (opcional, até 255)" e grava em `VENDAS.MOTIVO_CANCELAMENTO`; o roteiro não cita texto de mensagem sobre ele (sem divergência de texto), mas nenhum passo o preenche/confere (D5).
+
+**T57** (README cobre instalação para quem não tem contexto; validado de fato em T64)
+- Cobre arquitetura, pré-requisitos (32 bits, OpenSSL 1.0.2), FB3, `gbak`/scripts (`db/00_criar_banco.sql`, `01_schema.sql`, `02_seed.sql` existem), INI (seções/chaves conferem com `config/erpvendas.ini.example`), env vars, mock, LGPD, limitações do trial. Caminhos citados existem. "12 cenários" confere com o roteiro. `bin/` e `ERPVENDAS.FBK` inexistentes estão declarados como gerados em T61/T62, com alternativa por scripts: aceitável, não é defeito.
+- BaseUrl: INI example traz `http://localhost:5000`; mock escuta em 8080 por padrão. README §4 e roteiro mandam ajustar para 8080, mas §3.3 não avisa (D1).
+
+**T58** (10 ADRs com 1 linha e link; sem texto copiado)
+- ADRs 001-010 (+011 extra) com link para arquivos existentes em `.md/adr/`; DEC-01 a DEC-15 listadas (DEC-02 em parágrafo à parte, apontando `ambiente-licencas.md`); sem duplicação de texto.
+
+### Integração (cross-platform-integration-testing): coerência cruzada
+
+- README <-> INI example: seções/chaves e env vars idênticas; única divergência é a porta (D1).
+- README/roteiro <-> mock: comando, porta 8080, modos e `curl /_modo` idênticos. Python 3.8+ ok (mock usa `from __future__ import annotations`).
+- README <-> roteiro: contagem 12, caminhos e pacote `bin/` iguais em C12 e §2.
+- roteiro <-> código: ver D2-D5.
+- decisoes.md <-> ADRs/VISAO-PRODUTO §8: links e numeração conferem.
+
+### Requisitos não funcionais
+
+- Segurança/LGPD: nenhum segredo real nos docs (senhas fictícias, CPFs de teste válidos); roteiro pede log sem senha/CPF completo; nota LGPD do README coerente com o comportamento; RF7-04 não contradiz o roteiro.
+- Usabilidade dos docs: notação declarada e estrutura legível; ressalvas D4.
+
+### Achados (bug-documentation): nenhum Crítico, 5 Simples + 1 Informativo
+
+| ID | Sev. | Local | Descrição |
+|---|---|---|---|
+| D1 | Simples | `README.md` §3.3; `config/erpvendas.ini.example` | INI example tem `BaseUrl=http://localhost:5000`; o mock roda em 8080. Roteiro e §4 mandam ajustar, mas §3.3 (INI) não avisa; quem seguir só a instalação testará contra a porta errada. Sugestão: nota em §3.3 ou alinhar o example. |
+| D2 | Simples | roteiro C6-B | Cita o banner da venda bloqueada como "Há uma operação pendente no Financeiro. Use Pendências."; o código (`FormEdicaoVenda.pas:682`) exibe "Operação pendente de envio ao Financeiro: somente leitura. Use Pendências." Corrigir o texto (a mensagem de bloqueio do Service em `PendenciaFila.pas` está correta). |
+| D3 | Simples | roteiro C2 | "Dado: preço 0/negativo" com esperado "Preço inválido". `ProdutoService` e `FormEdicaoProduto.MensagemCampo` só recusam vazio/negativo (`< 0`); preço 0 é aceito. Trocar por "vazio/negativo" (ou, se 0 deve ser inválido, é bug de código a decidir pelo Gestor). |
+| D4 | Simples | roteiro C11 e C6 | C11 sem linha "Dado" (a notação do roteiro exige); C6 tem sub-casos A-E em vez de passos numerados, com passos implícitos (criar venda, `curl /_modo`, Confirmar). Acrescentar Dado em C11 e numerar C6. |
+| D5 | Simples | roteiro C9 | Nenhum passo preenche o motivo de cancelamento e confere `MOTIVO_CANCELAMENTO` gravado; reenvio pela fila grava motivo NULL (RF10-02) e não é avisado. Acrescentar passo com "Cliente desistiu" e nota do NULL no reenvio. |
+| D6 | Informativo | TASK.md (nota T58) | Diz DEC-02 "em aberto"; `docs/decisoes.md` a marca resolvida na T01 (correto). Atualizar a nota do TASK.md na consolidação. |
+
+Reprovações críticas: nenhuma. Nenhum achado compromete o critério de aceite central de T56-T58.
+
+### Não verificável por falta de IDE/ambiente (ressalva, não reprovação)
+
+Execução real do roteiro (T59) e instalação limpa seguindo o README (T64); existência de `bin/` e `ERPVENDAS.FBK` (T61/T62); teclado/foco de C11 (T60); texto exato do erro de banco em C10 não amostrado.
+
+### Fechamento estrutural
+
+T56-T58 `Concluída`; dependências da Seção 4 do TASK.md satisfeitas (T59, T60, T64 são posteriores), sem órfãs e sem tarefa `Bloqueada`; nada exige redesenho. `TASK.md` não alterado por este agente; D1-D5 aguardam criação em `Refatoração Lote-15` na consolidação pós-DevSecOps.
+
+### Veredito por tarefa
+
+- T56: **Aprovada com ressalvas** (D2, D3, D4, D5).
+- T57: **Aprovada com ressalvas** (D1; validação real em T64).
+- T58: **Aprovada** (D6 informativo).
+
+### Veredito do lote (chapéu QA)
+
+**Aprovado com ressalvas.** Nenhuma reprovação crítica. Liberado ao chapéu DevSecOps. Pontos para auditoria: ausência de segredos/dados reais nos docs, mascaramento de log e retenção descritos no README §5 conforme o código, `/_modo` do mock sem autenticação (documentado como só-localhost).
