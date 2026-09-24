@@ -132,6 +132,9 @@ begin
      (EFDDBEngineException(E).Kind = ekFKViolated) then
     Mensagem := MSG_PRODUTO_EM_USO;
 
+  // Mensagens especificas fixas passam pelo handler global; as genericas seguem EInfra.
+  if (Mensagem = MSG_PRODUTO_EM_USO) or (Mensagem = MSG_NAO_ENCONTRADO) then
+    raise EInfraMensagemSegura.Create(Mensagem);
   raise EInfra.Create(Mensagem);
 end;
 
@@ -186,7 +189,7 @@ begin
       Q.ParamByName('ID').AsInteger := AProduto.Id;
       Q.ExecSQL;
       if Q.RowsAffected = 0 then
-        raise EInfra.Create(MSG_NAO_ENCONTRADO);
+        raise EInfraMensagemSegura.Create(MSG_NAO_ENCONTRADO);
       if Iniciou then
         FConexao.Confirmar;
     except
@@ -218,6 +221,8 @@ begin
       Q.SQL.Text := SQL_EXCLUIR;
       Q.ParamByName('ID').AsInteger := AId;
       Q.ExecSQL;
+      if Q.RowsAffected = 0 then
+        raise EInfraMensagemSegura.Create(MSG_NAO_ENCONTRADO);
       if Iniciou then
         FConexao.Confirmar;
     except
