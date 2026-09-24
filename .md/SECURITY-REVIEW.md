@@ -459,3 +459,42 @@ Nome do cliente aparece na coluna Cliente da lista e no filtro; nome e **CPF/CNP
 **Aprovado com débito baixo** (achado 1 novo; achado 2 e RF6-01/RF6-04 herdados). Sem achado alto/crítico nem compliance obrigatório em aberto; sem SQL/HTTP/regra nas telas; sem vazamento em log ou mensagem; dado de tela não é fonte de verdade; duplo envio não duplica venda. Não bloqueia deploy.
 
 Escala para: nenhum (sem bloqueio). Gestor: sem relevância estratégica. Coordenador: não. Executor: nada imediato; RF6-01/RF6-04 seguem via `Refatoração Lote-6` antes de T38.
+
+
+## Lote 8 — Cliente REST do Financeiro (D3)
+
+Escopo: `ERPV.Integracao.FinanceiroDTOs` (T33), `ERPV.Integracao.FinanceiroClient` (T34-T36) e o ponto de uso em `ERPV.Negocio.QuitacaoService`/`ERPV.App.Root` (só segredos/log/mensagem). QA do lote: RF8-01/RF8-02 (não duplicados aqui). Análise por leitura de código (sem SAST automatizado disponível); sem recompilação. Referências: SDD §7, GUARDRAILS 16/17/18, ADR-004/006/007/008.
+
+### 1. Segredo/credencial no repositório (regra 16, ADR-007)
+Grep por `apikey|password|senha|secret|token = valor` em `src/`, INI e docs: nenhum valor literal; `ApiKey` só chega por `TConfiguracao` (env `ERPV_FINANCEIRO_APIKEY` com prioridade sobre o INI) e entra no `TFinanceiroClient.Create` pelo `Root`. Sem dependência de terceiros nova (só RTL: `System.Net.HttpClient`, `System.JSON`). Sem achado.
+
+### 2. ApiKey, corpo e log (regra 17)
+`X-Api-Key` vai só em cabeçalho, e só se `ApiKey <> ''`; nunca em URL, mensagem ou log. `MontarUrl` = BaseUrl + rota fixa + `IntToStr(id)`. O log grava apenas método, rota (com id numérico da venda), código HTTP e `E.ClassName` (sem URL/cabeçalho/corpo/`E.Message`); corpo de requisição e resposta não são logados. `TResultadoFinanceiro.Indisponivel`/`RespostaInvalida` têm texto fixo. Sem achado.
+
+### 3. Transporte, redirect e timeouts
+`HandleRedirects := False` (3xx vira Indisponível, sem seguir para host arbitrário nem reenviar a ApiKey); `ConnectionTimeout/SendTimeout/ResponseTimeout` = `TimeoutMs` (padrão positivo garantido em `Config`). Sem achado. **Observação SG8-04:** a BaseUrl não tem esquema validado; `http://localhost:8101` é aceitável só em dev/mock. Em produção, a ApiKey e o payload trafegariam em claro se a URL for `http://` remota. Não é achado de código; vira requisito operacional (seção 6).
+
+### 4. Resposta não confiável (JSON malicioso/enorme, mensagem ao usuário)
+- Parse tolerante: `ParseJSONValue` em try/except, raiz não-objeto descartada, campos desconhecidos ignorados, status por `TryStrToStatusVenda` (whitelist), `vendaId` via `StrToIntDef`. Sem execução de conteúdo e sem eco do corpo em `RespostaInvalida`. Corpo enorme: `ContentAsString` lê tudo em memória sem teto (app desktop, endpoint interno; timeout limita o tempo). Risco de DoS local baixo.
+- **Exceção não capturada (RF8-01):** `TryIsoToDateTime` só captura `EConvertError`; qualquer outra exceção do `ISO8601ToDate` sobe por `AInterpretar` (fora do try de `Executar`), atravessa `Enviar`/`QuitacaoService` e chega ao `Application.OnException` (T11). Impacto de confidencialidade: **nenhum vazamento** — o tratador global mostra mensagem genérica e loga com mascaramento; a exceção não carrega dado sensível (só o texto de data do Financeiro). Impacto de robustez/integridade: um `dataQuitacao` malformado num 200 aborta `ConfirmarQuitacao` antes de `AtualizarStatus` e antes da fila/reconciliação (T40/T41): o Financeiro fica Quitada, o local Pendente e sem reenvio. Quebra a promessa "falha esperada vira resultado, nunca exceção" do cliente. Um Financeiro comprometido/defeituoso consegue disparar isso à vontade.
+- **Mensagem do Financeiro exibida (SG8-02):** `ExtrairMensagem` devolve o texto do campo `mensagem` do 4xx sem limite de tamanho nem remoção de caracteres de controle, e `QuitacaoService` a repassa "íntegra" à UI (`'Quitação recusada pelo Financeiro: ' + Mensagem`). Sem injeção (texto vai a label/diálogo VCL, sem SQL/HTML/comando; não é gravado em banco nem log), mas uma mensagem gigante ou com quebras de linha/controle pode deformar o diálogo ou induzir o operador (texto arbitrário com aparência de instrução do sistema). Um Financeiro legítimo não devolve dado pessoal aí por contrato, mas nada impede.
+
+### 5. LGPD/dado pessoal em payload
+Quitação: `vendaId`, `clienteId` (id numérico), `valorTotal`, itens (`produtoId`, `quantidade`, `precoUnitario`) — sem nome, CPF/CNPJ, e-mail ou endereço; bate com o contrato v1.0 (minimização OK). Cancelamento: `vendaId` + `motivo` (texto livre do operador, já exigido pelo contrato/RN); **SG8-03 (baixa):** o campo livre pode receber dado pessoal digitado pelo operador e é enviado ao Financeiro sem filtro — aceitável para o contrato, mas a UI de cancelamento (Lote 9+) deve orientar a não inserir CPF/e-mail. Log: nada disso é logado. Compliance obrigatório: sem pendência.
+
+### 6. Requisitos de segurança operacional para o chapéu DevOps
+Produção: BaseUrl com `https://` e certificado válido (validar contra o cert, sem desabilitar verificação); `ERPV_FINANCEIRO_APIKEY` só por variável de ambiente/secret, INI sem a chave; mock (`tools/mock-financeiro`, http) só em dev/staging local, fora do pacote de release.
+
+### Achados do lote
+
+| # | Achado | Severidade | Situação |
+|---|---|---|---|
+| SG8-01 (= RF8-01) | `TryIsoToDateTime` captura só `EConvertError`; exceção escapa do cliente e deixa venda Pendente sem fila/reconciliação. Sem vazamento de dado | Média (robustez/integridade; segurança: baixa) | Débito com prazo: antes do fechamento do Lote 9 (T38-T41); mesma correção do QA (`except on Exception`, ou capturar em `Enviar` ao redor de `AInterpretar` devolvendo `RespostaInvalida`); tarefa em `Refatoração Lote-8` |
+| SG8-02 | Mensagem 4xx do Financeiro sem limite/sanitização, exibida ao operador | Baixa | Débito: truncar (ex.: 200 chars) e trocar controles/quebras por espaço em `ExtrairMensagem`; prazo antes do Lote 16 |
+| SG8-03 | `motivo` de cancelamento livre pode carregar dado pessoal digitado | Baixa | Débito/orientação de UI no Lote 9+; sem código no Lote 8 |
+| SG8-04 | BaseUrl sem exigência de https (http local só dev) | Baixa (observação) | Requisito de DevOps (seção 6); opcional: aviso no log se `http://` e host não-local |
+
+### Veredito do lote (chapéu DevSecOps)
+**Aprovado com débito** (SG8-01 média; SG8-02..04 baixos). Sem achado alto/crítico nem compliance obrigatório em aberto; ApiKey e corpos fora de log/URL/mensagem, redirects desligados, timeouts aplicados, payload minimizado. Não bloqueia deploy. Pendente no fechamento estrutural: registrar SG8-01 (junto com RF8-01) e SG8-02 em `Refatoração Lote-8` com os prazos acima. Nota: sobe para Alta se o SG8-01 deixar de ser tratado antes de a quitação ir a produção com Financeiro real, pelo risco de divergência de estado entre sistemas.
+
+Escala para: nenhum (sem bloqueio). Gestor: sem relevância estratégica. Coordenador: não. Executor: correção de SG8-01/SG8-02 via `Refatoração Lote-8`, não imediata.

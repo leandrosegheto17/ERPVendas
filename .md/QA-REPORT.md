@@ -401,3 +401,55 @@ T31 e T32 `Concluída`. Dependências da Seção 4 (T31->T14,T15,T26,T29; T32->T
 ### Veredito do lote (chapéu QA)
 
 **Aprovado com ressalvas.** Nenhuma reprovação crítica; T31 e T32 aprovadas com ressalvas (achados simples RF7-01..RF7-03); o critério central de cada tarefa está coberto pelo fluxo real aprovado pelo usuário e pela leitura do código, mas Visualizar de Quitada/Cancelada, filtros, vazio/erro e DPI **não** foram provados em execução. Segue para auditoria de segurança (chapéu DevSecOps).
+
+
+## Lote 8 — Cliente REST do Financeiro (D3)
+
+Base: critério de aceite de T33-T36 no `TASK.md`, `docs/contrato-api-financeiro.md` v1.0, ADR-004/005/006, Diretrizes (Seção 1), `tools/mock-financeiro/mock_financeiro.py` e código real lido (`ERPV.Integracao.FinanceiroDTOs`, `ERPV.Integracao.FinanceiroClient`, `ERPV.Dominio.Resultados`, `ERPV.Dominio.Enums`, `IFinanceiroGateway`, `ERPV.Core.Config`, consumo em `ERPV.Negocio.QuitacaoService`), sem usar a nota do Executor como base. Limitação declarada: sem CLI de compilação (Delphi Community), sem testes automatizados e sem execução contra o mock; **toda a verificação é por inspeção estática**. T33-T36 estão "Concluída — pendente de confirmação de compilação/execução na IDE". "Leitura" = conferido pelo Validador no código-fonte.
+
+| Tarefa | Critério (resumo) | Verificação (leitura) | Veredito |
+|---|---|---|---|
+| T33 | JSON com `valorTotal` ponto/2 casas, ids string, `itens[]` conforme contrato; parse de `Quitada`+`dataQuitacao` com pt-BR ativo | `FinanceiroFormatSettings` (en-US + separadores explícitos, nunca o `FormatSettings` global); `CurrToStrF(ffFixed,2)` => `350.90`, sem milhar; `TJSONNumber.Create(string)` preserva o texto; `vendaId/clienteId/produtoId` = `TJSONString`; `quantidade` inteiro; nomes e ordem de campos idênticos ao contrato; `motivo` omitido se vazio; parse por `ISO8601ToDate(...,False)` (independe de locale, sem conversão de fuso); `status` via `TryStrToStatusVenda` (fora do enum => False); `Quitada` exige `dataQuitacao` válida; campos extras e `vendaId` ausente tolerados; `try/finally` libera os objetos JSON. Sem Vcl/FireDAC/System.Net; `uses` só Domínio + `System.*`; sem `inline var`; BOM presente. Ressalva: RF8-01 | **Aprovado com ressalva** (RF8-01) |
+| T34 | Contra o mock: ok => Sucesso; recusa => Recusado (mensagem ou fallback "código HTTP xxx"); erro500/timeout => Indisponível sem travar além do timeout; servidor parado => Indisponível | `THTTPClient` síncrono; `ConnectionTimeout/SendTimeout/ResponseTimeout := TimeoutMs` (já em ms, `TimeoutSegundos*1000`); `X-Api-Key` só se `Trim(ApiKey) <> ''` e nunca logada; rota/método batem com o mock; 2xx => parser (válido => `Sucesso(Status,Data)`, inválido => `RespostaInvalida`); 4xx => `Recusado(codigo, mensagem do corpo ou fallback "... (codigo HTTP xxx)")`, compatível com o 422 `{"mensagem":...}` do mock; 5xx e demais => `Indisponivel(codigo)`; exceção de rede/timeout capturada em `Executar` e devolvida como `Indisponivel(0,...)` (mock `timeout` dorme 11 s > 10 s; `offline-simulado` derruba o socket; mock parado recusa conexão: os três caem no `except`); log só método/rota/código/nome da classe da exceção, sem corpo, cabeçalho ou chave; `HandleRedirects := False`; `try/finally` libera `THTTPClient` e stream; `Enviar` genérico reutilizado por T35/T36. Ressalva: RF8-01 (exceção pode escapar do parser) | **Aprovado com ressalva** (RF8-01) |
+| T35 | Mock: ok => Cancelada; recusa/500 mapeados como em T34 | POST `/api/vendas/cancelamento` (bate com o mock); corpo `{"vendaId":"1042","motivo":...}` (motivo omitido se vazio); 2xx com `svCancelada` => `Sucesso`; 2xx com outro status (ex.: Quitada) ou corpo inválido => `RespostaInvalida`; 4xx/5xx/rede pelo mesmo `Enviar` | **Aprovado** |
+| T36 | Mock devolve Quitada/Pendente e o cliente converte para enum; status desconhecido => RespostaInvalida | GET `/api/vendas/{id}/status` (id via `IntToStr`, bate com o mock); `Status` por `TryStrToStatusVenda`; desconhecido/corpo inválido => `RespostaInvalida`; 404 => `Recusado` (contrato 1.3); `vendaId` opcional/tolerante; sem corpo enviado | **Aprovado** |
+
+### Testes de integração (dentro do lote)
+
+- Contrato `IFinanceiroGateway`: `TFinanceiroClient` implementa as 3 assinaturas idênticas às da interface, retornando `TResultadoFinanceiro` do Domínio; sem stubs restantes.
+- Consumidor `TQuitacaoService` (leitura): trata `rfSucesso` (exige `svQuitada`, usa `DataQuitacao`, `0 => Now`), `rfRecusado` (mensagem íntegra, fallback com código), `rfIndisponivel` (reconcilia por `ConsultarStatus` antes de enfileirar) e `rfRespostaInvalida`. Coerente com o mapa do cliente: `CodigoHttp` 0 em falha de rede, código real em 5xx; `Sucesso` do GET status vem com `DataQuitacao = 0`, e o serviço já cobre com `Now`.
+- Mock x cliente (leitura): rotas, métodos, códigos (422/500), corpo `{"mensagem"}`, `vendaId` string e `dataQuitacao` sem timezone são tratados pelo cliente. O mock gera a data em UTC; o cliente não converte fuso (contrato: horário local assumido igual), diferença só visível se a máquina não estiver em UTC (T55/C# real).
+- Composition root: `TFinanceiroClient` ainda não é instanciado em `ERPV.App.Root` (entra em T38, conforme nota do Executor); não é reprovação de T33-T36.
+- Não aplicável: cross-platform e `API-CONTRACT.yaml` (projeto Delphi VCL desktop; referência é `docs/contrato-api-financeiro.md`).
+
+### Requisitos não funcionais
+
+- Timeout em ms nas 3 propriedades; sem threads; nenhuma transação de banco no cliente (ADR-006).
+- Segurança: `X-Api-Key` e corpo nunca logados; exceção de rede reduzida ao nome da classe (sem URL). Sem Vcl/FireDAC em Integração e Domínio (busca por texto: só comentários).
+- Locale: nenhuma conversão numérica/data dos DTOs depende do locale do SO.
+- Delphi 10.3: sem `inline var`. UTF-8: `DTOs` com BOM; `Client` sem BOM mas 100% ASCII (0 bytes não ASCII).
+- Não verificados: comportamento real de timeout (teto de 10 s), performance.
+
+### Achados (bug-documentation) — todos Simples, nenhum Crítico
+
+- **RF8-01 (Simples):** `TryIsoToDateTime` só captura `EConvertError`, mas `ISO8601ToDate` (System.DateUtils) levanta `EDateTimeException` em data inválida (conhecimento da RTL, não exercitado; confirmar na IDE). Passos: resposta 200 de quitação com `"dataQuitacao":"xx"` ou `2026-13-40T99:00:00`. Esperado: `RespostaInvalida`. Obtido (por leitura): exceção escapa de `TryParseQuitacaoResponse`, atravessa o método anônimo e `Enviar` (que só protege `Executar`) e chega ao `QuitacaoService`, contrariando "sem exceção para falha esperada". Cenário raro (Financeiro mal-comportado); correção de uma linha: `TryISO8601ToDate(Valor, Data, False)` ou capturar `Exception`; opcionalmente `try/except` em volta de `AInterpretar` em `Enviar`.
+- **RF8-02 (Simples, documentação):** nota de T34 no `TASK.md` diz que T35/T36 "são stubs Indisponível", já superado; nota de T33 cita `EConvertError`/`ISO8601ToDate` sem a ressalva de RF8-01.
+
+Observações (não são reprovação): (a) `ConsultarStatus` ignora `dataQuitacao` do GET (contrato v1.0 não a define; o mock a envia), então a reconciliação de T41 grava `Now`; considerar lê-la se o C# confirmar (T55). (b) Os timeouts do `THTTPClient` são por operação, não um teto total.
+
+Padrão recorrente: nenhum. Sem escalação ao `coordenador`. Este relatório não alterou o `TASK.md`; RF8-01/RF8-02 precisam entrar em `Refatoração Lote-8` (Seção 3) no fechamento estrutural.
+
+### O que só a execução na IDE/mock confirma (ressalva, não reprovação por si só)
+
+1. Compilação (Shift+F9) de `DTOs` e `Client` com 0 erros; em especial a disponibilidade em 10.3 de `THTTPClient.SendTimeout`, do construtor `TStringStream.Create(string, TEncoding, Boolean)` e das assinaturas `Get/Post` com `TNetHeaders`.
+2. Roteiros manuais dos cabeçalhos das units contra o mock (porta 8101): modos `ok`, `recusa` (422 + mensagem), `erro500`, `timeout` (retorno em ~10 s, `CodigoHttp 0`), `offline-simulado`, mock parado; `X-Api-Key` presente só com chave configurada. Nota: o mock devolve 200 `Pendente` para id desconhecido, então o 404 do passo 10 só se exercita em rota errada.
+3. Saída de `SerializarQuitacaoRequest` idêntica ao exemplo do contrato com locale pt-BR ativo; `TryParseQuitacaoResponse` retornando `22/09/2026 14:35:12`.
+4. Tipo real da exceção de RF8-01.
+
+### Fechamento estrutural
+
+T33-T36 `Concluída` (pendentes de confirmação na IDE). Dependências da Seção 4 (T33->T08,T09; T34->T33,T05,T11; T35/T36->T34) resolvidas e não órfãs; T34 desbloqueia o Lote 9 (já usa `IFinanceiroGateway`). Nenhuma tarefa `Bloqueada`. Nenhuma escalação ao `coordenador`. Pendente, fora do escopo desta execução: registrar RF8-01/RF8-02 em `Refatoração Lote-8` e marcar o lote `Validado`.
+
+### Veredito do lote (chapéu QA)
+
+**Aprovado com ressalvas.** Nenhuma reprovação crítica; T35 e T36 aprovadas, T33 e T34 aprovadas com ressalva (RF8-01); 2 ajustes simples; ressalva geral de compilação/execução pendente na IDE/mock. Segue para auditoria de segurança (chapéu DevSecOps), que deve olhar em especial `X-Api-Key`, logs e a exceção que escapa em RF8-01.
