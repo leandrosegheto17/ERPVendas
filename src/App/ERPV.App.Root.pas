@@ -118,7 +118,10 @@ uses
   ERPV.Dominio.Contratos.IFilaRepository,
   ERPV.Negocio.ClienteService,
   ERPV.Negocio.ProdutoService,
-  ERPV.Negocio.VendaService;
+  ERPV.Negocio.VendaService,
+  ERPV.Negocio.QuitacaoService,
+  ERPV.Dominio.Contratos.IFinanceiroGateway,
+  ERPV.Integracao.FinanceiroClient;
 
 type
   /// <summary>
@@ -142,6 +145,8 @@ type
     FProdutoService: TProdutoService;
     FVendaService: TVendaService;
     FFilaRepository: IFilaRepository;
+    FFinanceiro: IFinanceiroGateway;
+    FQuitacaoService: TQuitacaoService;
   public
     /// <exception cref="EConfiguracao">INI ausente ou invalido (T09).</exception>
     /// <exception cref="EInfra">Falha ao conectar ao banco (T12).</exception>
@@ -159,6 +164,7 @@ type
     property ProdutoService: TProdutoService read FProdutoService;
     property VendaService: TVendaService read FVendaService;
     property FilaRepository: IFilaRepository read FFilaRepository;
+    property QuitacaoService: TQuitacaoService read FQuitacaoService;
 
     // Proximos incrementos (T17 ClienteRepository, T21 ProdutoRepository,
     // T25 VendaRepository, T37 FilaRepository, servicos de negocio etc.):
@@ -204,7 +210,9 @@ begin
     FProdutoRepository); // T27
   FFilaRepository := TFilaRepository.Create(FConexao, FLogger); // T37
 
-  // Proximos incrementos (T37...) entram aqui.
+  FFinanceiro := TFinanceiroClient.Create(FConfiguracao.Financeiro.BaseUrl,
+    FConfiguracao.Financeiro.TimeoutMs, FConfiguracao.Financeiro.ApiKey, FLogger); // T34
+  FQuitacaoService := TQuitacaoService.Create(FVendaRepository, FFinanceiro, FFilaRepository); // T38
 end;
 
 destructor TRootAplicacao.Destroy;
@@ -216,6 +224,8 @@ begin
   if Assigned(Application) then
     Application.OnException := nil;
 
+  FQuitacaoService.Free; // T38, antes de Venda/Financeiro
+  FFinanceiro := nil; // T34
   FVendaService.Free; // T27, antes dos repositorios
   FVendaRepository := nil; // T25, antes de FConexao
   FFilaRepository := nil; // T37, antes de FConexao
