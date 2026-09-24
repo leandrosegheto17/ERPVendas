@@ -133,6 +133,9 @@ function TFinanceiroClient.ExtrairMensagem(const ACorpo: string): string;
 var
   LVal: TJSONValue;
   LMsg: TJSONValue;
+  LI, LTam: Integer;
+const
+  CMaxMensagem = 200;
 begin
   Result := '';
   if Trim(ACorpo) = '' then
@@ -152,6 +155,18 @@ begin
     end;
   finally
     LVal.Free; // Free em nil e seguro
+  end;
+  // Uma linha, sem controles; teste de vazio (fallback "codigo HTTP") fica depois da limpeza
+  for LI := 1 to Length(Result) do
+    if Result[LI] < ' ' then
+      Result[LI] := ' ';
+  Result := Trim(Result);
+  if Length(Result) > CMaxMensagem then
+  begin
+    LTam := CMaxMensagem;
+    if (Result[LTam] >= #$D800) and (Result[LTam] <= #$DBFF) then
+      Dec(LTam); // nao deixa par substituto partido
+    Result := Trim(Copy(Result, 1, LTam)) + #$2026;
   end;
 end;
 
