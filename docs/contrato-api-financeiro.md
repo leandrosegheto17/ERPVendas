@@ -207,7 +207,7 @@ rotas.
 | Data | Versão | Mudança | Status |
 |---|---|---|---|
 | 21/09/2026 | 1.0 | Contrato inicial recebido do lado C# (3 rotas, sem formato de erro/idempotência formalizados) | **Vigente** |
-| 22/09/2026 | 1.1 | Proposta C1-C8: formato de erro padronizado, códigos HTTP por cenário (incl. `409`/`422` para DEC-08/09), idempotência de quitação, enum fechado de status, formalização de serialização | **Proposta — enviada ao contato C# em 22/09/2026, aguardando confirmação até 23/09/2026** |
+| 22/09/2026 | 1.1 | Proposta C1-C8: formato de erro padronizado, códigos HTTP por cenário (incl. `409`/`422` para DEC-08/09), idempotência de quitação, enum fechado de status, formalização de serialização | **Proposta enviada ao contato C# em 22/09/2026 (prazo pedido: 23/09/2026); não houve resposta escrita — a implementação da v1.1 pelo C# foi confirmada em 24/09/2026 pelo smoke T54 (ver linhas de 24/09)** |
 | 24/09/2026 | smoke T54 | Smoke com curl contra o Financeiro C# real (http://localhost:5000, chave via `ERPV_FINANCEIRO_APIKEY`, nunca registrada). O C# implementa de fato a v1.1 (envelope `{erro:{codigo,mensagem}}`, 400/401/404/409, idempotência, `X-Correlation-Id`, alias `/api/v1`). Divergências D1-D9 abaixo, a tratar na T55. | **Registrado; ajustes de código na T55** |
 | 24/09/2026 | 1.1 (registro T55) | **Confirmação: v1.1 implementada pelo C#** (evidência = smoke T54, curl + app na IDE; não houve resposta escrita do contato). DEC-08 respondida: recusa = 400 (`VALOR_TOTAL_DIVERGENTE`, `PAYLOAD_INVALIDO`) ou 409 (`VENDA_JA_CANCELADA`, `DADOS_DIVERGENTES`, `MOTIVO_OBRIGATORIO`), **sem 422**. DEC-09 respondida: o C# aceita cancelar Quitada com motivo (200) e devolve 409 `MOTIVO_OBRIGATORIO` sem motivo; o Vendas mantém o bloqueio local (só cancela Pendente). Ajustes no cliente: D1 (envelope `erro`), D2 (`409 CONFLITO_CONCORRENCIA` = `Indisponivel`/retentável, sustentado pelo contrato-v1.1 do Financeiro; demais 4xx = `Recusado`), D3 (401 = mensagem de configuração da chave), D4 (só documentação: C# envia UTC). Mock passou a responder 400 com envelope. Não verificado contra o C# real: 409 `CONFLITO_CONCORRENCIA`, 5xx e timeout (cobertos por testes DUnitX de função pura, `tests/ERPV.Testes.FinanceiroClientErros.pas`, compilados e executados na IDE em 24/09/2026: 78/78 testes DUnitX passaram). | **Confirmada (v1.1 implementada; ajustes T55 aplicados no código, sem compilação/execução por CLI)** |
 
@@ -240,7 +240,7 @@ errada 401 `NAO_AUTORIZADO` (corpos idênticos); alias `/api/v1/vendas/{id}/stat
 | D2 | Não existe `422`: recusa por regra de negócio é 400 (`VALOR_TOTAL_DIVERGENTE`, `PAYLOAD_INVALIDO`) ou 409 (`VENDA_JA_CANCELADA`, `DADOS_DIVERGENTES`, `MOTIVO_OBRIGATORIO`, `CONFLITO_CONCORRENCIA`). Mock/roteiro do cliente assumem 422. | Tratamento genérico 4xx continua correto (Recusado, sem enfileirar), exceto `CONFLITO_CONCORRENCIA` (409, o C# diz que pode repetir) | Decidir se `CONFLITO_CONCORRENCIA` deve ser tratado como retentável; atualizar mock para 400/409 |
 | D3 | `X-Api-Key` é **obrigatório** no C# (todas as rotas exceto `/api/health`); o contrato do Vendas diz opcional (DEC-07) e o INI padrão vem com `ApiKey=` vazio. Chave ausente e inválida dão 401 idêntico. | Sem chave configurada, toda operação vira `Recusado` 401 (não enfileira) | Marcar chave como obrigatória em produção; mensagem específica para 401 (configuração, não recusa de negócio) |
 | D4 | `dataQuitacao` vem em UTC com sufixo `Z` e 7 casas fracionárias (`2026-09-24T12:57:36.3587666Z`); o contrato do Vendas dizia "sem timezone, sem conversão". O cliente usa `ISO8601ToDate(..., False)`. | **Verificado no app (2026-09-24):** `DATA_QUITACAO` gravada e exibida no horário local correto; parse com 7 casas e "Z" sem falha | Nenhuma correção; só documentar que o C# envia UTC |
-| D5 | Quitação repetida com payload diferente para venda **já Quitada** devolve 200 (não `409 DADOS_DIVERGENTES`; esse código só ocorre em venda Pendente registrada). | Sem impacto no fluxo normal; idempotência confirmada | Ajustar a descrição de `DADOS_DIVERGENTES` no contrato |
+| D5 | Quitação repetida com payload diferente para venda **já Quitada** devolve 200 (não `409 DADOS_DIVERGENTES`; esse código só ocorre em venda Pendente registrada). | Sem impacto no fluxo normal; idempotência confirmada | Ajustar a descrição de `DADOS_DIVERGENTES` no contrato — **status: feito** (documentação apenas, sem mudança de código): `DADOS_DIVERGENTES` (409) só ocorre em venda Pendente já registrada; quitação repetida de venda já Quitada devolve 200 |
 | D6 | Cancelamento de `vendaId` desconhecido devolve 200 `Cancelada` (D-08, cria registro) e cancelar Quitada com motivo é aceito (200). | O Vendas só cancela Pendente, então sem impacto; confirma DEC-09 como "permitido com motivo" no C# | Registrar DEC-08/DEC-09 como respondidas |
 | D7 | `POST /api/vendas` (registrar Pendente) responde 404: não implementado no C#. | Vendas não o usa | Manter fora do escopo |
 | D8 | Mensagens do C# usam vírgula decimal (culture pt-BR do host) em `VALOR_TOTAL_DIVERGENTE`; JSON malformado devolve `PAYLOAD_INVALIDO` com mensagem enganosa ("vendaId é obrigatório"). | Só texto; o Vendas não deve parsear mensagem | Usar apenas `codigo` |
@@ -250,15 +250,18 @@ Não verificados: timeout de 10 s, erro 5xx e
 indisponibilidade real (o C# não foi derrubado), `CONFLITO_CONCORRENCIA` e
 `ERRO_INTERNO` (não provocados), persistência local do resultado.
 
-Quando a confirmação (total, parcial ou negativa) chegar do lado C#, esta
-tabela ganha uma nova linha com a data e o resultado (T55 do TASK.md é
-responsável por esse registro, junto ao ajuste de mapeamento de erro/código/
-`X-Api-Key` no cliente).
+O resultado da confirmação foi registrado pela T55 na linha de 24/09/2026
+("1.1 (registro T55)") da tabela acima, junto aos ajustes de mapeamento de
+erro/código/`X-Api-Key` no cliente (D1-D4). Não houve resposta escrita do
+contato C#; a evidência é o smoke T54. Os cenários "Não verificados" acima
+seguem em aberto (RF14-05).
 
 ---
 
 ## 4. Mensagem para envio ao contato do time C# (ação humana do usuário)
 
+> Registro histórico (22/09): não houve resposta escrita ao pedido; a
+> confirmação veio pelo smoke T54 de 24/09/2026 (Seção 3).
 > O envio desta mensagem é uma ação humana do usuário — não é executada por
 > este agente. O texto abaixo está pronto para colar em e-mail/chat com o
 > contato do time C# do Financeiro.
