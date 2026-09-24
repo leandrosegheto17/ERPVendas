@@ -104,6 +104,7 @@
         <DCCReference Include="src\Negocio\ERPV.Negocio.ProdutoService.pas"/>
         <DCCReference Include="src\Negocio\ERPV.Negocio.VendaService.pas"/>
         <DCCReference Include="src\Negocio\ERPV.Negocio.QuitacaoService.pas"/>
+        <DCCReference Include="src\Negocio\ERPV.Negocio.FilaService.pas"/>
         <DCCReference Include="src\Integracao\ERPV.Integracao.EmailSender.pas"/>
         <DCCReference Include="src\Relatorios\ERPV.Relatorios.PedidoLayout.pas">
             <Form>DMPedidoLayout</Form>
