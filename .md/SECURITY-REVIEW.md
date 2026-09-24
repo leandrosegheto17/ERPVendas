@@ -633,3 +633,59 @@ A11-04/A11-05/R11-1: sem implicação de segurança adicional.
 **Aprovado com débito** (SG11-01 média; SG11-02..06 baixos). Sem achado alto/crítico e sem compliance obrigatório em aberto: SQL parametrizado e somente leitura, `Limpar` confinado à pasta temp, mensagens fixas sem caminho/SQL, log mascarado, sem PII/segredo no .dfm/INI. Não bloqueia deploy. SG11-01 sobe para Alta se, em produção, a pasta ficar em local compartilhado/legível por outros usuários sem limpeza. Pendente no fechamento estrutural: registrar SG11-01, 02, 04 e 06 (com A11-01/02/03) em `Refatoração Lote-11`. Evidência apenas estática (nada compilado/executado).
 
 Escala para: nenhum (sem bloqueio). Gestor: SG11-05 (conteúdo do PDF/máscara do CPF) e licença ReportBuilder antes de produção, informativos e em paralelo. Coordenador: não. Executor: correção via `Refatoração Lote-11`, não imediata. DevOps: requisitos da seção 6.
+
+---
+
+## Lote 12 — E-mail pós-quitação (T48, T49) — chapéu DevSecOps (2026-09-24)
+
+Escopo: `ERPV.Integracao.EmailSender` (T48), `TQuitacaoService.PosQuitacao` (T49, `QuitacaoService.pas:231-304`), `TextoDesfechoQuitacao` (`ERPV.UI.ConfirmacaoVenda.pas:88-102`), `ERPV.Core.Config` (`[SMTP]`, `:251-256`), `FilaRepository` (ULTIMO_ERRO), `EmailValido` (`ERPV.Core.Validadores`). QA do lote (Aprovado com ressalvas) não duplicado. Análise estática manual (sem SAST automatizado no ambiente; Delphi não compila via CLI).
+
+### 1. TLS/SMTP (`EmailSender.pas:164-186`)
+- `TIdSSLIOHandlerSocketOpenSSL` é criado sem `SSLOptions.VerifyMode`/`VerifyDepth`/`OnVerifyPeer`/`RootCertFile`: o padrão do Indy é **não verificar** a cadeia nem o hostname. O canal é cifrado, mas qualquer MITM na rota apresenta certificado próprio e a sessão segue (SG12-01).
+- `UseTLS := utUseExplicitTLS` é **oportunista** no Indy: se o servidor não anuncia (ou um atacante remove) `STARTTLS`, a sessão continua em texto claro e o `AUTH` (usuário/senha) e o PDF com PII trafegam sem cifra. O modo estrito é `utUseRequireTLS` (SG12-01).
+- Contexto: no Mailtrap sandbox (dados fictícios, credencial descartável) o risco é aceitável. Em produção (SMTP real, credencial de conta, PDF com nome/CPF/CNPJ/e-mail do cliente) o vetor vira exposição de credencial + dado pessoal em trânsito; LGPD art. 46 (medidas técnicas). Por isso é Média agora, com **condição de correção antes do primeiro deploy em produção**.
+- `sslvTLSv1_2` fixo (sem fallback a SSL3/TLS1.0): correto. Timeouts 15 s/30 s definidos: ok.
+- DLLs OpenSSL 1.0.2 (spike T02) estão fora de suporte desde 2019 (SG12-02).
+
+### 2. Credenciais
+`Senha` vem de `ERPV_SMTP_PASSWORD` (prioridade) ou INI (fallback texto claro, aceito no ADR-007). Nunca é logada: `LogErro` grava só mensagem fixa + `ClassName`; `LogInfo` sem parâmetros; a mensagem crua de Indy não é usada em lugar algum. Sem segredo literal em unit/INI example. Sem achado; recomenda-se em produção usar só a variável de ambiente (seção 8).
+
+### 3. Erro do SMTP ao usuário
+`Enviar` devolve apenas constantes (`MSG_CREDENCIAL`, `MSG_REJEITADO`, `MSG_SSL`, `MSG_CONEXAO`, `MSG_GENERICA`); nenhuma resposta do servidor, host, usuário ou código vaza. A UI (`TextoDesfechoQuitacao`) mostra texto fixo e, no sucesso, o endereço do próprio cliente ao operador (finalidade legítima). Sem achado.
+
+### 4. PII na fila e no log
+`PosQuitacao` grava em `ULTIMO_ERRO` só: constantes de `EmailSender`, `'Cliente sem e-mail cadastrado'`, `'Venda não encontrada...'` ou `'Falha ao gerar/enviar e-mail: ' + E.ClassName`; nunca o destinatário nem `E.Message`. Além disso `FilaRepository` mascara (`TLogger.MascararSensiveis`) e trunca a `MAX_ERRO`. Nenhum log do `EmailSender` traz e-mail/CPF. Sem achado. Observação: se `Enfileirar` falha, o `except` de `PosQuitacao` (`:298-302`) engole sem registrar nada (SG12-06).
+
+### 5. Injeção de cabeçalho / CRLF
+Assunto e corpo são montados só com `AVendaId` (inteiro) via `Format`: não há entrada de usuário em `Subject`/corpo. O destinatário vem de `Cliente.Email` do banco; a entrada é validada em `ClienteService`/`FormEdicaoCliente` por `EmailValido`, que rejeita qualquer caractere `<= ' '` (inclui CR/LF/TAB), vírgula e ponto e vírgula, e mais de um `@`. Portanto CRLF/múltiplos destinatários não passam pelo caminho normal. Lacuna: `TEmailSender.Enviar` só faz `Trim` e checa vazio, sem revalidar; dado legado/importado/gravado direto no banco chegaria a `Recipients.EmailAddresses` (Indy interpreta vírgula como lista de destinatários; risco de envio do PDF a terceiros) (SG12-03). O anexo é caminho gerado internamente (`Pedido_<Id>_<ts>.pdf`), sem entrada de usuário.
+
+### 6. PDF com PII na pasta temp durante o envio
+Ciclo: `GerarPdf` -> `Enviar` (síncrono, até ~15 s de conexão + 30 s de leitura) -> `Limpar` no mesmo `PosQuitacao`, em sucesso e em falha e mesmo com exceção (o `Limpar` fica fora do `try/except`, `:286-292`). O `TIdAttachmentFile` é liberado com `LMsg` no `finally` de `Enviar`, antes do `Limpar`, então não há handle preso impedindo a exclusão. A janela de exposição existe (PDF legível por segundos, até ~45 s em servidor lento) e o resíduo em queda do processo continua coberto por SG11-01/SG11-02 (sem varredura na inicialização, ACL herdada, nome previsível); não é achado novo, mas SG11-01/02 agora têm caminho real de ocorrência (T49 ativo) e o prazo deve ser respeitado (SG12-04).
+
+### 7. Compliance (LGPD)
+Finalidade: envio da confirmação ao próprio titular (RF-21), base contratual; minimização: assunto/corpo sem PII, PDF com CPF/CNPJ completo (SG11-05 já sinalizado). Trânsito: ver SG12-01. Terceiro: Mailtrap é serviço externo; enviar dados reais de clientes a ele em dev seria transferência a terceiro sem finalidade (SG12-05). Logs e fila sem PII em claro. Nenhum requisito obrigatório do SDD Seção 7 fica sem atendimento em desenvolvimento/sandbox; o item de TLS é condição para produção.
+
+### 8. Requisitos de segurança operacional para o chapéu DevOps
+- Produção: `UsaTLS=1` obrigatório, porta 587/465, senha só por `ERPV_SMTP_PASSWORD` (INI sem `Senha`), conta SMTP de menor privilégio (só envio), rotação de credencial.
+- Homologação/dev com Mailtrap: somente dados fictícios (nunca base de produção/cópia com clientes reais).
+- Distribuir OpenSSL 1.0.2u (última) ou a versão suportada pelo Indy adotado, com origem/hash conferidos; monitorar EOL.
+- Remetente com domínio real e SPF/DKIM/DMARC configurados antes do go-live (o padrão `nao-responder@erpvendas.local` não é entregável na internet).
+- Requisitos da seção 6 do Lote 11 (ACL da `PastaPdfTemp`) continuam valendo.
+
+### Achados do lote
+
+| # | Achado | Severidade | Situação |
+|---|---|---|---|
+| SG12-01 | Sem verificação de certificado TLS (`VerifyMode` padrão vazio, sem `OnVerifyPeer`/CA) e `utUseExplicitTLS` oportunista (downgrade por remoção de STARTTLS): MITM lê usuário/senha SMTP e PDF com PII; aceitável só em Mailtrap sandbox com dados fictícios | Média (Alta se produção sem correção) | Débito com prazo: **antes do primeiro deploy em produção/smoke T54 com SMTP real**; `SSLOptions.VerifyMode := [sslvrfPeer]`, `VerifyDepth`, `OnVerifyPeer` validando cadeia + hostname (`RootCertFile` ou repositório do SO) e `utUseRequireTLS` quando `UsaTLS=1`; tarefa em `Refatoração Lote-12`. Não bloqueia o lote (dev) |
+| SG12-02 | OpenSSL 1.0.2 (spike T02) sem suporte, CVEs conhecidos; uso apenas como cliente para host fixo configurado | Baixa | Débito: registrar EOL, usar 1.0.2u e planejar migração (Indy/OpenSSL 1.1+); requisito ao DevOps; `Refatoração Lote-12` (documental) |
+| SG12-03 | `TEmailSender.Enviar` não revalida o destinatário (só `Trim`/vazio); CRLF/vírgula em dado legado ou gravado fora do fluxo validado chegaria a `Recipients` | Baixa (defesa em profundidade; caminho normal protegido por `EmailValido`) | Débito: chamar `EmailValido` em `Enviar` e retornar `Falha(MSG_DESTINATARIO)`; teste unitário com lista de destinatários e com CRLF; `Refatoração Lote-12` |
+| SG12-04 | PDF com PII legível na pasta temp durante o envio síncrono (até ~45 s) e resíduo em queda do app; sem varredura (continuação de SG11-01/SG11-02) | Baixa (Média se pasta compartilhada; sem código novo no T49) | Sem tarefa nova; vincular T49 ao prazo de SG11-01/02 (antes do smoke T54) |
+| SG12-05 | Envio de e-mail com dados reais de cliente ao Mailtrap (terceiro) em dev/homologação | Baixa (operacional/LGPD) | Regra ao DevOps/Gestor: apenas dados fictícios no sandbox; sem código |
+| SG12-06 | `PosQuitacao` engole falha de `Enfileirar` (`:298-302`) sem registrar: e-mail perdido sem rastro nem reconciliação; mesma classe de SG9-01 | Baixa (integridade; sem vazamento) | Débito: registrar (log mascarado, só Id da venda) e sinalizar na mensagem da UI; junto de SG9-01; `Refatoração Lote-12` |
+
+Sem achados de: injeção via assunto/corpo, vazamento de senha, PII em log/fila/mensagem, erro do SMTP exposto, traversal no anexo.
+
+### Veredito do lote (chapéu DevSecOps)
+**Aprovado com débito** (SG12-01 média com condição de produção; SG12-02..06 baixos). Sem achado alto/crítico e sem compliance obrigatório em aberto no escopo dev/sandbox: credenciais fora do log e do código, mensagens de erro fixas, `ULTIMO_ERRO` sem PII (fixo + mascarado + truncado), assunto/corpo sem entrada de usuário, destinatário validado na origem, PDF apagado em sucesso e falha. Não bloqueia o deploy de homologação/Mailtrap. **SG12-01 sobe para Alta e passa a bloquear deploy em produção com SMTP real** se o certificado não for verificado e o STARTTLS exigido.
+
+Escala para: nenhum bloqueio. Gestor: informativo, SG12-05 (dados reais em serviço externo) e SG11-05 (CPF completo no PDF). Coordenador: não. Executor: correção via `Refatoração Lote-12`, não imediata (SG12-01 antes de produção). DevOps: requisitos da seção 8.
