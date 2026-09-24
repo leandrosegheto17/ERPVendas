@@ -53,3 +53,8 @@ logs/
 
 # Pacote de entrega gerado por scripts/montar-bin.ps1 (T61)
 bin/
+
+# Bancos Firebird e backups (T63) e runtime packages proprietarios (nao redistribuiveis)
+*.fdb
+*.fbk
+*.bpl
