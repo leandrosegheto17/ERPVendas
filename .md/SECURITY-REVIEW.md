@@ -823,3 +823,15 @@ Achados (finding-severity-classification):
 - Severidade (finding-severity-classification): nenhum alto/crítico; resíduo RF11-09 Baixo, com tarefa em `Refatoração Lote-11`. Nenhum compliance obrigatório em aberto. Bloqueio 006 não afeta o lote.
 
 **Veredito: Aprovado com débito baixo** (RF11-09). Deploy não afetado por este lote.
+
+
+## Refatoração Lote-3 — validação (2026-09-24)
+
+Chapéu DevSecOps, por leitura. Commit 17dbc05.
+
+- Superfície: mudanças de cor (token), BOM e remoção de unit do projeto; nenhum dado sensível, autenticação, rede, log ou I/O tocado.
+- Débito do Lote 3 (Achado 3, baixa): resolvido. Remover `ERPV.UI.FormTesteTema` do `.dpr`/`.dproj` reduz a superfície do release (form de teste sem autenticação e sem dados reais, dados fictícios em memória); a unit segue só em disco como utilitário manual e não é compilada no build.
+- Segredos: nenhum introduzido (diff sem credenciais, chaves ou strings de conexão).
+- Severidade: nenhum achado novo. Nenhum compliance em aberto. Bloqueio 006 não afeta o lote.
+
+**Veredito: Aprovado** (sem débito novo). Deploy não afetado por este lote.

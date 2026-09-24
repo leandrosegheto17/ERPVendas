@@ -930,3 +930,16 @@ Nenhum erro de compilação certo; dúvida de API só em DisplayFormat (RF11-08)
 Novas tarefas: RF11-07 (conferir cabeçalho/Detail/paginação no Designer), RF11-08 (formato pt-BR/locale e DisplayFormat), RF11-09 (ponto-ponto e unidade mapeada em PastaPdfTempValida).
 
 **Veredito: Aprovado com ressalvas.** Sem reprovação crítica. Liberado ao DevSecOps.
+
+
+## Refatoração Lote-3 — validação (2026-09-24)
+
+Chapéu QA, por leitura (nada compilado/executado). Commit 17dbc05 (RF3-01..03).
+
+- RF3-01: `clERPVTextoSobreDestaque = TColor($FFFFFF)` é branco em qualquer ordem de bytes (mesmo valor de `clWhite`); nome/formato/comentário coerentes com os vizinhos. FormMain (~l.270) e Tema.EstilizarBotao (NormalText/HotText/PressedText/Font.Color) usam o token; ambas as units já têm `ERPV.UI.Tokens` no uses. Grep em `src/UI` por `clWhite|clBlack|clSilver|clGray|TColor(|$RRGGBB` fora de Tokens: zero. Outros literais (clRed/clBlue/RGB( etc.): nenhum. OK.
+- RF3-02: FormBaseLista.pas começa com EF BB BF, diff de 1 linha (só a 1ª), CRLF preservado. Todas as .pas de `src/UI` têm BOM; as 7 .pas sem BOM em `src/` e `tests/` são ASCII puro. OK.
+- RF3-03: linha removida do meio da lista uses do `.dpr` mantém a sintaxe (vírgulas intactas, `ERPV.UI.Tokens` termina com `;`); `.dproj` íntegro (só 1 linha `DCCReference` removida). Nenhuma outra referência a `ERPV.UI.FormTesteTema` no repositório além do próprio arquivo (utilitário manual em `src/UI`), do comentário de FormBaseLista e das notas do TASK.md. Nenhum roteiro em `docs/` manda abrir o form de teste. Nota cosmética (sem tarefa): a nota histórica da T68 no TASK.md ainda diz que o form está "no .dproj" (era verdade na época; superada pela RF3-03).
+- Notas do TASK.md de RF3-01..03: uma linha por célula, honestas (declaram "não compilado nem executado"). Detalhe irrelevante: o critério do RF3-01 cita FormMain "~linha 209", hoje ~270.
+- Pendência de verificação real (não é reprovação): compilar/abrir a tela principal na IDE e conferir aparência inalterada (faixa de marca e botão Primário).
+
+**Veredito: Aprovado com ressalvas** (só a verificação em compilação real, herdada de todo o lote). Sem reprovação crítica nem simples nova. Liberado ao DevSecOps.
