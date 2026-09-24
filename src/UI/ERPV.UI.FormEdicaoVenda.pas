@@ -74,6 +74,7 @@ type
     FQuitacaoService: TQuitacaoService;
     FVendaCancelada: Boolean;
     FBtnConfirmar: TcxButton;
+    FConfirmando: Boolean; // reentrancia (SG9-04): ignora cliques enfileirados
     FLblEspera: TLabel;
     FLblTitulo: TLabel;
     FPnlChip: TPanel;
@@ -112,6 +113,7 @@ type
     function PrecoDoProduto(AProdutoId: Integer): Currency;
     procedure RecalcularLinhas;
     procedure AtualizarTotal;
+    function TotalDaGrade: Currency;
     procedure MostrarErroCliente(const AMsg: string);
     procedure LimparErroCliente;
     procedure MostrarErroItens(const AMsg: string);
@@ -683,20 +685,23 @@ begin
   AtualizarTotal;
 end;
 
-procedure TFormEdicaoVenda.AtualizarTotal;
+function TFormEdicaoVenda.TotalDaGrade: Currency;
 var
   I: Integer;
-  Total: Currency;
   V: Variant;
 begin
-  Total := 0;
+  Result := 0;
   for I := 0 to FView.DataController.RecordCount - 1 do
   begin
     V := FView.DataController.Values[I, FColSubtotal.Index];
     if not (VarIsNull(V) or VarIsEmpty(V)) then
-      Total := Total + VarAsType(V, varCurrency);
+      Result := Result + VarAsType(V, varCurrency);
   end;
-  FLblTotal.Caption := 'Total  R$ ' + FormatCurr(cFormatoMoeda, Total);
+end;
+
+procedure TFormEdicaoVenda.AtualizarTotal;
+begin
+  FLblTotal.Caption := 'Total  R$ ' + FormatCurr(cFormatoMoeda, TotalDaGrade);
 end;
 
 { ---- dados ---- }
@@ -861,20 +866,33 @@ var
 begin
   if (FQuitacaoService = nil) or (FVendaId <= 0) or FSomenteLeitura then
     Exit;
-  Venda := FVendaService.Obter(FVendaId);
+  if FConfirmando then
+    Exit;
+  FConfirmando := True;
   try
-    if Venda = nil then
-      raise ERegraNegocio.Create('Venda não encontrada');
-    Total := Venda.ValorTotal;
+    Venda := FVendaService.Obter(FVendaId);
+    try
+      if Venda = nil then
+        raise ERegraNegocio.Create('Venda não encontrada');
+      Total := Venda.ValorTotal;
+    finally
+      Venda.Free;
+    end;
+    // A3/RF7-05: nao confirma com total desatualizado (grade != gravado)
+    if TotalDaGrade <> Total then
+    begin
+      Notificar(utnAviso, 'Salve a venda antes de confirmar a quitação.');
+      Exit;
+    end;
+    Espera.Desabilitar := [FBtnConfirmar, BtnSalvar, BtnCancelar, FBtnAdicionar,
+      FBtnRemover, FCmbCliente, FGrade];
+    Espera.Rotulo := FLblEspera;
+    // Excecoes sobem ao handler global; UI restaurada no finally do helper.
+    if ConfirmarVendaComFeedback(FQuitacaoService, FVendaId, Total, Espera) then
+      ModalResult := mrOk; // quitada: fecha e a lista recarrega
   finally
-    Venda.Free;
+    FConfirmando := False;
   end;
-  Espera.Desabilitar := [FBtnConfirmar, BtnSalvar, BtnCancelar, FBtnAdicionar,
-    FBtnRemover, FCmbCliente, FGrade];
-  Espera.Rotulo := FLblEspera;
-  // Excecoes sobem ao handler global; UI restaurada no finally do helper.
-  if ConfirmarVendaComFeedback(FQuitacaoService, FVendaId, Total, Espera) then
-    ModalResult := mrOk; // quitada: fecha e a lista recarrega
 end;
 
 procedure TFormEdicaoVenda.Gravar;
