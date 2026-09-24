@@ -137,8 +137,8 @@ Lote com 7 itens: fundação D1; T08, T09, T10 independentes entre si.
 ### Lote 11 — Relatório e PDF (D4)
 | ID | Tarefa | Dono | Tipo | Prio | Origem | Est.(h) | Depende | Par. | Critério de aceite | Status |
 |---|---|---|---|---|---|---|---|---|---|---|
-| T45 | `VendaRepository`: DataSet do relatório (venda + cliente + itens + totais) | Executor(Delphi) | OBR | P0 | RF-19 | 2 | T25, T03 | T46 (layout pode usar dados fixos) | DataSet devolve nome, documento, itens e total idênticos ao banco para uma venda | Pendente |
-| T46 | Layout ReportBuilder "Confirmação de Pedido" (cabeçalho, cliente, itens, total, status) | Executor(UI) | OBR | P0 | RF-19 | 5 | T45, T67 | - | Preview mostra dados iguais ao registro (conferência com o banco); leitura clara, sem estouro de coluna | Pendente |
+| T45 | `VendaRepository`: DataSet do relatório (venda + cliente + itens + totais) | Executor(Delphi) | OBR | P0 | RF-19 | 2 | T25, T03 | T46 (layout pode usar dados fixos) | DataSet devolve nome, documento, itens e total idênticos ao banco para uma venda | Concluída — pendente de confirmação de compilação/execução na IDE. Nota: `IVendaRepository.RelatorioDataSet(AVendaId)` (1 linha por item, venda+cliente repetidos, SUBTOTAL; ReadOnly); roteiro no cabeçalho de `ERPV.Dados.VendaRepository.pas` |
+| T46 | Layout ReportBuilder "Confirmação de Pedido" (cabeçalho, cliente, itens, total, status) | Executor(UI) | OBR | P0 | RF-19 | 5 | T45, T67 | - | Preview mostra dados iguais ao registro (conferência com o banco); leitura clara, sem estouro de coluna | Bloqueada — Bloqueio 004 (`BLOCKERS.md`): exige o Report Designer da IDE (RBuilder só com `.dcu` aqui); usuário desenha o layout ou fornece referência |
 | T47 | `IRelatorioPedido` impl.: gera PDF em pasta temp configurada e devolve caminho; limpeza do arquivo | Executor(Delphi) | SUG | P0 | RF-20, ADR-007 | 2.5 | T46, T09 | - | Arquivo PDF legível é criado; falha de escrita => EInfra amigável; remoção funciona | Pendente |
 
 ### Lote 12 — E-mail pós-quitação (D4)
