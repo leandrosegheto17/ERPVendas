@@ -139,8 +139,8 @@ type
   /// <summary>
   /// Composition root (ADR-001): monta e mantem vivas, durante o ciclo de
   /// vida do app, as instancias de infraestrutura (Config/Log/Tratador de
-  /// excecoes/Conexao) e, nos proximos incrementos, os repositorios e
-  /// servicos de negocio concretos - todos injetados por construtor nas
+  /// excecoes/Conexao) e os repositorios, gateways e servicos de negocio
+  /// concretos ja montados - todos injetados por construtor nas
   /// classes que os consomem. Nenhuma outra unit deve instanciar essas
   /// classes concretas diretamente.
   /// </summary>
@@ -185,9 +185,9 @@ type
     property RelatorioPedido: IRelatorioPedido read FRelatorioPedido;
     property EmailSender: IEmailSender read FEmailSender;
 
-    // Proximos incrementos (T17 ClienteRepository, T21 ProdutoRepository,
-    // T25 VendaRepository, T37 FilaRepository, servicos de negocio etc.):
-    // novo campo + property aqui, instanciado no construtor logo apos
+    // Ja montados (T17 ClienteRepository, T21 ProdutoRepository,
+    // T25 VendaRepository, T37 FilaRepository, servicos de negocio etc.).
+    // Novo item: campo + property aqui, instanciado no construtor logo apos
     // FConexao e liberado no destructor antes de FConexao. Ver nota no
     // cabecalho desta unit.
   end;
@@ -241,7 +241,7 @@ begin
   FFilaService := TFilaService.Create(FVendaRepository, FFinanceiro,
     FFilaRepository, FClienteRepository, FRelatorioPedido, FEmailSender, FQuitacaoService, FLogger); // T50/T51/T52, RF13-02/05
 
-  // Proximos incrementos entram aqui.
+  // Novos itens de composicao entram aqui.
 end;
 
 destructor TRootAplicacao.Destroy;

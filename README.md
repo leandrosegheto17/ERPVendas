@@ -86,7 +86,7 @@ Segredos preferencialmente por variável de ambiente (têm prioridade sobre o IN
 
 Crie as pastas de `PastaPdfTemp` e `Log` antes de abrir o app. Se o INI estiver ausente ou incompleto, o app exibe mensagem clara e encerra de forma controlada.
 
-**Segurança de `PastaPdfTemp`:** contém PDFs com dados pessoais por até 24 h (retenção; depois são apagados). Mantenha a pasta **fora** de OneDrive/Dropbox/pastas sincronizadas e de rotinas de backup, com ACL restrita ao usuário que executa o aplicativo (sem `Everyone`/`Users` com leitura), p.ex. `icacls "<pasta>" /inheritance:r /grant:r "%USERNAME%":(OI)(CI)F`. Os arquivos se chamam `Pedido_<Id>_<GUID>.pdf` (nome não previsível).
+**Segurança de `PastaPdfTemp`:** contém PDFs com dados pessoais por até 24 h (retenção; depois são apagados). Mantenha a pasta **fora** de OneDrive/Dropbox/pastas sincronizadas e de rotinas de backup, com ACL restrita ao usuário que executa o aplicativo (sem `Everyone`/`Users` com leitura), p.ex. `icacls "<pasta>" /inheritance:r /grant:r "%USERNAME%":(OI)(CI)F`. Os arquivos se chamam `Pedido_<Id>_<GUID>.pdf` (nome não previsível). O app recusa caminhos relativos, raiz de unidade, UNC e segmentos `..`; **limite:** unidade mapeada de rede (ex.: `Z:` apontando para `\\srv\share`) não é detectada — use disco local.
 
 ### 3.4 Executar
 
