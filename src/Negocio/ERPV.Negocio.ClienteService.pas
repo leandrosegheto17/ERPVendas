@@ -3,7 +3,7 @@ unit ERPV.Negocio.ClienteService;
 {
   T18 - Regras de negocio de Cliente (RF-01/02/03). Camada Negocio: so
   depende de interfaces do Dominio e do Core (sem Vcl/FireDAC/Dados).
-  A regra "excluir = inativar quando ha venda" e da T30; aqui a exclusao e fisica.
+  T30: "excluir = inativar quando ha venda" (RN-05) via IVendaRepository.
 }
 
 interface
@@ -13,16 +13,20 @@ uses
   Data.DB,
   ERPV.Core.Erros,
   ERPV.Core.Validadores,
+  ERPV.Dominio.Enums,
   ERPV.Dominio.Cliente,
+  ERPV.Dominio.Contratos.IVendaRepository,
   ERPV.Dominio.Contratos.IClienteRepository;
 
 type
   TClienteService = class
   private
     FRepositorio: IClienteRepository;
+    FVendaRepositorio: IVendaRepository;
     procedure Validar(const ACliente: TCliente);
   public
-    constructor Create(const ARepositorio: IClienteRepository);
+    constructor Create(const ARepositorio: IClienteRepository;
+      const AVendaRepositorio: IVendaRepository);
 
     /// <summary>Normaliza (CPF/CNPJ so digitos), valida e inclui (Id = 0) ou
     /// altera (Id > 0). Devolve o Id. A entidade continua sendo do chamador.</summary>
@@ -31,15 +35,19 @@ type
     /// <summary>Devolve o cliente (o chamador libera) ou nil.</summary>
     function Obter(AId: Integer): TCliente;
     function ListarDataSet(const AFiltroBusca: string; AIncluirInativos: Boolean): TDataSet;
-    procedure Excluir(AId: Integer);
+    /// <summary>Com venda vinculada inativa (reInativado); sem venda exclui
+    /// fisicamente (reExcluido). Inexistente: reExcluido.</summary>
+    function Excluir(AId: Integer): TResultadoExclusao;
   end;
 
 implementation
 
-constructor TClienteService.Create(const ARepositorio: IClienteRepository);
+constructor TClienteService.Create(const ARepositorio: IClienteRepository;
+  const AVendaRepositorio: IVendaRepository);
 begin
   inherited Create;
   FRepositorio := ARepositorio;
+  FVendaRepositorio := AVendaRepositorio;
 end;
 
 procedure TClienteService.Validar(const ACliente: TCliente);
@@ -93,9 +101,26 @@ begin
   Result := FRepositorio.ListarDataSet(AFiltroBusca, AIncluirInativos);
 end;
 
-procedure TClienteService.Excluir(AId: Integer);
+function TClienteService.Excluir(AId: Integer): TResultadoExclusao;
+var
+  Item: TCliente;
 begin
+  if FVendaRepositorio.ExisteVendaPorCliente(AId) then
+  begin
+    Item := FRepositorio.Obter(AId);
+    try
+      if Item <> nil then
+      begin
+        Item.Ativo := False;
+        FRepositorio.Alterar(Item);
+      end;
+    finally
+      Item.Free;
+    end;
+    Exit(reInativado);
+  end;
   FRepositorio.Excluir(AId);
+  Result := reExcluido;
 end;
 
 end.

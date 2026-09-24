@@ -3,13 +3,16 @@
 {
   T27 - Regras de negocio de Venda (CRUD + validacoes, RF-07/08, RN-01/03).
   Camada Negocio: so depende de interfaces do Dominio e do Core.
-  Fora do escopo: total/snapshot de preco (T28) e restricao por status (T29).
+  T28: total = Soma(qtd x preco) recalculado; preco do item e snapshot do
+  produto (valores vindos do chamador sao ignorados).
+  T29: so venda Pendente e alteravel/excluivel (status lido do banco).
 }
 
 interface
 
 uses
   System.SysUtils,
+  System.Generics.Collections,
   Data.DB,
   ERPV.Core.Erros,
   ERPV.Dominio.Enums,
@@ -28,6 +31,8 @@ type
     FClienteRepositorio: IClienteRepository;
     FProdutoRepositorio: IProdutoRepository;
     procedure Validar(const AVenda: TVenda);
+    procedure ExigirPendente(AId: Integer; out AAtual: TVenda);
+    procedure AplicarPrecosETotal(const AVenda: TVenda; const AAtual: TVenda);
   public
     constructor Create(const AVendaRepositorio: IVendaRepository;
       const AClienteRepositorio: IClienteRepository;
@@ -95,9 +100,79 @@ begin
   end;
 end;
 
-function TVendaService.Salvar(const AVenda: TVenda): Integer;
+procedure TVendaService.ExigirPendente(AId: Integer; out AAtual: TVenda);
+var
+  Msg: string;
 begin
-  Validar(AVenda);
+  // Status sempre lido do banco; o objeto do chamador nao e confiavel.
+  AAtual := FVendaRepositorio.Obter(AId);
+  if AAtual = nil then
+    raise ERegraNegocio.Create('Venda não encontrada');
+  if AAtual.Status <> svPendente then
+  begin
+    if AAtual.Status = svQuitada then
+      Msg := 'Venda já quitada não pode ser alterada nem excluída'
+    else
+      Msg := 'Venda cancelada não pode ser alterada nem excluída';
+    FreeAndNil(AAtual);
+    raise ERegraNegocio.Create(Msg);
+  end;
+end;
+
+procedure TVendaService.AplicarPrecosETotal(const AVenda: TVenda; const AAtual: TVenda);
+var
+  Item, Antigo: TVendaItem;
+  Produto: TProduto;
+  Usados: TList<TVendaItem>;
+  Total: Currency;
+  Achou: Boolean;
+begin
+  Total := 0;
+  Usados := TList<TVendaItem>.Create;
+  try
+    for Item in AVenda.Itens do
+    begin
+      Achou := False;
+      if AAtual <> nil then
+        for Antigo in AAtual.Itens do
+          if (Antigo.ProdutoId = Item.ProdutoId) and (Usados.IndexOf(Antigo) < 0) then
+          begin
+            // Produto nao mudou: mantem o snapshot gravado.
+            Item.PrecoUnitario := Antigo.PrecoUnitario;
+            Usados.Add(Antigo);
+            Achou := True;
+            Break;
+          end;
+      if not Achou then
+      begin
+        Produto := FProdutoRepositorio.Obter(Item.ProdutoId);
+        try
+          Item.PrecoUnitario := Produto.PrecoUnitario;
+        finally
+          Produto.Free;
+        end;
+      end;
+      Total := Total + Item.Quantidade * Item.PrecoUnitario;
+    end;
+  finally
+    Usados.Free;
+  end;
+  AVenda.ValorTotal := Total;
+end;
+
+function TVendaService.Salvar(const AVenda: TVenda): Integer;
+var
+  Atual: TVenda;
+begin
+  Atual := nil;
+  try
+    if AVenda.Id > 0 then
+      ExigirPendente(AVenda.Id, Atual);
+    Validar(AVenda);
+    AplicarPrecosETotal(AVenda, Atual);
+  finally
+    Atual.Free;
+  end;
   if AVenda.Id > 0 then
   begin
     FVendaRepositorio.Alterar(AVenda);
@@ -125,7 +200,11 @@ begin
 end;
 
 procedure TVendaService.Excluir(AId: Integer);
+var
+  Atual: TVenda;
 begin
+  ExigirPendente(AId, Atual);
+  Atual.Free;
   FVendaRepositorio.Excluir(AId);
 end;
 

@@ -35,6 +35,11 @@ function TryStrToStatusVenda(const AValor: string; out AStatus: TStatusVenda): B
 function TipoFilaToStr(ATipo: TTipoFila): string;
 function StrToTipoFila(const AValor: string): TTipoFila;
 
+type
+  /// <summary>Desfecho de "excluir" de Cliente/Produto (T30, RN-05): exclusao
+  /// fisica ou inativacao (quando ha vendas vinculadas).</summary>
+  TResultadoExclusao = (reExcluido, reInativado);
+
 implementation
 
 const

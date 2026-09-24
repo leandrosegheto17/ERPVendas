@@ -12,16 +12,20 @@ uses
   System.SysUtils,
   Data.DB,
   ERPV.Core.Erros,
+  ERPV.Dominio.Enums,
   ERPV.Dominio.Produto,
+  ERPV.Dominio.Contratos.IVendaRepository,
   ERPV.Dominio.Contratos.IProdutoRepository;
 
 type
   TProdutoService = class
   private
     FRepositorio: IProdutoRepository;
+    FVendaRepositorio: IVendaRepository;
     procedure Validar(const AProduto: TProduto);
   public
-    constructor Create(const ARepositorio: IProdutoRepository);
+    constructor Create(const ARepositorio: IProdutoRepository;
+      const AVendaRepositorio: IVendaRepository);
 
     /// <summary>Normaliza (Trim), valida e inclui (Id = 0) ou altera (Id > 0).
     /// Devolve o Id. A entidade continua sendo do chamador.</summary>
@@ -30,15 +34,19 @@ type
     /// <summary>Devolve o produto (o chamador libera) ou nil.</summary>
     function Obter(AId: Integer): TProduto;
     function ListarDataSet(const AFiltroBusca: string; AIncluirInativos: Boolean): TDataSet;
-    procedure Excluir(AId: Integer);
+    /// <summary>Com item de venda vinculado inativa (reInativado); sem venda
+    /// exclui fisicamente (reExcluido). Inexistente: reExcluido.</summary>
+    function Excluir(AId: Integer): TResultadoExclusao;
   end;
 
 implementation
 
-constructor TProdutoService.Create(const ARepositorio: IProdutoRepository);
+constructor TProdutoService.Create(const ARepositorio: IProdutoRepository;
+  const AVendaRepositorio: IVendaRepository);
 begin
   inherited Create;
   FRepositorio := ARepositorio;
+  FVendaRepositorio := AVendaRepositorio;
 end;
 
 procedure TProdutoService.Validar(const AProduto: TProduto);
