@@ -120,6 +120,8 @@
         <DCCReference Include="src\UI\ERPV.UI.ConfirmacaoVenda.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.FormEdicaoVenda.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.FormListaClientes.pas"/>
+        <DCCReference Include="src\UI\ERPV.UI.PendenciasApresentacao.pas"/>
+        <DCCReference Include="src\UI\ERPV.UI.FormPendencias.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.FormListaProdutos.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.FormListaVendas.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.FormMain.pas">

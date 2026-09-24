@@ -34,6 +34,8 @@ uses
   ERPV.UI.FormListaClientes in 'src\UI\ERPV.UI.FormListaClientes.pas',
   ERPV.UI.FormListaProdutos in 'src\UI\ERPV.UI.FormListaProdutos.pas',
   ERPV.UI.FormListaVendas in 'src\UI\ERPV.UI.FormListaVendas.pas',
+  ERPV.UI.PendenciasApresentacao in 'src\UI\ERPV.UI.PendenciasApresentacao.pas',
+  ERPV.UI.FormPendencias in 'src\UI\ERPV.UI.FormPendencias.pas',
   ERPV.Integracao.EmailSender in 'src\Integracao\ERPV.Integracao.EmailSender.pas',
   ERPV.Relatorios.PedidoLayout in 'src\Relatorios\ERPV.Relatorios.PedidoLayout.pas' {DMPedidoLayout: TDataModule},
   ERPV.Relatorios.RelatorioPedido in 'src\Relatorios\ERPV.Relatorios.RelatorioPedido.pas',
@@ -58,7 +60,7 @@ begin
       AplicarTema; // skin uma unica vez, antes de criar qualquer form (T14)
       Application.CreateForm(TFormMain, FormMain);
       FormMain.Configurar(Root.Configuracao.Financeiro.BaseUrl, Root.ClienteService,
-        Root.ProdutoService, Root.VendaService, Root.QuitacaoService);
+        Root.ProdutoService, Root.VendaService, Root.QuitacaoService, Root.FilaRepository, Root.FilaService);
       Application.Run;
     finally
       Root.Free;

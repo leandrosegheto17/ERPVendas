@@ -46,7 +46,8 @@ uses
   ERPV.UI.Tokens, ERPV.UI.Tema, ERPV.UI.Icones,
   ERPV.Negocio.ClienteService, ERPV.UI.FormListaClientes,
   ERPV.Negocio.ProdutoService, ERPV.UI.FormListaProdutos,
-  ERPV.Negocio.VendaService, ERPV.Negocio.QuitacaoService, ERPV.UI.FormListaVendas;
+  ERPV.Negocio.VendaService, ERPV.Negocio.QuitacaoService, ERPV.UI.FormListaVendas,
+  ERPV.Dominio.Contratos.IFilaRepository, ERPV.Negocio.FilaService, ERPV.UI.FormPendencias;
 
 const
   WM_ERPV_FECHAR_LISTA = WM_USER + 101;
@@ -65,6 +66,9 @@ type
     FVendaService: TVendaService;
     FQuitacaoService: TQuitacaoService;
     FListaVendas: TFormListaVendas;
+    FFilaRepository: IFilaRepository;
+    FFilaService: TFilaService;
+    FPendencias: TFormPendencias;
     FPainelMarca: TPanel;
     FRotuloMarca: TLabel;
     FPainelNav: TPanel;
@@ -114,7 +118,8 @@ type
     /// </summary>
     procedure Configurar(const ABaseUrlFinanceiro: string;
       AClienteService: TClienteService; AProdutoService: TProdutoService;
-      AVendaService: TVendaService; AQuitacaoService: TQuitacaoService = nil);
+      AVendaService: TVendaService; AQuitacaoService: TQuitacaoService = nil;
+      const AFilaRepository: IFilaRepository = nil; AFilaService: TFilaService = nil);
 
     /// <summary>
     ///   Ponto de entrada de navegacao. T14 ainda nao tem as telas (T19/T23/
@@ -174,8 +179,11 @@ end;
 
 procedure TFormMain.Configurar(const ABaseUrlFinanceiro: string;
   AClienteService: TClienteService; AProdutoService: TProdutoService;
-  AVendaService: TVendaService; AQuitacaoService: TQuitacaoService);
+  AVendaService: TVendaService; AQuitacaoService: TQuitacaoService;
+  const AFilaRepository: IFilaRepository; AFilaService: TFilaService);
 begin
+  FFilaRepository := AFilaRepository;
+  FFilaService := AFilaService;
   FVendaService := AVendaService;
   FQuitacaoService := AQuitacaoService;
   FBaseUrlFinanceiro := ABaseUrlFinanceiro;
@@ -519,12 +527,27 @@ begin
     FListaClientes.OnFechada := AoFecharListaClientes;
     FListaClientes.Show;
   end
+  else if (ADestino = dsPendencias) and (FFilaService <> nil) and (FFilaRepository <> nil) then
+  begin
+    FecharListaClientes;
+    FecharListaProdutos;
+    FecharListaVendas; // tambem libera FPendencias anterior
+    FRotuloBemVindo.Visible := False;
+    FRotuloBemVindoSub.Visible := False;
+    FPendencias := TFormPendencias.Create(Self, FFilaRepository, FFilaService);
+    FPendencias.BorderStyle := bsNone;
+    FPendencias.Parent := FAreaConteudo;
+    FPendencias.Align := alClient;
+    FPendencias.OnFechada := AoFecharListaVendas;
+    FPendencias.Show;
+  end
   else
     Notificar(utnInfo, 'Esta tela ainda não está disponível.', FAreaConteudo);
 end;
 
 procedure TFormMain.FecharListaClientes;
 begin
+  FreeAndNil(FPendencias); // T52: tela unica embutida por vez
   FreeAndNil(FListaClientes);
   FRotuloBemVindo.Visible := True;
   FRotuloBemVindoSub.Visible := True;
@@ -532,6 +555,7 @@ end;
 
 procedure TFormMain.FecharListaProdutos;
 begin
+  FreeAndNil(FPendencias);
   FreeAndNil(FListaProdutos);
   FRotuloBemVindo.Visible := True;
   FRotuloBemVindoSub.Visible := True;
@@ -559,6 +583,7 @@ end;
 
 procedure TFormMain.FecharListaVendas;
 begin
+  FreeAndNil(FPendencias);
   FreeAndNil(FListaVendas);
   FRotuloBemVindo.Visible := True;
   FRotuloBemVindoSub.Visible := True;
