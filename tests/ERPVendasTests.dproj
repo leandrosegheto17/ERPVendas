@@ -166,6 +166,7 @@
         <DCCReference Include="ERPV.Testes.FinanceiroClientErros.pas"/>
         <DCCReference Include="ERPV.Testes.PendenciaFila.pas"/>
         <DCCReference Include="ERPV.Testes.PendenciasApresentacao.pas"/>
+        <DCCReference Include="ERPV.Testes.Formatacao.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

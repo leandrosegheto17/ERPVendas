@@ -15,6 +15,7 @@ uses
   Vcl.Forms,
   ERPV.App.Root in 'src\App\ERPV.App.Root.pas',
   ERPV.Core.Validadores in 'src\Core\ERPV.Core.Validadores.pas',
+  ERPV.Core.Formatacao in 'src\Core\ERPV.Core.Formatacao.pas',
   ERPV.Dados.ClienteRepository in 'src\Dados\ERPV.Dados.ClienteRepository.pas',
   ERPV.Dados.ProdutoRepository in 'src\Dados\ERPV.Dados.ProdutoRepository.pas',
   ERPV.Dados.VendaRepository in 'src\Dados\ERPV.Dados.VendaRepository.pas',

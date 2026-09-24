@@ -8,7 +8,8 @@ uses
   ERPV.Testes.FilaService in 'ERPV.Testes.FilaService.pas',
   ERPV.Testes.FinanceiroClientErros in 'ERPV.Testes.FinanceiroClientErros.pas',
   ERPV.Testes.PendenciaFila in 'ERPV.Testes.PendenciaFila.pas',
-  ERPV.Testes.PendenciasApresentacao in 'ERPV.Testes.PendenciasApresentacao.pas';
+  ERPV.Testes.PendenciasApresentacao in 'ERPV.Testes.PendenciasApresentacao.pas',
+  ERPV.Testes.Formatacao in 'ERPV.Testes.Formatacao.pas';
 
 var
   LRunner: ITestRunner;

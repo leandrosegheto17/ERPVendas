@@ -108,6 +108,7 @@
         </DelphiCompile>
         <DCCReference Include="src\App\ERPV.App.Root.pas"/>
         <DCCReference Include="src\Core\ERPV.Core.Validadores.pas"/>
+        <DCCReference Include="src\Core\ERPV.Core.Formatacao.pas"/>
         <DCCReference Include="src\Dados\ERPV.Dados.ClienteRepository.pas"/>
         <DCCReference Include="src\Dados\ERPV.Dados.ProdutoRepository.pas"/>
         <DCCReference Include="src\Dados\ERPV.Dados.VendaRepository.pas"/>
