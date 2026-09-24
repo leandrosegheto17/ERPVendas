@@ -15,7 +15,8 @@
     TENTATIVAS = 1 (a 2a chamada resulta em 1 linha, tentativas 2).
   - MarcarConcluido: STATUS = CONCLUIDO, CONCLUIDO_EM = CURRENT_TIMESTAMP.
   - RegistrarFalha: mantem PENDENTE, TENTATIVAS + 1, ULTIMO_ERRO.
-  - ULTIMO_ERRO truncado em 500 caracteres (VARCHAR(500)).
+  - ULTIMO_ERRO e mascarado (TLogger.MascararSensiveis: CPF/e-mail etc.)
+    e depois truncado em 500 caracteres (VARCHAR(500)) - RF9-05.
   - Nao ha indice unico parcial no schema: a unicidade PENDENTE por
     venda+tipo e garantida aqui (app monousuario desktop, ADR-005).
 
@@ -87,7 +88,8 @@ const
 
 function TruncarErro(const AErro: string): string;
 begin
-  Result := Copy(AErro, 1, MAX_ERRO);
+  // RF9-05: mascara primeiro, trunca depois (nao corta CPF/e-mail no meio).
+  Result := Copy(TLogger.MascararSensiveis(AErro), 1, MAX_ERRO);
 end;
 
 { TFilaRepository }
