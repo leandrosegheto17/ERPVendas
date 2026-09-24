@@ -123,7 +123,9 @@ uses
   ERPV.Integracao.FinanceiroClient,
   ERPV.Negocio.QuitacaoService,
   ERPV.Dominio.Contratos.IRelatorioPedido,
-  ERPV.Relatorios.RelatorioPedido;
+  ERPV.Relatorios.RelatorioPedido,
+  ERPV.Dominio.Contratos.IEmailSender,
+  ERPV.Integracao.EmailSender;
 
 type
   /// <summary>
@@ -150,6 +152,7 @@ type
     FFinanceiro: IFinanceiroGateway;
     FQuitacaoService: TQuitacaoService;
     FRelatorioPedido: IRelatorioPedido;
+    FEmailSender: IEmailSender;
   public
     /// <exception cref="EConfiguracao">INI ausente ou invalido (T09).</exception>
     /// <exception cref="EInfra">Falha ao conectar ao banco (T12).</exception>
@@ -170,6 +173,7 @@ type
     property Financeiro: IFinanceiroGateway read FFinanceiro;
     property QuitacaoService: TQuitacaoService read FQuitacaoService;
     property RelatorioPedido: IRelatorioPedido read FRelatorioPedido;
+    property EmailSender: IEmailSender read FEmailSender;
 
     // Proximos incrementos (T17 ClienteRepository, T21 ProdutoRepository,
     // T25 VendaRepository, T37 FilaRepository, servicos de negocio etc.):
@@ -222,6 +226,7 @@ begin
 
   FRelatorioPedido := TRelatorioPedido.Create(FConfiguracao.Relatorio.PastaPdfTemp,
     FVendaRepository, FLogger); // T47
+  FEmailSender := TEmailSender.Create(FConfiguracao.SMTP, FLogger); // T48
 
   // Proximos incrementos entram aqui.
 end;
@@ -235,6 +240,7 @@ begin
   if Assigned(Application) then
     Application.OnException := nil;
 
+  FEmailSender := nil; // T48
   FRelatorioPedido := nil; // T47
   FQuitacaoService.Free; // T43, antes dos repositorios/gateway
   FFinanceiro := nil; // T34
