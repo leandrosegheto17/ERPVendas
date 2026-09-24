@@ -21,11 +21,11 @@ Dado: CPF inválido `11111111111`; CNPJ inválido `11222333000180`; e-mail `abc`
 Esperado: (1) "CPF invalido"; (2) "CNPJ invalido"; (3) "E-mail invalido"; (4) "Documento ja cadastrado"; (5) "Informe o nome" / "Informe o CPF/CNPJ" / "Informe o e-mail" no campo, sem gravar; (6) grava e aparece na grade; após inativar exibe "Inativo" e não aparece habilitado no lookup de venda. Nenhuma mensagem expõe SQL/caminho.
 
 ## C2. CRUD e validações de Produto
-Dado: descrição vazia; unidade vazia; preço 0/negativo.
-1. Produtos > Novo; salvar sem descrição; sem unidade; com preço inválido.
+Dado: descrição vazia; unidade vazia; preço vazio ou negativo (o preço 0 é aceito).
+1. Produtos > Novo; salvar sem descrição; sem unidade; com preço vazio; com preço negativo (ex.: -1,00); com preço 0,00.
 2. Cadastrar "Produto Teste", UN, 10,00; editar o preço; inativar.
 
-Esperado: "Informe a descrição", "Informe a unidade", "Preço inválido"; cadastro válido aparece na lista; inativo exibe "Inativo" e não é selecionável em venda.
+Esperado: "Informe a descrição", "Informe a unidade", "Preço inválido" (preço vazio ou negativo); preço 0,00 é aceito e grava; cadastro válido aparece na lista; inativo exibe "Inativo" e não é selecionável em venda.
 
 ## C3. Venda: validações e snapshot de preço
 Dado: Cliente 1; Produtos A (19,90) e B (145,50).
@@ -53,12 +53,45 @@ Dado: mock `ok`; SMTP Mailtrap válido; venda Pendente de C3 (R$ 185,30) do Clie
 Esperado: diálogo "Confirmar a venda N (R$ 185,30)? Esta ação envia a quitação ao Financeiro."; status Quitada com data de quitação preenchida; mock recebeu 1 POST `/api/vendas/quitacao` (`GET /api/vendas/N/status` = Quitada); e-mail "Confirmação de Pedido N" no Mailtrap com PDF anexo (corpo "Segue em anexo a confirmação do pedido N."); PDF temporário removido após o envio; Pendências vazia; log sem senha nem CPF/e-mail completos.
 
 ## C6. Recusa (4xx), 500 e timeout -> fila -> Reenviar
-Dado: uma nova venda Pendente por sub-caso.
-- A) `m=recusa`: Confirmar. Esperado: "Quitação recusada pelo Financeiro (código HTTP 422)"; venda continua Pendente.
-- B) `m=erro500`: Confirmar. Esperado: "Financeiro indisponível. A venda N continua Pendente e foi colocada na fila. Tente novamente em Pendências."; barra de status "Pendências: 1"; banner na venda "Há uma operação pendente no Financeiro. Use Pendências."; nova quitação/cancelamento bloqueado até resolver ("Resolva em Pendências antes de continuar.").
-- C) `m=timeout`: Confirmar. Esperado: cursor de espera e botões desabilitados; retorno em ~10 s com a mesma mensagem de indisponível; item na fila.
-- D) `m=offline-simulado`: idem B.
-- E) Voltar `m=ok`; Pendências > selecionar item > Reenviar selecionado. Esperado: item concluído, venda Quitada, e-mail e PDF enviados (como C5), contador decrementa. Com o mock ainda em falha: "Ainda não foi possível reenviar este item. Tente novamente." e o item permanece.
+Dado: mock no ar em `http://127.0.0.1:8080`; Cliente 1 e Produto A cadastrados; uma nova venda Pendente (cliente + item) criada para cada sub-caso (A a D); o sub-caso E reaproveita uma venda que foi para a fila em B, C ou D.
+
+**A) Recusa (4xx)**
+1. Vendas > Nova venda; selecionar Cliente 1, adicionar Produto A qtd 1 e salvar (status Pendente).
+2. Definir o modo: `curl "http://127.0.0.1:8080/_modo?m=recusa"`.
+3. Abrir a venda > Confirmar venda e confirmar no diálogo.
+
+Esperado: "Quitação recusada pelo Financeiro (código HTTP 422)"; venda continua Pendente.
+
+**B) Erro 500**
+1. Criar uma nova venda Pendente (Cliente 1, Produto A qtd 1).
+2. Definir o modo: `curl "http://127.0.0.1:8080/_modo?m=erro500"`.
+3. Abrir a venda > Confirmar venda e confirmar no diálogo.
+4. Reabrir a venda e tentar confirmar ou cancelar de novo.
+
+Esperado: "Financeiro indisponível. A venda N continua Pendente e foi colocada na fila. Tente novamente em Pendências."; barra de status "Pendências: 1"; banner na venda "Operação pendente de envio ao Financeiro: somente leitura. Use Pendências."; nova quitação/cancelamento bloqueado até resolver ("Há uma operação pendente de envio ao Financeiro para esta venda. Resolva em Pendências antes de continuar.").
+
+**C) Timeout**
+1. Criar uma nova venda Pendente (Cliente 1, Produto A qtd 1).
+2. Definir o modo: `curl "http://127.0.0.1:8080/_modo?m=timeout"`.
+3. Abrir a venda > Confirmar venda e confirmar no diálogo; aguardar (o cliente espera ~10 s por chamada).
+
+Esperado: cursor de espera e botões desabilitados; retorno em ~10 s com a mesma mensagem de indisponível; item na fila.
+
+**D) Offline simulado**
+1. Criar uma nova venda Pendente (Cliente 1, Produto A qtd 1).
+2. Definir o modo: `curl "http://127.0.0.1:8080/_modo?m=offline-simulado"`.
+3. Abrir a venda > Confirmar venda e confirmar no diálogo.
+
+Esperado: idem B.
+
+**E) Reenviar pela fila**
+1. Com um item na fila (de B, C ou D), voltar o mock a ok: `curl "http://127.0.0.1:8080/_modo?m=ok"`.
+2. Pendências > selecionar o item > Reenviar selecionado.
+3. Repetir com o mock ainda em falha (ex.: `curl "http://127.0.0.1:8080/_modo?m=erro500"`) em outro item.
+
+Esperado: (1-2) item concluído, venda Quitada, e-mail e PDF enviados (como C5), contador decrementa; (3) com o mock ainda em falha: "Ainda não foi possível reenviar este item. Tente novamente." e o item permanece.
+
+**F) Timeout após gravação (opcional)**: `m=timeout-post` está descrito em C8 (e no README de `tools/mock-financeiro`); siga os passos e o esperado de lá.
 
 ## C7. Falha de SMTP -> fila EMAIL
 Dado: mock `ok`; senha SMTP errada no INI (ou `ERPV_SMTP_PASSWORD` inválida); nova venda Pendente.
@@ -76,11 +109,13 @@ Esperado: (1) venda continua Pendente e item na fila; (2) o sistema consulta `GE
 
 ## C9. Cancelamento
 Dado: mock `ok`; uma venda Pendente; uma Quitada.
-1. Venda Pendente > Cancelar venda > "Confirmar cancelamento" (motivo opcional).
+1. Venda Pendente > Cancelar venda; conferir o campo "Motivo (opcional)" e o texto de apoio "Não informe dados pessoais (CPF, telefone, e-mail) no motivo."; preencher um motivo (ex.: "Cliente desistiu") > "Confirmar cancelamento". Repetir em outra Pendente sem motivo.
 2. Repetir com `m=recusa` e com `m=erro500` em outras Pendentes.
 3. Tentar cancelar a Quitada e uma já Cancelada.
+4. Conferir no banco: `SELECT MOTIVO_CANCELAMENTO FROM VENDAS WHERE ID = N`.
+5. No cancelamento que foi para a fila (`m=erro500`, com motivo preenchido), voltar `m=ok` e Pendências > Reenviar selecionado; conferir de novo `VENDAS.MOTIVO_CANCELAMENTO`.
 
-Esperado: (1) status Cancelada, somente leitura; mock recebeu POST `/api/vendas/cancelamento`; (2) recusa: "Cancelamento recusado pelo Financeiro ..." e venda continua Pendente; 500: "Financeiro indisponível. O cancelamento da venda N foi colocado na fila de pendências", e Reenviar depois conclui; (3) "Venda já quitada não pode ser cancelada" / "Venda já está cancelada".
+Esperado: (1) status Cancelada, somente leitura; mock recebeu POST `/api/vendas/cancelamento`; (2) recusa: "Cancelamento recusado pelo Financeiro ..." e venda continua Pendente; 500: "Financeiro indisponível. O cancelamento da venda N foi colocado na fila de pendências", e Reenviar depois conclui; (3) "Venda já quitada não pode ser cancelada" / "Venda já está cancelada"; (4) cancelamento com motivo grava o texto em `VENDAS.MOTIVO_CANCELAMENTO` (recortado em 255 caracteres); sem motivo fica NULL; (5) o reenvio pela fila conclui o cancelamento mas grava `MOTIVO_CANCELAMENTO` NULL: o motivo não é persistido na `FILA_INTEGRACAO` e o reenvio de CANCELAMENTO sai sem motivo (decisão RF10-02).
 
 ## C10. INI ausente ou inválido
 Dado: `erpvendas.ini` removido; depois INI com chave obrigatória vazia (ex.: `BaseUrl=`); depois senha de banco errada.
@@ -89,6 +124,7 @@ Dado: `erpvendas.ini` removido; depois INI com chave obrigatória vazia (ex.: `B
 Esperado: diálogo de erro "Arquivo de configuracao nao encontrado: "<caminho>". Copie config\erpvendas.ini.example para essa pasta, ajuste os valores ... e inicie o sistema novamente." e encerramento sem abrir a janela principal; para chave vazia: `Configuracao invalida em "<ini>": chave "..." ausente ou vazia na secao ...`; para banco: mensagem amigável sem credencial. Nenhuma stack/SQL exibida.
 
 ## C11. Teclado
+Dado: aplicação aberta na tela principal; clientes, produtos e ao menos uma venda de teste cadastrados; mouse fora de uso (apenas teclado).
 1. Em cada edição modal (Cliente, Produto, Venda): percorrer com Tab; digitar e pressionar Enter; pressionar Esc.
 2. Nas listas: Esc; atalhos Alt+letra (`&`) de botões e menus.
 3. Na grade de itens da venda, pressionar Enter.
