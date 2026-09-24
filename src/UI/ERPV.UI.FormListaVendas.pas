@@ -637,12 +637,25 @@ begin
   if AViewInfo.Item = FColStatus then
   begin
     S := StatusDoRegistro(AViewInfo.GridRecord);
+    // Fundo + texto do par de tokens; linha selecionada mantem o estilo de selecao (legibilidade)
     if SameText(S, ST_PENDENTE) then
-      ACanvas.Font.Color := clERPVAvisoTexto
+    begin
+      ACanvas.Font.Color := clERPVAvisoTexto;
+      if not AViewInfo.Selected then
+        ACanvas.Brush.Color := clERPVAvisoFundo;
+    end
     else if SameText(S, ST_QUITADA) then
-      ACanvas.Font.Color := clERPVSucessoTexto
+    begin
+      ACanvas.Font.Color := clERPVSucessoTexto;
+      if not AViewInfo.Selected then
+        ACanvas.Brush.Color := clERPVSucessoFundo;
+    end
     else
+    begin
       ACanvas.Font.Color := clERPVInativoTexto;
+      if not AViewInfo.Selected then
+        ACanvas.Brush.Color := clERPVInativoFundo;
+    end;
     ACanvas.Font.Style := [fsBold];
   end
   else if AViewInfo.Item = FColSinc then
