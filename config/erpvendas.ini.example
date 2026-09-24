@@ -27,8 +27,10 @@ BaseUrl=http://localhost:5000
 ; Timeout de conexao/resposta, EM SEGUNDOS (convertido para milissegundos
 ; internamente antes de ser usado no THTTPClient - ver ERPV.Core.Config).
 TimeoutSegundos=10
-; Chave opcional do header X-Api-Key. Vazio = nao envia o header (DEC-07).
-; Use ERPV_FINANCEIRO_APIKEY em ambientes que exigirem a chave.
+; Header X-Api-Key. OBRIGATORIO para o Financeiro C# real (todas as rotas
+; exceto /api/health; sem chave ou chave errada = 401 - T55/D3). Vazio so serve
+; para o mock local (nao envia o header). NUNCA grave a chave real neste arquivo
+; versionado: use ERPV_FINANCEIRO_APIKEY (ou o erpvendas.ini real, fora do Git).
 ApiKey=
 
 [SMTP]

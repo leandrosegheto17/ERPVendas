@@ -60,7 +60,7 @@ Dado: mock no ar em `http://127.0.0.1:8080`; Cliente 1 e Produto A cadastrados; 
 2. Definir o modo: `curl "http://127.0.0.1:8080/_modo?m=recusa"`.
 3. Abrir a venda > Confirmar venda e confirmar no diálogo.
 
-Esperado: "Quitação recusada pelo Financeiro: Operacao recusada pelo Financeiro (modo simulado: recusa). A venda continua Pendente." (se o corpo do Financeiro não trouxer mensagem, o texto é "Quitacao recusada pelo Financeiro (codigo HTTP 422)", conforme o fallback do cliente); venda continua Pendente.
+Esperado: "Quitação recusada pelo Financeiro: Operacao recusada pelo Financeiro (modo simulado: recusa). A venda continua Pendente." (se o corpo do Financeiro não trouxer mensagem, o texto é "Quitacao recusada pelo Financeiro (codigo HTTP 400)", conforme o fallback do cliente); venda continua Pendente.
 
 **B) Erro 500**
 1. Criar uma nova venda Pendente (Cliente 1, Produto A qtd 1).

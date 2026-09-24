@@ -402,7 +402,7 @@ var
   R: TResultadoReenvio;
 begin
   // RF13-04: dado pessoal na resposta do Financeiro nao chega em claro a UI.
-  FGw.RespPost := TResultadoFinanceiro.Indisponivel(422,
+  FGw.RespPost := TResultadoFinanceiro.Indisponivel(400,
     'Recusado: cliente 123.456.789-09 joao@example.com');
   R := FSvc.Reenviar(1, 10, tfQuitacao);
   Assert.AreEqual(Ord(rrFalha), Ord(R.Desfecho));

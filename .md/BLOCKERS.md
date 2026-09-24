@@ -202,3 +202,5 @@ Atualização 2026-09-24 (Bloqueio 007, ambiente real parcialmente verificado): 
 Verificados no app contra o Financeiro real (T54): quitação, cancelamento de venda Pendente, data de quitação local,
 e-mail com PDF no Mailtrap (porta 2525, sem TLS). Ainda **não** verificados: DUnitX (`tests/`), banco recriado em UTF8,
 Report Designer, TLS/`CaFile`, timeout/5xx/indisponibilidade. O bloqueio segue Aberto para esses itens.
+
+Atualização 2026-09-24 (Bloqueio 007, T55): projeto de testes DUnitX criado (`tests/ERPVendasTests.dpr`, DUnitX do GitHub na Library path da IDE) e **executado na IDE: 78/78 testes passaram**. Resta para o 007: banco recriado em UTF8, Report Designer, TLS/`CaFile`, timeout/5xx/indisponibilidade reais, 409 `CONFLITO_CONCORRENCIA` contra o C#.
