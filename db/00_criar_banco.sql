@@ -1,0 +1,20 @@
+-- =============================================================================
+-- ERP Vendas (Delphi) - db/00_criar_banco.sql  (RF4-03)
+-- Template de criacao do banco. NAO contem usuario/senha reais (GUARDRAILS.md
+-- regra 16): ajuste o caminho e informe a senha na hora de rodar, sem commitar.
+--
+-- O banco DEVE ser criado com DEFAULT CHARACTER SET UTF8; sem isso (charset NONE)
+-- a collation ERPV_CI_AI de 01_schema.sql nao existe e a busca sem acento falha.
+--
+-- Exemplo (descomente e ajuste; <senha> e placeholder):
+--   CREATE DATABASE 'localhost:C:\ERPVendas\dados\ERPVENDAS.FDB'
+--     USER 'SYSDBA' PASSWORD '<senha>' DEFAULT CHARACTER SET UTF8;
+--
+-- Use o prefixo localhost: no CREATE DATABASE. Sem ele o isql abre o arquivo em
+-- modo embedded e retem lock exclusivo (ver docs/ambiente-licencas.md secao 8);
+-- finalize a sessao com QUIT; antes de conectar pelo FireDAC.
+--
+-- Verificacao apos criar:
+--   SELECT RDB$CHARACTER_SET_NAME FROM RDB$DATABASE;   -- esperado: UTF8
+-- Depois execute db/01_schema.sql e db/02_seed.sql.
+-- =============================================================================

@@ -84,9 +84,10 @@ const
     'SELECT ID, NOME, TIPO_PESSOA, CPF_CNPJ, ENDERECO, TELEFONE, EMAIL, ATIVO ' +
     'FROM CLIENTES WHERE (1 = 1) ';
   SQL_LISTAR_ATIVOS = 'AND ATIVO = TRUE ';
+  { RF4-03: busca sem caixa e sem acento via collation ERPV_CI_AI (db/01_schema.sql). }
   SQL_LISTAR_BUSCA =
-    'AND (UPPER(NOME) LIKE :BUSCA ESCAPE ''\'' ' +
-    'OR UPPER(EMAIL) LIKE :BUSCA ESCAPE ''\'' ' +
+    'AND (NOME COLLATE ERPV_CI_AI LIKE :BUSCA ESCAPE ''\'' ' +
+    'OR EMAIL COLLATE ERPV_CI_AI LIKE :BUSCA ESCAPE ''\'' ' +
     'OR CPF_CNPJ LIKE :DOC) ';
   SQL_LISTAR_ORDEM = 'ORDER BY NOME, ID';
   SQL_EXISTE_DOC = 'SELECT 1 FROM CLIENTES WHERE CPF_CNPJ = :DOC AND ID <> :IGNORAR_ID';
@@ -324,7 +325,7 @@ begin
     Q.SQL.Text := SQL;
     if Busca <> '' then
     begin
-      Q.ParamByName('BUSCA').AsString := '%' + EscaparLike(UpperCase(Busca)) + '%';
+      Q.ParamByName('BUSCA').AsString := '%' + EscaparLike(Busca) + '%';
       Digitos := SoDigitos(Busca);
       if Digitos <> '' then
         Q.ParamByName('DOC').AsString := '%' + Digitos + '%'

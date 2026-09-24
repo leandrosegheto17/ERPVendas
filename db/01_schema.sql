@@ -17,9 +17,24 @@
 -- conforme SDD.md Secao 7 "Isolamento") fica fora deste repositorio, em
 -- erpvendas.ini (ver config/erpvendas.ini.example) ou informada na linha de
 -- comando/variavel de ambiente na hora de rodar - nunca neste arquivo.
+-- REQUISITO (RF4-03): o banco DEVE ter sido criado com DEFAULT CHARACTER SET UTF8
+-- (ver db/00_criar_banco.sql). Verificacao:
+--   SELECT RDB$CHARACTER_SET_NAME FROM RDB$DATABASE;   -- esperado: UTF8
+-- Em banco NONE a collation ERPV_CI_AI abaixo nao existe/falha: recrie o banco.
+-- Verificar a collation depois: SELECT RDB$COLLATION_NAME FROM RDB$COLLATIONS
+--   WHERE RDB$COLLATION_NAME = 'ERPV_CI_AI';
 -- =============================================================================
 
 SET SQL DIALECT 3;
+
+-- -----------------------------------------------------------------------------
+-- Collation para busca sem caixa e sem acento (RF4-03). Sintaxe Firebird 3.0:
+--   CREATE COLLATION nome FOR UTF8 FROM UNICODE CASE INSENSITIVE ACCENT INSENSITIVE;
+-- Baseada na collation UNICODE do Firebird (ICU quando disponivel). Se falhar,
+-- alternativa: FROM UNICODE_CI_AI (se pre-definida) ou so CASE INSENSITIVE.
+-- Executada antes do SET TERM, entao termina com ponto e virgula.
+-- -----------------------------------------------------------------------------
+CREATE COLLATION ERPV_CI_AI FOR UTF8 FROM UNICODE CASE INSENSITIVE ACCENT INSENSITIVE;
 SET TERM ^ ;
 
 -- -----------------------------------------------------------------------------
