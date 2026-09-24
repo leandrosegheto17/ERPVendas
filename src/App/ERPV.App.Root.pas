@@ -229,6 +229,10 @@ begin
   FVendaService := TVendaService.Create(FVendaRepository, FClienteRepository,
     FProdutoRepository, FFilaRepository); // T27 + T53 (bloqueio por fila)
 
+  // RF14-03: aviso (sem o valor da chave) quando ApiKey do Financeiro estiver vazia.
+  if TConfiguracao.AvisoApiKeyVazia(FConfiguracao.Financeiro.ApiKey) <> '' then
+    FLogger.Aviso(TConfiguracao.AvisoApiKeyVazia(FConfiguracao.Financeiro.ApiKey));
+
   FFinanceiro := TFinanceiroClient.Create(FConfiguracao.Financeiro.BaseUrl,
     FConfiguracao.Financeiro.TimeoutMs, FConfiguracao.Financeiro.ApiKey, FLogger); // T34-T36
   FRelatorioPedido := TRelatorioPedido.Create(FConfiguracao.Relatorio.PastaPdfTemp,

@@ -52,6 +52,7 @@ type
     FColTipo: TcxGridDBColumn;
     FColCriado: TcxGridDBColumn;
     FColSituacao: TcxGridDBColumn;
+    FColUltimoErro: TcxGridDBColumn;
     FPnlVazio: TPanel;
     FPnlErro: TPanel;
     FLblErro: TLabel;
@@ -78,6 +79,8 @@ type
       APrevFocusedRecord, AFocusedRecord: TcxCustomGridRecord;
       ANewItemRecordFocusingChanged: Boolean);
     procedure AoTextoTipo(Sender: TcxCustomGridTableItem;
+      ARecord: TcxCustomGridRecord; var AText: string);
+    procedure AoTextoUltimoErro(Sender: TcxCustomGridTableItem;
       ARecord: TcxCustomGridRecord; var AText: string);
     procedure AoTextoSituacao(Sender: TcxCustomGridTableItem;
       ARecord: TcxCustomGridRecord; var AText: string);
@@ -227,7 +230,9 @@ begin
   FColSituacao := AdicionarColuna('STATUS', 'Situação', 90);
   FColSituacao.PropertiesClass := TcxTextEditProperties;
   FColSituacao.OnGetDisplayText := AoTextoSituacao;
-  AdicionarColuna('ULTIMO_ERRO', 'Último erro', 320);
+  FColUltimoErro := AdicionarColuna('ULTIMO_ERRO', 'Último erro', 320);
+  FColUltimoErro.PropertiesClass := TcxTextEditProperties;
+  FColUltimoErro.OnGetDisplayText := AoTextoUltimoErro;
 
   FView.DataController.KeyFieldNames := 'ID';
   FView.DataController.DataSource := FDataSource;
@@ -435,6 +440,14 @@ procedure TFormPendencias.AoTextoTipo(Sender: TcxCustomGridTableItem;
 begin
   if ARecord <> nil then
     AText := TextoTipoFila(VarToStr(ARecord.Values[FColTipo.Index]));
+end;
+
+procedure TFormPendencias.AoTextoUltimoErro(Sender: TcxCustomGridTableItem;
+  ARecord: TcxCustomGridRecord; var AText: string);
+begin
+  // RF14-03: 401 de configuracao da chave aparece distinto de recusa de negocio.
+  if ARecord <> nil then
+    AText := TextoUltimoErro(VarToStr(ARecord.Values[FColUltimoErro.Index]));
 end;
 
 procedure TFormPendencias.AoTextoSituacao(Sender: TcxCustomGridTableItem;

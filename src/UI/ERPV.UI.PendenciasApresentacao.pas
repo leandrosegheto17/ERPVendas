@@ -50,6 +50,12 @@ function AcoesDaVenda(const AStatus: string; ATemFilaPendente,
   ATemQuitacaoService: Boolean): TAcoesVenda;
 
 function TextoTipoFila(const ATipo: string): string;
+/// <summary>RF14-03: True se ULTIMO_ERRO e o 401 de configuracao da chave
+/// (texto fixo do FinanceiroClient, D3), nao uma recusa de negocio.</summary>
+function ErroEhConfiguracaoApiKey(const AUltimoErro: string): Boolean;
+/// <summary>RF14-03: texto da coluna "Ultimo erro"; 401 de chave recebe o
+/// prefixo "Configuração: " para distinguir de falha/recusa de negocio.</summary>
+function TextoUltimoErro(const AUltimoErro: string): string;
 function TextoSituacaoFila(const AStatus: string): string;
 /// <summary>RF13-01: so item com STATUS PENDENTE pode ser reenviado.</summary>
 function PodeReenviarItem(const AStatus: string): Boolean;
@@ -116,6 +122,19 @@ begin
     Result := 'Concluído'
   else
     Result := AStatus;
+end;
+
+function ErroEhConfiguracaoApiKey(const AUltimoErro: string): Boolean;
+begin
+  Result := Pos('X-Api-Key', AUltimoErro) > 0;
+end;
+
+function TextoUltimoErro(const AUltimoErro: string): string;
+begin
+  if ErroEhConfiguracaoApiKey(AUltimoErro) then
+    Result := 'Configuração: ' + AUltimoErro
+  else
+    Result := AUltimoErro;
 end;
 
 function PodeReenviarItem(const AStatus: string): Boolean;

@@ -30,9 +30,30 @@ type
     [Test] procedure Acoes_PendenteComFila_BloqueiaEditarConfirmarCancelar;
     [Test] procedure Acoes_QuitadaCancelada_SoVisualizar;
     [Test] procedure Acoes_SemQuitacaoService_BloqueiaConfirmarCancelar;
+    // RF14-03
+    [Test] procedure UltimoErro_401DeChave_EhDistinguidoComoConfiguracao;
+    [Test] procedure UltimoErro_RecusaDeNegocio_FicaInalterado;
   end;
 
 implementation
+
+procedure TTestesPendenciasApresentacao.UltimoErro_401DeChave_EhDistinguidoComoConfiguracao;
+const
+  E1 = 'O Financeiro rejeitou a chave de acesso (X-Api-Key). Verifique a ApiKey configurada.';
+  E2 = 'O Financeiro exige chave de acesso (X-Api-Key) e nenhuma esta configurada. ' +
+    'Informe ApiKey no INI ou em ERPV_FINANCEIRO_APIKEY.';
+begin
+  Assert.IsTrue(ErroEhConfiguracaoApiKey(E1));
+  Assert.IsTrue(ErroEhConfiguracaoApiKey(E2));
+  Assert.AreEqual('Configuração: ' + E1, TextoUltimoErro(E1));
+end;
+
+procedure TTestesPendenciasApresentacao.UltimoErro_RecusaDeNegocio_FicaInalterado;
+begin
+  Assert.IsFalse(ErroEhConfiguracaoApiKey('Cliente inativo'));
+  Assert.AreEqual('Cliente inativo', TextoUltimoErro('Cliente inativo'));
+  Assert.AreEqual('', TextoUltimoErro(''));
+end;
 
 procedure TTestesPendenciasApresentacao.Concluido_MostraItemConcluido;
 var
