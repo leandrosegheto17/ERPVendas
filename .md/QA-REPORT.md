@@ -572,3 +572,43 @@ T43 e T44 `Concluída` (pendentes de confirmação na IDE). Dependências da Se�
 ### Veredito do lote (chapéu QA)
 
 **REPROVADO (crítica, A10-01 — T43; T44 volta a Em andamento por dependência).** Revisão do veredito anterior ("Aprovado com ressalvas"): a primeira passada não conferiu o BOM de `QuitacaoService.pas`. Tirando A10-01, T43 e T44 estão aprovadas com ressalvas (5 ajustes simples: RF10-01..RF10-05); ressalva geral de compilação/execução pendente na IDE/mock (evidência apenas estática). Segue para auditoria de segurança (chapéu DevSecOps), que deve olhar em especial o motivo livre (LGPD, SG8-03, RF10-03), a mensagem técnica exibida em RF10-01 e a ausência de log do motivo.
+
+## Lote 9 — revalidação (pós-correção A1) — chapéu QA (2026-09-23)
+
+Complementa a seção "Lote 9 — Fluxo Confirmar venda (T37-T42)" acima (texto anterior mantido). Método: inspeção estática + verificação de bytes; nada compilado/executado (Delphi 10.3 sem CLI). Correção avaliada: Bloqueio 005 Resolvido (commits ec58871 e b39a790).
+
+### Confirmação da correção de A1
+
+- Bytes iniciais `EF BB BF` confirmados em `src/UI/ERPV.UI.ConfirmacaoVenda.pas`, `src/Negocio/ERPV.Negocio.QuitacaoService.pas` e `src/Dados/ERPV.Dados.FilaRepository.pas`.
+- Sem mojibake (busca por `Ã`, `Â`, `â€`, U+FFFD em `src/`: única ocorrência é "NÃO" legítimo em comentário de `ERPV.Core.Log.pas`).
+- Literais de UX 4.3 íntegros em `ConfirmacaoVenda.pas` ("Financeiro indisponível ... foi colocada na fila. Tente novamente em Pendências.", "Quitação recusada pelo Financeiro: ...", "Esta ação envia a quitação ao Financeiro.") e fallbacks de `QuitacaoService` ("Quitação recusada pelo Financeiro (código HTTP ...)", "Financeiro indisponível (código HTTP ...)").
+- Varredura geral: as 36 units com caractere não ASCII em `src/` têm BOM; os arquivos sem BOM (`App.Root`, `Core.Config`, `Core.Validadores`, `Integracao.FinanceiroClient`, `Negocio.ClienteService`, `UI.FormBaseLista`, `UI.FormMain.dfm`) são só ASCII. Nenhuma outra unit acentuada sem BOM. A1 **corrigida**.
+
+### Integração com o Lote 10 (regressão)
+
+`QuitacaoService.pas` agora contém `Cancelar` (T43), mas `Confirmar` está intacto: lê status do banco e exige Pendente antes do POST, sem transação no HTTP; 200/Quitada => `AtualizarStatus` curto; recusa sem gravar/enfileirar; indisponível => GET de reconciliação, Quitada => conclui local sem fila, senão `EnfileirarIndisponivel` (`tfQuitacao`, EInfra não mascara). `Cancelar` usa método/campos próprios e `tfCancelamento`, sem compartilhar estado com `Confirmar`. `TDesfechoQuitacao`/`TResultadoQuitacao` inalterados; `FilaRepository` e `ConfirmacaoVenda` sem regressão de lógica. Nenhuma regressão em T38-T41.
+
+### Achados após a revalidação
+
+- **A1: RESOLVIDO.**
+- **A2, A3, A4, A5 (Simples): permanecem válidos**, IDs estáveis, a rotear para `Refatoração Lote-9`. Cosmético (".." na recusa) também permanece.
+- **RF8-01 (risco médio-baixo, alcançável) e R1 (mock `timeout` atrasa também GET /status; T41 sem prova ponta a ponta): permanecem.** R2 (compilação/roteiros na IDE) segue pendente.
+- **Novos achados: nenhum.** Observação apenas documental (Simples, agregável a A5): o comentário de cabeçalho ainda cita `FILA_SINCRONIZACAO` (T40/T41), tabela real `FILA_INTEGRACAO`.
+- **Reprovações críticas em aberto: nenhuma.**
+
+### Nota sobre T38
+
+A validação do Lote 10 reabriu T38 (`Em andamento`) por causa do mesmo BOM de `QuitacaoService.pas` (A10-01). Com A1/A10-01 corrigidos nesta unit, T38 é **restaurada a `Concluída`** nesta revalidação. (T43/T44 dependem de sua própria revalidação no Lote 10.)
+
+### Veredito por tarefa (revalidação)
+
+- T37: **Aprovada.**
+- T38: **Aprovada com ressalva** (RF8-01, A5); restaurada a Concluída.
+- T39: **Aprovada.**
+- T40: **Aprovada com ressalva** (A2, A4).
+- T41: **Aprovada com ressalva** (R1).
+- T42: **Aprovada com ressalva** (A3 simples, A2); crítica A1 resolvida; volta a `Concluída`.
+
+### Veredito do lote (chapéu QA)
+
+**Aprovado com ressalvas.** Ressalvas: A2-A5, RF8-01 (corrigir antes do smoke T54), R1, R2 (IDE). A2-A5 (e o ajuste de cabeçalho) entram em `Refatoração Lote-9`. Este relatório não alterou código nem `TASK.md`. Liberado para o chapéu DevSecOps auditar o Lote 9. O Bloqueio 005 pode permanecer Resolvido.
