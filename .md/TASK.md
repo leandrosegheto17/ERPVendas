@@ -181,8 +181,8 @@ Lote com 7 itens: fundação D1; T08, T09, T10 independentes entre si.
 ### Lote 17 — Acabamento (P2, cortável primeiro)
 | ID | Tarefa | Dono | Tipo | Prio | Origem | Est.(h) | Depende | Par. | Critério de aceite | Status |
 |---|---|---|---|---|---|---|---|---|---|---|
-| T65 | "Reenviar todos" na tela de Pendências | Executor(UI) | SUG | P2 | UX 2.7 | 1.5 | T52 | T66 | Botão processa todos e mostra resumo | Pendente |
-| T66 | Acabamento de UI cortável: atalhos extras, máscaras adicionais, ícone de check de validação (o "skin único" foi para T68) | Executor(UI) | SUG | P2 | VISAO T20 | 5 | T60 | T65 | Extras aplicados sem quebrar layouts em 1366x768 | Pendente |
+| T65 | "Reenviar todos" na tela de Pendências | Executor(UI) | SUG | P2 | UX 2.7 | 1.5 | T52 | T66 | Botão processa todos e mostra resumo | Concluída — DISPENSADA por decisão do usuário em 2026-09-24 (P2, cortável; projeto de processo seletivo): NÃO implementada. "Reenviar selecionado" (T52) segue como caminho suportado |
+| T66 | Acabamento de UI cortável: atalhos extras, máscaras adicionais, ícone de check de validação (o "skin único" foi para T68) | Executor(UI) | SUG | P2 | VISAO T20 | 5 | T60 | T65 | Extras aplicados sem quebrar layouts em 1366x768 | Concluída — DISPENSADA por decisão do usuário em 2026-09-24 (P2, cortável; projeto de processo seletivo): acabamento extra NÃO implementado |
 
 Total: 69 tarefas (T01..T69), 17 lotes, ~184,5 h-pessoa (P0+P1 ~178 h; P2 ~6,5 h). Rodada 2 (UX v1.1, ADR-011): +10,5 h no total, sendo +8,5 h MUST (T68 3,5; T15 +2; T14 +1; T01, T20, T32, T60 +0,5 cada) e +2 h SHOULD (T69). Fora de escopo (cortes assumidos): reprocessamento automático da fila, seed extenso, "Visualizar relatório" (fora do PRD).
 
