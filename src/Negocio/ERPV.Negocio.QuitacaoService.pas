@@ -130,6 +130,10 @@ type
 
 implementation
 
+const
+  MsgCancelarLocalFalhou = 'O cancelamento foi confirmado no Financeiro, mas não ' +
+    'foi possível gravá-lo localmente; a venda continua Pendente';
+
 { TResultadoCancelamento }
 
 function TResultadoCancelamento.Cancelou: Boolean;
@@ -313,7 +317,8 @@ begin
   if StatusAtual = svCancelada then
     Exit(ResultadoCancelamento(dcNaoPermitida, 'Venda já está cancelada'));
 
-  Motivo := Trim(AMotivo);
+  // RF10-01: MOTIVO_CANCELAMENTO e VARCHAR(255) (UI ja limita); recorta.
+  Motivo := Copy(Trim(AMotivo), 1, 255);
 
   // HTTP fora de transacao (ADR-006).
   Resp := FFinanceiro.ConfirmarCancelamento(AVendaId, Motivo);
@@ -322,8 +327,26 @@ begin
     rfSucesso:
       if Resp.Status = svCancelada then
       begin
-        FVendaRepositorio.AtualizarStatus(AVendaId, svCancelada, 0, Motivo);
-        Result := ResultadoCancelamento(dcCancelada);
+        try
+          FVendaRepositorio.AtualizarStatus(AVendaId, svCancelada, 0, Motivo);
+          Result := ResultadoCancelamento(dcCancelada);
+        except
+          on EInfra do
+          begin
+            // RF10-01: Financeiro ja cancelou; gravacao local falhou. Venda
+            // segue Pendente; CANCELAMENTO vai para a fila (reconciliacao).
+            // Desfecho dcNaoPermitida: a UI exibe a Mensagem como aviso.
+            try
+              FFilaRepositorio.Enfileirar(AVendaId, tfCancelamento, '');
+              Result := ResultadoCancelamento(dcNaoPermitida, MsgCancelarLocalFalhou +
+                '; o cancelamento foi colocado na fila de pendências');
+            except
+              on EInfra do
+                Result := ResultadoCancelamento(dcNaoPermitida, MsgCancelarLocalFalhou +
+                  ' e não foi possível colocá-lo na fila; tente novamente mais tarde');
+            end;
+          end;
+        end;
       end
       else
         Result := ResultadoCancelamento(dcRespostaInvalida,
@@ -332,8 +355,16 @@ begin
       Result := ResultadoCancelamento(dcRecusada, Resp.Mensagem);
     rfIndisponivel:
       begin
-        FFilaRepositorio.Enfileirar(AVendaId, tfCancelamento, Resp.Mensagem);
-        Result := ResultadoCancelamento(dcEnfileirada, Resp.Mensagem);
+        try
+          FFilaRepositorio.Enfileirar(AVendaId, tfCancelamento, Resp.Mensagem);
+          Result := ResultadoCancelamento(dcEnfileirada, Resp.Mensagem);
+        except
+          on EInfra do
+            // RF10-01: sem fila nao ha reenvio; venda segue Pendente.
+            Result := ResultadoCancelamento(dcNaoPermitida,
+              'Financeiro indisponível e não foi possível colocar o cancelamento ' +
+              'na fila; a venda continua Pendente. Tente novamente mais tarde');
+        end;
       end;
   else
     Result := ResultadoCancelamento(dcRespostaInvalida, Resp.Mensagem);
