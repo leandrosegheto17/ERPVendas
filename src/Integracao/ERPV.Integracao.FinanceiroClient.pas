@@ -1,28 +1,39 @@
 unit ERPV.Integracao.FinanceiroClient;
 
 (*
-  FinanceiroClient (T34, Lote 8; RF-12/13, ADR-004). Implementa
+  FinanceiroClient (T34, Lote 8; RF-12/13, ADR-004; ajustes T55). Implementa
   IFinanceiroGateway sobre THTTPClient SINCRONO (sem threads, sem Vcl).
 
   Regras:
    - Timeout do INI (TConfiguracao.Financeiro.TimeoutMs, JA em ms) aplicado
      a ConnectionTimeout/SendTimeout/ResponseTimeout (docs/ambiente-licencas.md
      secao 4).
-   - X-Api-Key enviado somente se ApiKey <> ''. Nunca logada.
+   - X-Api-Key enviado somente se ApiKey <> ''. Nunca logada. O C# real EXIGE
+     a chave (T55/D3); o cliente segue tolerante ao mock (sem chave).
    - Falha esperada vira TResultadoFinanceiro, nunca excecao:
        200 + corpo valido   => Sucesso
        200 + corpo invalido => RespostaInvalida
-       4xx                  => Recusado (mensagem do corpo {"mensagem"} ou
-                               fallback "... (codigo HTTP xxx)"); nao reenfileira
+       4xx                  => Recusado (mensagem do envelope real do C#
+                               {"erro":{"codigo","mensagem"}} - T55/D1 -, ou
+                               da raiz {"mensagem"} (v1.0), ou fallback
+                               "... (codigo HTTP xxx)"); nao reenfileira.
+                               O C# nao usa 422: recusa e 400/409 (T55/D2).
+       401                  => Recusado com mensagem de CONFIGURACAO da chave
+                               X-Api-Key (T55/D3), nao "recusa de negocio"
+       409 CONFLITO_CONCORRENCIA => Indisponivel (retentavel; enfileira):
+                               contrato-v1.1 do Financeiro diz que o cliente
+                               pode repetir a requisicao (T55/D2). A decisao
+                               usa so o `codigo`, nunca o texto da mensagem (D8).
        5xx / timeout / rede => Indisponivel
        demais codigos (1xx/3xx) => Indisponivel (inesperado, tratado como infra)
    - Log (opcional, ALogger pode ser nil): so metodo, rota e codigo HTTP;
      nunca corpo nem cabecalhos.
    - Estrutura: Enviar(...) privado e generico (metodo, rota, corpo, parser);
      ConfirmarCancelamento (T35) e ConsultarStatus (T36), ja implementados,
-     reutilizam Enviar.
+     reutilizam Enviar. O mapeamento de erro esta em MapearErroHttp/ExtrairErro
+     (class functions puras, sem rede, cobertas por ERPV.Testes.FinanceiroClientErros).
    - RF8-01: TryIsoToDateTime (FinanceiroDTOs) captura qualquer Exception;
-     dataQuitacao malformada => RespostaInvalida. RF8-03: ExtrairMensagem
+     dataQuitacao malformada => RespostaInvalida. RF8-03: ExtrairErro
      limpa controles e trunca a mensagem 4xx em 200 caracteres.
 
   Composition root: ERPV.App.Root instancia
@@ -39,8 +50,9 @@ unit ERPV.Integracao.FinanceiroClient;
    1. Compilar (Shift+F9): 0 erros.
    2. GET http://localhost:8080/_modo?m=ok; ConfirmarQuitacao => Categoria
       rfSucesso, Status svQuitada, DataQuitacao <> 0.
-   3. m=recusa => rfRecusado, CodigoHttp 422, Mensagem preenchida (do corpo
-      ou "... (codigo HTTP 422)").
+   3. m=recusa (o mock agora responde 400 com envelope "erro", como o C# real, que usa
+      400/409 e nunca 422) => rfRecusado, CodigoHttp 400, Mensagem
+      preenchida (do corpo ou "... (codigo HTTP 400)").
    4. m=erro500 => rfIndisponivel, CodigoHttp 500.
    5. m=timeout => rfIndisponivel, CodigoHttp 0, retorno em ~10 s (nao 11+).
    6. m=offline-simulado => rfIndisponivel (conexao derrubada).
@@ -56,7 +68,7 @@ unit ERPV.Integracao.FinanceiroClient;
   ROTEIRO MANUAL T35 (ConfirmarCancelamento; mesmo mock/BaseUrl):
    1. m=ok; ConfirmarCancelamento(1042, 'Cliente desistiu') => rfSucesso,
       Status svCancelada. Com motivo '' o corpo enviado nao tem "motivo".
-   2. m=recusa => rfRecusado, CodigoHttp 422, Mensagem preenchida.
+   2. m=recusa => rfRecusado, CodigoHttp 400 (mock), Mensagem preenchida.
    3. m=erro500 => rfIndisponivel, CodigoHttp 500.
    4. m=timeout / offline-simulado / mock parado => rfIndisponivel.
    5. Resposta 2xx com status diferente de Cancelada (ex.: Quitada) ou corpo
@@ -83,7 +95,6 @@ type
     FApiKey: string;
     FLogger: TLogger; // nao e dono; pode ser nil
     function MontarUrl(const ARota: string): string;
-    function ExtrairMensagem(const ACorpo: string): string;
     /// <summary>Executa AMetodo ('POST'/'GET') em ARota; nunca lanca.
     /// Devolve o codigo HTTP em ACodigo e o corpo em ACorpo; False = falha
     /// de rede/timeout (AErro = so nome da classe da excecao).</summary>
@@ -98,6 +109,17 @@ type
     /// <param name="AApiKey">'' = nao envia X-Api-Key.</param>
     constructor Create(const ABaseUrl: string; ATimeoutMs: Integer;
       const AApiKey: string; ALogger: TLogger = nil);
+    /// <summary>Le o corpo de erro do C# {"erro":{"codigo","mensagem"}} (D1),
+    /// tolerando a raiz {"mensagem"} (v1.0) e corpo vazio/nao-JSON (devolve ''
+    /// nos dois). AMensagem e limpa (uma linha, max. 200 chars); ACodigo so
+    /// aceita [A-Za-z0-9_] (max. 64), senao ''.</summary>
+    class procedure ExtrairErro(const ACorpo: string; out ACodigo,
+      AMensagem: string);
+    /// <summary>Mapeia resposta NAO-2xx ja recebida (funcao pura, sem rede).
+    /// 4xx => Recusado (401 => mensagem de configuracao; 409
+    /// CONFLITO_CONCORRENCIA => Indisponivel); demais => Indisponivel.</summary>
+    class function MapearErroHttp(ACodigoHttp: Integer; const ACorpo,
+      ADescricao: string; ATemApiKey: Boolean): TResultadoFinanceiro;
     function ConfirmarQuitacao(const AVenda: TVenda): TResultadoFinanceiro;
     function ConfirmarCancelamento(AVendaId: Integer; const AMotivo: string): TResultadoFinanceiro;
     function ConsultarStatus(AVendaId: Integer): TResultadoFinanceiro;
@@ -133,15 +155,19 @@ begin
   Result := FBaseUrl + ARota;
 end;
 
-function TFinanceiroClient.ExtrairMensagem(const ACorpo: string): string;
+class procedure TFinanceiroClient.ExtrairErro(const ACorpo: string;
+  out ACodigo, AMensagem: string);
 var
   LVal: TJSONValue;
-  LMsg: TJSONValue;
+  LAlvo: TJSONObject;
+  LV: TJSONValue;
   LI, LTam: Integer;
 const
   CMaxMensagem = 200;
+  CMaxCodigo = 64;
 begin
-  Result := '';
+  ACodigo := '';
+  AMensagem := '';
   if Trim(ACorpo) = '' then
     Exit;
   LVal := nil;
@@ -153,25 +179,83 @@ begin
     end;
     if LVal is TJSONObject then
     begin
-      LMsg := TJSONObject(LVal).GetValue('mensagem');
-      if (LMsg <> nil) and (LMsg is TJSONString) then
-        Result := Trim(TJSONString(LMsg).Value);
+      LAlvo := TJSONObject(LVal);
+      // Envelope real do C# (D1): {"erro":{"codigo","mensagem"}}.
+      // Sem envelope, LAlvo continua a raiz (tolera v1.0 {"mensagem"}).
+      LV := LAlvo.GetValue('erro');
+      if LV is TJSONObject then
+        LAlvo := TJSONObject(LV);
+      LV := LAlvo.GetValue('mensagem');
+      if (LV <> nil) and (LV is TJSONString) then
+        AMensagem := Trim(TJSONString(LV).Value);
+      LV := LAlvo.GetValue('codigo');
+      if (LV <> nil) and (LV is TJSONString) then
+        ACodigo := Trim(TJSONString(LV).Value);
     end;
   finally
     LVal.Free; // Free em nil e seguro
   end;
+  // codigo: so identificador simples (usado em decisao, nunca como texto livre)
+  if Length(ACodigo) > CMaxCodigo then
+    ACodigo := '';
+  for LI := 1 to Length(ACodigo) do
+    if not CharInSet(ACodigo[LI], ['A'..'Z', 'a'..'z', '0'..'9', '_']) then
+    begin
+      ACodigo := '';
+      Break;
+    end;
   // Uma linha, sem controles; teste de vazio (fallback "codigo HTTP") fica depois da limpeza
-  for LI := 1 to Length(Result) do
-    if Result[LI] < ' ' then
-      Result[LI] := ' ';
-  Result := Trim(Result);
-  if Length(Result) > CMaxMensagem then
+  for LI := 1 to Length(AMensagem) do
+    if AMensagem[LI] < ' ' then
+      AMensagem[LI] := ' ';
+  AMensagem := Trim(AMensagem);
+  if Length(AMensagem) > CMaxMensagem then
   begin
     LTam := CMaxMensagem;
-    if (Result[LTam] >= #$D800) and (Result[LTam] <= #$DBFF) then
+    if (AMensagem[LTam] >= #$D800) and (AMensagem[LTam] <= #$DBFF) then
       Dec(LTam); // nao deixa par substituto partido
-    Result := Trim(Copy(Result, 1, LTam)) + #$2026;
+    AMensagem := Trim(Copy(AMensagem, 1, LTam)) + #$2026;
   end;
+end;
+
+class function TFinanceiroClient.MapearErroHttp(ACodigoHttp: Integer;
+  const ACorpo, ADescricao: string; ATemApiKey: Boolean): TResultadoFinanceiro;
+var
+  LCodigo, LMsg: string;
+begin
+  if (ACodigoHttp >= 400) and (ACodigoHttp < 500) then
+  begin
+    // D3: 401 = problema de configuracao da chave, nao recusa de negocio.
+    // Texto fixo (nao usa a mensagem do servidor); segue Recusado (nao enfileira:
+    // repetir sem corrigir a configuracao nao adianta).
+    if ACodigoHttp = 401 then
+    begin
+      if ATemApiKey then
+        Result := TResultadoFinanceiro.Recusado(401,
+          'O Financeiro rejeitou a chave de acesso (X-Api-Key). Verifique a ApiKey configurada.')
+      else
+        Result := TResultadoFinanceiro.Recusado(401,
+          'O Financeiro exige chave de acesso (X-Api-Key) e nenhuma esta configurada. ' +
+          'Informe ApiKey no INI ou em ERPV_FINANCEIRO_APIKEY.');
+      Exit;
+    end;
+    ExtrairErro(ACorpo, LCodigo, LMsg);
+    // D2: 409 CONFLITO_CONCORRENCIA e retentavel (contrato-v1.1 do Financeiro).
+    if (ACodigoHttp = 409) and SameText(LCodigo, 'CONFLITO_CONCORRENCIA') then
+    begin
+      Result := TResultadoFinanceiro.Indisponivel(409,
+        'Financeiro ocupado (conflito de concorrencia); a operacao sera retentada.');
+      Exit;
+    end;
+    if LMsg = '' then
+      LMsg := Format('%s recusada pelo Financeiro (codigo HTTP %d)', [ADescricao, ACodigoHttp]);
+    Result := TResultadoFinanceiro.Recusado(ACodigoHttp, LMsg);
+    Exit;
+  end;
+
+  // 5xx e qualquer outro codigo inesperado: infraestrutura.
+  Result := TResultadoFinanceiro.Indisponivel(ACodigoHttp,
+    Format('Financeiro indisponivel (codigo HTTP %d)', [ACodigoHttp]));
 end;
 
 function TFinanceiroClient.Executar(const AMetodo, ARota, ACorpoEnvio: string;
@@ -235,7 +319,7 @@ function TFinanceiroClient.Enviar(const AMetodo, ARota, ACorpoEnvio, ADescricao:
   const AInterpretar: TFunc<string, TResultadoFinanceiro>): TResultadoFinanceiro;
 var
   LCodigo: Integer;
-  LCorpo, LErro, LMsg: string;
+  LCorpo, LErro: string;
 begin
   if not Executar(AMetodo, ARota, ACorpoEnvio, LCodigo, LCorpo, LErro) then
   begin
@@ -255,18 +339,7 @@ begin
     Exit;
   end;
 
-  if (LCodigo >= 400) and (LCodigo < 500) then
-  begin
-    LMsg := ExtrairMensagem(LCorpo);
-    if LMsg = '' then
-      LMsg := Format('%s recusada pelo Financeiro (codigo HTTP %d)', [ADescricao, LCodigo]);
-    Result := TResultadoFinanceiro.Recusado(LCodigo, LMsg);
-    Exit;
-  end;
-
-  // 5xx e qualquer outro codigo inesperado: infraestrutura.
-  Result := TResultadoFinanceiro.Indisponivel(LCodigo,
-    Format('Financeiro indisponivel (codigo HTTP %d)', [LCodigo]));
+  Result := MapearErroHttp(LCodigo, LCorpo, ADescricao, FApiKey <> '');
 end;
 
 function TFinanceiroClient.ConfirmarQuitacao(const AVenda: TVenda): TResultadoFinanceiro;

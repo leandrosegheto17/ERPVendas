@@ -60,7 +60,7 @@ O modo é **global** e afeta as 3 rotas de negócio até ser trocado de novo:
 | Modo | Efeito em POST quitação/cancelamento e GET status |
 |---|---|
 | `ok` (padrão) | Comportamento normal descrito na tabela acima. |
-| `recusa` | Responde `422` com `{"mensagem": "..."}` — simula recusa 4xx do Financeiro (RN mapeada para `Recusado` em ADR-004). Não altera o estado em memória. |
+| `recusa` | Responde `400` com o envelope real do C# `{"erro":{"codigo","mensagem"}}` (T55; antes 422, que o C# nao usa) — simula recusa 4xx do Financeiro (RN mapeada para `Recusado` em ADR-004). Não altera o estado em memória. |
 | `erro500` | Responde `500` com `{"mensagem": "..."}` — simula erro interno do Financeiro (`Indisponivel` em ADR-004). |
 | `timeout` | Aguarda 11 s antes de responder (o cliente Delphi usa timeout padrão de 10 s lido do INI, ADR-004 — por isso o mock espera mais que isso) e só então responde normalmente. Serve para validar que o cliente classifica como `Indisponivel` sem travar além do timeout configurado. |
 | `timeout-post` | Atrasa 11 s só a **resposta dos POSTs** (quitação/cancelamento); o efeito do POST é registrado no estado do mock ANTES do atraso e `GET /api/vendas/{id}/status` responde normal, sem atraso. Serve para provar a reconciliação T41 de ponta a ponta (POST estoura, GET confirma `Quitada`, sem reenvio: 1 POST no log). |
@@ -91,7 +91,7 @@ curl -s -X POST http://127.0.0.1:8080/api/vendas/cancelamento \
 curl -s "http://127.0.0.1:8080/_modo?m=recusa"
 curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8080/api/vendas/quitacao \
   -H "Content-Type: application/json" -d '{"vendaId":"3"}'
-# -> 422
+# -> 400
 
 # 5) Modo erro500 -> 500
 curl -s "http://127.0.0.1:8080/_modo?m=erro500"

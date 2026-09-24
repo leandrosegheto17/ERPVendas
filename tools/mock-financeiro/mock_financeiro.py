@@ -153,8 +153,8 @@ class MockFinanceiroHandler(BaseHTTPRequestHandler):
 
         if modo == "recusa":
             self._responder_json(
-                422,
-                {"mensagem": "Operacao recusada pelo Financeiro (modo simulado: recusa)."},
+                400,
+                {"erro": {"codigo": "VALOR_TOTAL_DIVERGENTE", "mensagem": "Operacao recusada pelo Financeiro (modo simulado: recusa)."}},
             )
             return "tratado"
 

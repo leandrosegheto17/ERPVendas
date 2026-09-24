@@ -7,13 +7,13 @@ quitação). Qualquer mudança de rota/payload/código só entra em vigor depois
 de registrada neste arquivo (TASK.md, Seção 1, "Contrato").
 
 - **Versão vigente:** v1.0 (recebida do lado C#, não alterada).
-- **Versão proposta:** v1.1 (itens C1-C8), aguardando confirmação do lado C#
-  — ver Seção 3.
+- **Versão:** v1.1 (itens C1-C8) **implementada pelo C#** (confirmada em 2026-09-24 pelo smoke T54; DEC-08/09 respondidas)
+  — ver Seção 3 (registro T55).
 - **Base URL:** configurável em `erpvendas.ini` (ex.: `http://localhost:5000`),
   nunca hardcoded no código Delphi.
-- **Autenticação:** nenhuma no MVP; header `X-Api-Key` **opcional** — só é
-  enviado se um valor estiver configurado no INI/variável de ambiente; vazio
-  = não envia (DEC-07).
+- **Autenticação:** header `X-Api-Key` **obrigatório no C# real** (T55/D3, 2026-09-24; só `/api/health` dispensa); opcional só para o mock. O cliente só o
+  envia se houver valor no INI/variável de ambiente; vazio
+  = não envia (DEC-07, válido só no mock). 401 => mensagem de configuração, sem enfileirar.
 - **Formato:** JSON, UTF-8. Números decimais sempre com ponto (nunca vírgula),
   2 casas para valores monetários. Datas em ISO 8601 (`AAAA-MM-DDThh:mm:ss`).
   `TFormatSettings` invariante no cliente Delphi, independente do locale
@@ -152,7 +152,7 @@ rotas.
 - Ids (`vendaId`, `clienteId`, `produtoId`) sempre como string, mesmo sendo
   inteiros no banco de cada lado.
 - Header `X-Api-Key`: enviado somente se configurado (INI ou variável de
-  ambiente); ausência não é erro.
+  ambiente); o C# real o exige (ausência = 401, T55/D3). Datas do C# vêm em UTC com `Z` (T55/D4; verificado no app, sem correção).
 - Cliente **nunca** mantém transação de banco local aberta durante a
   chamada HTTP (ADR-006).
 
@@ -161,7 +161,9 @@ rotas.
 | Faixa HTTP / condição | Categoria (`TResultadoFinanceiro`) | Efeito |
 |---|---|---|
 | 200 | `Sucesso` | Segue o fluxo (grava status, PDF, e-mail conforme a rota) |
-| 4xx | `Recusado` | Mantém status atual; mensagem do corpo se existir, senão fallback com código HTTP; **não enfileira** (RN-08) |
+| 4xx (400, 404, 409; o C# não usa 422) | `Recusado` | Mantém status atual; mensagem de `erro.mensagem` do envelope real `{"erro":{"codigo","mensagem"}}` (ou raiz `mensagem`, v1.0), senão fallback com código HTTP; **não enfileira** (RN-08) |
+| 401 | `Recusado` | Mensagem fixa de configuração da `X-Api-Key` (ausente vs. rejeitada); não enfileira (T55/D3) |
+| 409 `CONFLITO_CONCORRENCIA` | `Indisponivel` | Retentável (o C# diz que pode repetir): enfileira como 5xx; decisão só pelo `codigo` (T55/D2) |
 | 5xx | `Indisponivel` | Mantém status atual; enfileira (exceto GET status, que não enfileira, só reconcilia) |
 | Timeout (>10 s, configurável) | `Indisponivel` | Idem 5xx |
 | Erro de rede/conexão | `Indisponivel` | Idem 5xx |
@@ -169,10 +171,10 @@ rotas.
 
 ---
 
-## 2. Proposta v1.1 (C1-C8) — **PROPOSTA, NÃO CONFIRMADA PELO LADO C#**
+## 2. Proposta v1.1 (C1-C8) — **IMPLEMENTADA PELO C# (confirmada 2026-09-24, ver Seção 3)**
 
-> Esta seção descreve refinamentos **propostos** ao baseline v1.0. Nada aqui
-> está em vigor até confirmação do time C#. O cliente Delphi (ADR-004) já foi
+> Histórico da proposta original (texto de 22/09; onde diz `422` e corpo `{codigo,mensagem}`, vale o que o C# implementou: 400/409 e envelope `erro`, Seção 3). Ressalva antiga: nada aqui
+> estava em vigor até a confirmação do time C# (agora dada). O cliente Delphi (ADR-004) já foi
 > implementado de forma tolerante à v1.0 — funciona igual, com ou sem estes
 > refinamentos.
 
@@ -207,6 +209,7 @@ rotas.
 | 21/09/2026 | 1.0 | Contrato inicial recebido do lado C# (3 rotas, sem formato de erro/idempotência formalizados) | **Vigente** |
 | 22/09/2026 | 1.1 | Proposta C1-C8: formato de erro padronizado, códigos HTTP por cenário (incl. `409`/`422` para DEC-08/09), idempotência de quitação, enum fechado de status, formalização de serialização | **Proposta — enviada ao contato C# em 22/09/2026, aguardando confirmação até 23/09/2026** |
 | 24/09/2026 | smoke T54 | Smoke com curl contra o Financeiro C# real (http://localhost:5000, chave via `ERPV_FINANCEIRO_APIKEY`, nunca registrada). O C# implementa de fato a v1.1 (envelope `{erro:{codigo,mensagem}}`, 400/401/404/409, idempotência, `X-Correlation-Id`, alias `/api/v1`). Divergências D1-D9 abaixo, a tratar na T55. | **Registrado; ajustes de código na T55** |
+| 24/09/2026 | 1.1 (registro T55) | **Confirmação: v1.1 implementada pelo C#** (evidência = smoke T54, curl + app na IDE; não houve resposta escrita do contato). DEC-08 respondida: recusa = 400 (`VALOR_TOTAL_DIVERGENTE`, `PAYLOAD_INVALIDO`) ou 409 (`VENDA_JA_CANCELADA`, `DADOS_DIVERGENTES`, `MOTIVO_OBRIGATORIO`), **sem 422**. DEC-09 respondida: o C# aceita cancelar Quitada com motivo (200) e devolve 409 `MOTIVO_OBRIGATORIO` sem motivo; o Vendas mantém o bloqueio local (só cancela Pendente). Ajustes no cliente: D1 (envelope `erro`), D2 (`409 CONFLITO_CONCORRENCIA` = `Indisponivel`/retentável, sustentado pelo contrato-v1.1 do Financeiro; demais 4xx = `Recusado`), D3 (401 = mensagem de configuração da chave), D4 (só documentação: C# envia UTC). Mock passou a responder 400 com envelope. Não verificado contra o C# real: 409 `CONFLITO_CONCORRENCIA`, 5xx e timeout (cobertos por testes DUnitX de função pura, `tests/ERPV.Testes.FinanceiroClientErros.pas`, compilados e executados na IDE em 24/09/2026: 78/78 testes DUnitX passaram). | **Confirmada (v1.1 implementada; ajustes T55 aplicados no código, sem compilação/execução por CLI)** |
 
 ### 3.1 Divergências encontradas no smoke T54 (2026-09-24)
 
