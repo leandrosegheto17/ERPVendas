@@ -23,6 +23,9 @@ Senha=senha_ficticia_dev
 
 [Financeiro]
 ; URL base do sistema Financeiro (C#). Ver docs/contrato-api-financeiro.md.
+; Em producao/rede use https://. http:// so vale para localhost/127.0.0.1/::1:
+; com ApiKey preenchida, http:// para outro host e RECUSADO pelo app (chave e
+; dados de venda trafegariam em claro; RF14-01/SG14-01).
 BaseUrl=http://localhost:5000
 ; Timeout de conexao/resposta, EM SEGUNDOS (convertido para milissegundos
 ; internamente antes de ser usado no THTTPClient - ver ERPV.Core.Config).
