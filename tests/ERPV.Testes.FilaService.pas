@@ -15,6 +15,9 @@ uses
   ERPV.Dominio.Contratos.IVendaRepository,
   ERPV.Dominio.Contratos.IFinanceiroGateway,
   ERPV.Dominio.Contratos.IFilaRepository,
+  ERPV.Dominio.Contratos.IClienteRepository,
+  ERPV.Dominio.Contratos.IRelatorioPedido,
+  ERPV.Dominio.Contratos.IEmailSender, ERPV.Dominio.Cliente,
   ERPV.Negocio.FilaService;
 
 type
@@ -54,12 +57,42 @@ type
     Concluidos, Falhas: Integer;
     UltimoErro: string;
     FalharRegistrar: Boolean;
+    FalharConcluir: Boolean;
     procedure Enfileirar(AVendaId: Integer; ATipo: TTipoFila; const AErro: string = '');
     function Listar(ASomentePendentes: Boolean): TDataSet;
     procedure MarcarConcluido(AId: Integer);
     procedure RegistrarFalha(AId: Integer; const AErro: string);
     function ContarPendencias: Integer;
     function ExistePendenciaPorVenda(AVendaId: Integer; ATipo: TTipoFila): Boolean;
+  end;
+
+  TClienteRepoFake = class(TInterfacedObject, IClienteRepository)
+  public
+    Email: string;
+    constructor Create;
+    function Incluir(const ACliente: TCliente): Integer;
+    procedure Alterar(const ACliente: TCliente);
+    procedure Excluir(AId: Integer);
+    function Obter(AId: Integer): TCliente;
+    function ListarDataSet(const AFiltroBusca: string; AIncluirInativos: Boolean): TDataSet;
+    function ExistePorDocumento(const ACpfCnpj: string; AIgnorarId: Integer = 0): Boolean;
+  end;
+
+  TRelatorioFake = class(TInterfacedObject, IRelatorioPedido)
+  public
+    Gerados, Limpezas: Integer;
+    LevantarGerar: Boolean;
+    function GerarPdf(const AVenda: TVenda): string;
+    procedure Limpar(const ACaminhoArquivo: string);
+  end;
+
+  TEmailFake = class(TInterfacedObject, IEmailSender)
+  public
+    Resp: TResultadoEnvioEmail;
+    Envios: Integer;
+    Levantar: Boolean;
+    constructor Create;
+    function Enviar(const ADestinatario, AAssunto, ACorpo, ACaminhoAnexoPdf: string): TResultadoEnvioEmail;
   end;
 
   [TestFixture]
@@ -71,6 +104,12 @@ type
     FVendaI: IVendaRepository;
     FGwI: IFinanceiroGateway;
     FFilaI: IFilaRepository;
+    FCli: TClienteRepoFake;
+    FRel: TRelatorioFake;
+    FEmail: TEmailFake;
+    FCliI: IClienteRepository;
+    FRelI: IRelatorioPedido;
+    FEmailI: IEmailSender;
     FSvc: TFilaService;
   public
     [Setup] procedure Setup;
@@ -81,7 +120,14 @@ type
     [Test] procedure Cancelamento_ReenviaSemMotivo_MotivoNulo;
     [Test] procedure Cancelamento_Erro500_RegistraFalha;
     [Test] procedure Cancelamento_GetJaCancelada_ConcluiSemPost;
-    [Test] procedure Email_NaoSuportado_SemEfeito;
+    [Test] procedure Email_SmtpOk_ConcluiELimpaPdf;
+    [Test] procedure Email_SmtpFalha_MantemPendenteELimpaPdf;
+    [Test] procedure Email_ExcecaoNoEnvio_ViraFalhaELimpaPdf;
+    [Test] procedure Email_ExcecaoNoPdf_ViraFalhaSemLimpar;
+    [Test] procedure Email_ClienteSemEmail_Falha;
+    [Test] procedure Email_VendaNaoQuitada_Falha;
+    [Test] procedure Email_MarcarConcluidoEInfra_ViraFalhaSemExcecao;
+    [Test] procedure Email_RegistrarFalhaEInfra_ViraFalhaSemExcecao;
     [Test] procedure VendaInexistente_RegistraFalha;
     [Test] procedure GravacaoLocalEInfra_ViraFalhaSemExcecao;
     [Test] procedure RegistrarFalhaEInfra_ViraFalhaSemExcecao;
@@ -157,6 +203,8 @@ function TFilaFake.ExistePendenciaPorVenda(AVendaId: Integer; ATipo: TTipoFila):
 
 procedure TFilaFake.MarcarConcluido(AId: Integer);
 begin
+  if FalharConcluir then
+    raise EInfra.Create('falha simulada');
   Inc(Concluidos);
 end;
 
@@ -166,6 +214,59 @@ begin
     raise EInfra.Create('falha simulada');
   Inc(Falhas);
   UltimoErro := AErro;
+end;
+
+{ TClienteRepoFake }
+
+constructor TClienteRepoFake.Create;
+begin
+  inherited Create;
+  Email := 'cliente@teste.com';
+end;
+
+function TClienteRepoFake.Obter(AId: Integer): TCliente;
+begin
+  Result := TCliente.Create;
+  Result.Id := AId;
+  Result.Email := Email;
+end;
+
+function TClienteRepoFake.Incluir(const ACliente: TCliente): Integer; begin Result := 0; end;
+procedure TClienteRepoFake.Alterar(const ACliente: TCliente); begin end;
+procedure TClienteRepoFake.Excluir(AId: Integer); begin end;
+function TClienteRepoFake.ListarDataSet(const AFiltroBusca: string; AIncluirInativos: Boolean): TDataSet; begin Result := nil; end;
+function TClienteRepoFake.ExistePorDocumento(const ACpfCnpj: string; AIgnorarId: Integer): Boolean; begin Result := False; end;
+
+{ TRelatorioFake }
+
+function TRelatorioFake.GerarPdf(const AVenda: TVenda): string;
+begin
+  if LevantarGerar then
+    raise Exception.Create('falha pdf');
+  Inc(Gerados);
+  Result := 'C:\temp\pedido.pdf';
+end;
+
+procedure TRelatorioFake.Limpar(const ACaminhoArquivo: string);
+begin
+  Inc(Limpezas);
+end;
+
+{ TEmailFake }
+
+constructor TEmailFake.Create;
+begin
+  inherited Create;
+  Resp := TResultadoEnvioEmail.Ok;
+end;
+
+function TEmailFake.Enviar(const ADestinatario, AAssunto, ACorpo,
+  ACaminhoAnexoPdf: string): TResultadoEnvioEmail;
+begin
+  Inc(Envios);
+  if Levantar then
+    raise Exception.Create('falha smtp ' + ADestinatario);
+  Result := Resp;
 end;
 
 { TTestesFilaService }
@@ -178,9 +279,15 @@ begin
   FVendaI := FVenda;
   FGwI := FGw;
   FFilaI := FFila;
+  FCli := TClienteRepoFake.Create;
+  FRel := TRelatorioFake.Create;
+  FEmail := TEmailFake.Create;
+  FCliI := FCli;
+  FRelI := FRel;
+  FEmailI := FEmail;
   // GET padrao: Financeiro ainda Pendente => segue para o POST.
   FGw.RespStatus := TResultadoFinanceiro.Sucesso(svPendente);
-  FSvc := TFilaService.Create(FVendaI, FGwI, FFilaI);
+  FSvc := TFilaService.Create(FVendaI, FGwI, FFilaI, FCliI, FRelI, FEmailI);
 end;
 
 procedure TTestesFilaService.TearDown;
@@ -263,14 +370,105 @@ begin
   Assert.AreEqual('', FVenda.UltimoMotivo);
 end;
 
-procedure TTestesFilaService.Email_NaoSuportado_SemEfeito;
+procedure TTestesFilaService.Email_SmtpOk_ConcluiELimpaPdf;
 var
   R: TResultadoReenvio;
 begin
+  FVenda.Status := svQuitada;
   R := FSvc.Reenviar(3, 10, tfEmail);
-  Assert.AreEqual(Ord(rrNaoSuportado), Ord(R.Desfecho));
-  Assert.AreEqual(0, FFila.Falhas + FFila.Concluidos);
+  Assert.IsTrue(R.Concluiu);
+  Assert.AreEqual(1, FFila.Concluidos);
+  Assert.AreEqual(0, FFila.Falhas);
+  Assert.AreEqual(1, FEmail.Envios);
+  Assert.AreEqual(1, FRel.Gerados);
+  Assert.AreEqual(1, FRel.Limpezas);
+  Assert.AreEqual(0, FVenda.Atualizacoes);
   Assert.AreEqual(0, FGw.Gets + FGw.Posts);
+end;
+
+procedure TTestesFilaService.Email_SmtpFalha_MantemPendenteELimpaPdf;
+var
+  R: TResultadoReenvio;
+begin
+  FVenda.Status := svQuitada;
+  FEmail.Resp := TResultadoEnvioEmail.Falha('SMTP fora do ar');
+  R := FSvc.Reenviar(3, 10, tfEmail);
+  Assert.AreEqual(Ord(rrFalha), Ord(R.Desfecho));
+  Assert.AreEqual(0, FFila.Concluidos);
+  Assert.AreEqual(1, FFila.Falhas);
+  Assert.AreEqual('SMTP fora do ar', FFila.UltimoErro);
+  Assert.AreEqual(1, FRel.Limpezas);
+  Assert.AreEqual(0, FVenda.Atualizacoes);
+end;
+
+procedure TTestesFilaService.Email_ExcecaoNoEnvio_ViraFalhaELimpaPdf;
+var
+  R: TResultadoReenvio;
+begin
+  FVenda.Status := svQuitada;
+  FEmail.Levantar := True;
+  R := FSvc.Reenviar(3, 10, tfEmail);
+  Assert.AreEqual(Ord(rrFalha), Ord(R.Desfecho));
+  Assert.AreEqual(1, FFila.Falhas);
+  Assert.AreEqual(1, FRel.Limpezas);
+  Assert.IsFalse(FFila.UltimoErro.Contains('@'));
+end;
+
+procedure TTestesFilaService.Email_ExcecaoNoPdf_ViraFalhaSemLimpar;
+var
+  R: TResultadoReenvio;
+begin
+  FVenda.Status := svQuitada;
+  FRel.LevantarGerar := True;
+  R := FSvc.Reenviar(3, 10, tfEmail);
+  Assert.AreEqual(Ord(rrFalha), Ord(R.Desfecho));
+  Assert.AreEqual(1, FFila.Falhas);
+  Assert.AreEqual(0, FEmail.Envios);
+end;
+
+procedure TTestesFilaService.Email_ClienteSemEmail_Falha;
+var
+  R: TResultadoReenvio;
+begin
+  FVenda.Status := svQuitada;
+  FCli.Email := '';
+  R := FSvc.Reenviar(3, 10, tfEmail);
+  Assert.AreEqual(Ord(rrFalha), Ord(R.Desfecho));
+  Assert.AreEqual(0, FEmail.Envios);
+  Assert.AreEqual(1, FFila.Falhas);
+end;
+
+procedure TTestesFilaService.Email_VendaNaoQuitada_Falha;
+var
+  R: TResultadoReenvio;
+begin
+  FVenda.Status := svPendente;
+  R := FSvc.Reenviar(3, 10, tfEmail);
+  Assert.AreEqual(Ord(rrFalha), Ord(R.Desfecho));
+  Assert.AreEqual(0, FEmail.Envios);
+end;
+
+procedure TTestesFilaService.Email_MarcarConcluidoEInfra_ViraFalhaSemExcecao;
+var
+  R: TResultadoReenvio;
+begin
+  FVenda.Status := svQuitada;
+  FFila.FalharConcluir := True;
+  R := FSvc.Reenviar(3, 10, tfEmail);
+  Assert.AreEqual(Ord(rrFalha), Ord(R.Desfecho));
+  Assert.AreEqual(1, FRel.Limpezas);
+end;
+
+procedure TTestesFilaService.Email_RegistrarFalhaEInfra_ViraFalhaSemExcecao;
+var
+  R: TResultadoReenvio;
+begin
+  FVenda.Status := svQuitada;
+  FEmail.Resp := TResultadoEnvioEmail.Falha('x');
+  FFila.FalharRegistrar := True;
+  R := FSvc.Reenviar(3, 10, tfEmail);
+  Assert.AreEqual(Ord(rrFalha), Ord(R.Desfecho));
+  Assert.IsTrue(R.Mensagem <> '');
 end;
 
 procedure TTestesFilaService.VendaInexistente_RegistraFalha;
