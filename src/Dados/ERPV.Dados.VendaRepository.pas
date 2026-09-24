@@ -26,6 +26,17 @@
   3. Alterar (trocar itens) e conferir; AtualizarStatus(Id, svQuitada, Now, '')
      e depois svCancelada com motivo; Obter reflete.
   4. Excluir(Id): VENDAS e VENDA_ITENS da venda ficam vazios.
+
+  T45 (Lote 11) - RelatorioDataSet(AVendaId): DataSet somente leitura, 1 linha
+  por item (venda + cliente repetidos), colunas VENDA_ID, DATA_VENDA, STATUS,
+  VALOR_TOTAL, CLIENTE_NOME, CLIENTE_CPF_CNPJ, CLIENTE_EMAIL,
+  PRODUTO_DESCRICAO, QUANTIDADE, PRECO_UNITARIO, SUBTOTAL. O chamador libera.
+  ROTEIRO T45 NA IDE:
+  5. Com venda de 2 itens: RelatorioDataSet(Id) devolve 2 registros; conferir
+     CLIENTE_NOME, CLIENTE_CPF_CNPJ, descricao/quantidade/preco dos itens e
+     VALOR_TOTAL contra SELECT direto no banco (Currency identicos; SUBTOTAL =
+     QUANTIDADE*PRECO_UNITARIO; soma dos SUBTOTAL = VALOR_TOTAL).
+  6. Id inexistente: DataSet vazio (IsEmpty). Tentar Edit/Post: deve recusar.
 }
 
 interface
@@ -66,6 +77,8 @@ type
     function ListarDataSet(const AStatusFiltro: string; AClienteIdFiltro: Integer): TDataSet;
     function ExisteVendaPorCliente(AClienteId: Integer): Boolean;
     function ExisteVendaPorProduto(AProdutoId: Integer): Boolean;
+    // T45
+    function RelatorioDataSet(AVendaId: Integer): TDataSet;
   end;
 
 implementation
@@ -86,6 +99,17 @@ const
   SQL_LISTAR_ORDEM = 'ORDER BY V.DATA_VENDA DESC, V.ID DESC';
   SQL_EXISTE_CLIENTE = 'SELECT FIRST 1 ID FROM VENDAS WHERE CLIENTE_ID = :ID';
   SQL_EXISTE_PRODUTO = 'SELECT FIRST 1 ID FROM VENDA_ITENS WHERE PRODUTO_ID = :ID';
+
+  // T45: relatorio (1 linha por item; SUBTOTAL calculado no banco)
+  SQL_RELATORIO =
+    'SELECT V.ID AS VENDA_ID, V.DATA_VENDA, V.STATUS, V.VALOR_TOTAL, ' +
+    'C.NOME AS CLIENTE_NOME, C.CPF_CNPJ AS CLIENTE_CPF_CNPJ, ' +
+    'C.EMAIL AS CLIENTE_EMAIL, P.DESCRICAO AS PRODUTO_DESCRICAO, ' +
+    'I.QUANTIDADE, I.PRECO_UNITARIO, I.QUANTIDADE * I.PRECO_UNITARIO AS SUBTOTAL ' +
+    'FROM VENDAS V JOIN CLIENTES C ON C.ID = V.CLIENTE_ID ' +
+    'LEFT JOIN VENDA_ITENS I ON I.VENDA_ID = V.ID ' +
+    'LEFT JOIN PRODUTOS P ON P.ID = I.PRODUTO_ID ' +
+    'WHERE V.ID = :ID ORDER BY I.ID';
 
   SQL_INCLUIR =
     'INSERT INTO VENDAS (CLIENTE_ID, DATA_VENDA, VALOR_TOTAL, STATUS, DATA_QUITACAO, ' +
@@ -424,6 +448,29 @@ begin
       if E is EInfra then
         raise;
       TratarFalha('listar', E);
+      Result := nil; // inalcancavel (TratarFalha sempre levanta)
+    end;
+  end;
+end;
+
+function TVendaRepository.RelatorioDataSet(AVendaId: Integer): TDataSet;
+var
+  Q: TFDQuery;
+begin
+  Q := NovaQuery;
+  try
+    Q.UpdateOptions.ReadOnly := True; // somente leitura
+    Q.SQL.Text := SQL_RELATORIO;
+    Q.ParamByName('ID').AsInteger := AVendaId;
+    Q.Open;
+    Result := Q;
+  except
+    on E: Exception do
+    begin
+      Q.Free;
+      if E is EInfra then
+        raise;
+      TratarFalha('obter', E);
       Result := nil; // inalcancavel (TratarFalha sempre levanta)
     end;
   end;

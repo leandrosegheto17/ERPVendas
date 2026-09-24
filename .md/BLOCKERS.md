@@ -145,3 +145,26 @@
   cenários (com TLS na porta 587, sem TLS na porta 2525), ambos com o anexo
   PDF confirmado no inbox. T02 marcada `Concluída` em `TASK.md`. Detalhes em
   `docs/ambiente-licencas.md` §11.5.
+
+## Bloqueio 004 — 2026-09-23
+- Reportado por: executor (chapéu UI, T46 — Layout ReportBuilder "Confirmação de Pedido")
+- Escalado para: usuário
+- Artefato/trecho afetado: `TASK.md` — Lote 11, T46 (bloqueia T47 e, via T47, T49)
+- Descrição: o layout exige bandas do ReportBuilder (cabeçalho, detalhe, resumo,
+  rodapé), `TppLabel`/`TppDBText` e `TppDBPipeline` ligado ao DataSet de T45
+  (`TVendaRepository.RelatorioDataSet`). O Executor não tem acesso ao Report
+  Designer e a instalação local do RBuilder 23.04 só traz `.dcu` (sem `.pas`,
+  demos ou `RBuilder.pdf`), então montar o layout por código seria improvisar API
+  sem evidência e não seria conferível ("leitura clara, sem estouro de coluna").
+  `docs/ambiente-licencas.md` §3.2 só valida `dtPDF`/`TextFileName`/
+  `PDFSettings.OpenPDFFile` com componentes soltos no form.
+- Impacto se não resolvido: T47 (`IRelatorioPedido`) e T49 (pós-quitação com PDF
+  anexo) ficam sem layout; Lote 11 não fecha.
+- Sugestão: (1) usuário desenha o layout no Report Designer (TDataModule/TForm
+  `ERPV.Relatorios.PedidoLayout` com `ppReport` + `ppDBPipeline`, colunas:
+  VENDA_ID, DATA_VENDA, STATUS, VALOR_TOTAL, CLIENTE_NOME, CLIENTE_CPF_CNPJ,
+  CLIENTE_EMAIL, PRODUTO_DESCRICAO, QUANTIDADE, PRECO_UNITARIO, SUBTOTAL; 1 linha
+  por item) e um Executor escreve o registro no `.dpr`/`.dproj`, a unit
+  consumidora e o roteiro manual; ou (2) usuário fornece unit/`.dfm`/`.rtm` de
+  referência para o Executor seguir por código.
+- Status: **Aberto**
