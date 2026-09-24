@@ -505,15 +505,15 @@ begin
         if Doc = '' then
           Result := 'Informe o CPF/CNPJ'
         else if (TipoAtual = tpFisica) and not CpfValido(Doc) then
-          Result := 'CPF invalido'
+          Result := 'CPF inválido'
         else if (TipoAtual = tpJuridica) and not CnpjValido(Doc) then
-          Result := 'CNPJ invalido';
+          Result := 'CNPJ inválido';
       end;
     cEmail:
       if Trim(FEdtEmail.Text) = '' then
         Result := 'Informe o e-mail'
       else if not EmailValido(Trim(FEdtEmail.Text)) then
-        Result := 'E-mail invalido';
+        Result := 'E-mail inválido';
   end;
 end;
 
