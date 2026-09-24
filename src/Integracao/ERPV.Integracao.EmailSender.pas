@@ -61,10 +61,12 @@ uses
   System.Classes,
   IdSMTP,
   IdSMTPBase,
+  IdReplySMTP,
   IdMessage,
   IdText,
   IdAttachmentFile,
   IdSSLOpenSSL,
+  IdSSLOpenSSLHeaders,
   IdExplicitTLSClientServerBase,
   IdException,
   ERPV.Core.Config,
@@ -254,7 +256,7 @@ begin
         else
           Result := TResultadoEnvioEmail.Falha(MSG_REJEITADO);
       end;
-      on E: EIdOSSLException do
+      on E: EIdOpenSSLError do
       begin
         LogErro('Falha SMTP (TLS/OpenSSL)', E);
         Result := TResultadoEnvioEmail.Falha(MSG_SSL);
