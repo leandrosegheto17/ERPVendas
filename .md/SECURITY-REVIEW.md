@@ -590,3 +590,46 @@ Sem dado pessoal em log, fila (`ULTIMO_ERRO`), mensagem de UI ou exceção; payl
 **Aprovado com débito** (SG9-01 e SG9-02 médios; SG9-03..05 baixos). Sem achado alto/crítico e sem compliance obrigatório em aberto: SQL parametrizado, transação curta, HTTP fora de transação, status lido do banco, `ULTIMO_ERRO` só com texto fixo (LGPD/minimização OK), mensagens sem SQL/caminho/exceção, ApiKey fora de log/URL/mensagem. RF8-01 no fluxo real: **Média, não bloqueante**, mas débito vencido e agravado por SG9-01 (dois caminhos de "Financeiro Quitada, local Pendente sem fila", não cobertos por T53). Não bloqueia deploy. Pendente no fechamento estrutural: registrar SG9-01 (com RF8-01 e SG10-01) e SG9-04/05 em `Refatoração Lote-9`. Evidência apenas estática (nada compilado/executado).
 
 Escala para: nenhum (sem bloqueio). Gestor: nenhum item novo (vira relevância estratégica só se SG9-01/SG9-02 forem a produção sem correção). Coordenador: não. Executor: correção de SG9-01/SG9-02 via `Refatoração Lote-8/9`, prioritária antes do Lote 11/T50; SG9-04/05 não imediatos.
+
+## Lote 11 — Relatório e PDF (T45, T46, T47) — chapéu DevSecOps (2026-09-24)
+
+Escopo: `ERPV.Dados.VendaRepository` (`SQL_RELATORIO`, `RelatorioDataSet`, `:104-112`, `:456-477`), `ERPV.Relatorios.RelatorioPedido` (T47), `ERPV.Relatorios.PedidoLayout.pas/.dfm` (T46), `IRelatorioPedido`, montagem em `ERPV.App.Root` (`:223`), `config/erpvendas.ini.example` (`[Relatorio] PastaPdfTemp`) e leitura em `ERPV.Core.Config:259`. QA do lote (A11-01..06, R11-1) não duplicado. Análise **estática por leitura** (sem SAST automatizado, sem Delphi, nada executado). Referências: SDD §7, GUARDRAILS 16/17/18, ADR-007/008, LGPD.
+
+### 1. SQL (injeção)
+`SQL_RELATORIO` é constante; único valor variável é `:ID` (`AsInteger`, `:464`). Sem concatenação de entrada; dataset com `ReadOnly`. Falha em `RelatorioDataSet` libera a query e vira `EInfra` de texto fixo (log mascarado). Sem achado (A11-04 é só rótulo de log).
+
+### 2. Path traversal / escape em `Limpar` (`RelatorioPedido.pas:67-74, 116-127`)
+`DentroDaPastaTemp` usa `ExpandFileName` (resolve `..`) e prefixo com delimitador final, logo `..\` e `temp2` não escapam; só apaga arquivo existente; fora da pasta gera aviso e não apaga. O nome do PDF é gerado internamente (`Pedido_<Id inteiro>_<timestamp>`), sem entrada de usuário, então não há traversal na geração. Residuais: symlink/junction não resolvidos (A11-06) e `PastaPdfTemp` relativa resolvida contra o diretório corrente (SG11-05). Sem achado alto.
+
+### 3. PDF com dado pessoal em pasta temp (LGPD)
+- Conteúdo: nome, CPF/CNPJ (completo), e-mail do cliente + itens/valores. Finalidade legítima (confirmação enviada ao próprio cliente, RF-20); a minimização é aceitável, mas CPF/CNPJ vai completo (SG11-06, observação).
+- Ciclo de vida: PDF só é removido se o chamador chamar `Limpar`. Se `Print` falhar após criar arquivo parcial (A11-02) ou o processo cair/o fluxo de e-mail não chegar a `Limpar`, o arquivo com PII **fica na pasta indefinidamente**; não há varredura de arquivos antigos na inicialização (SG11-01).
+- Permissões: o exemplo aponta `C:\ERPVendas\temp\pdf`; `ForceDirectories` herda a ACL da raiz `C:\`, que por padrão dá leitura a outros usuários autenticados da máquina; o código não restringe a ACL (SG11-02). Em estação monousuário o risco é reduzido.
+- Nome previsível (A11-03): `Pedido_<Id>_<yyyymmddhhnnsszzz>` é adivinhável com Id sequencial; só importa combinado com ACL frouxa (SG11-02).
+
+### 4. Vazamento de caminho/SQL em mensagens e logs
+Mensagem ao usuário é `MSG_FALHA_PDF` fixa (sem caminho/SQL). `FLogger.Erro` recebe `AVenda.Id` (inteiro) e a exceção original, que passa pelo mascaramento de `ERPV.Core.Log` (CPF/CNPJ/e-mail/senha/apikey). `Limpar` loga o caminho completo no aviso (`:126`); o nome só contém Id e timestamp (sem PII), caminho é local; aceitável, sem achado. Nenhum dado do cliente entra em log.
+
+### 5. Layout .dfm, segredos e dependência
+`mtPedido` sem linhas (`Data` ausente): nenhum dado real/PII no .dfm; `Active = True` sem efeito de dado. Sem segredo literal em nenhuma unit/INI do lote (o INI example só tem caminho). ReportBuilder: componente licenciado já existente (T67); faixa "Demo Copy" do trial é questão de licenciamento/produto (deve sair antes do deploy de produção — nota ao DevOps/Gestor), não vulnerabilidade. Domínio (`IRelatorioPedido`) sem ReportBuilder/FireDAC (ADR-001/010). Sem criptografia/senha no PDF (não exigida no SDD §7).
+
+### 6. Requisitos de segurança operacional para o chapéu DevOps
+Criar `PastaPdfTemp` com ACL restrita ao usuário da aplicação (remover herança de "Users/Authenticated Users"), fora de pasta sincronizada/backup (OneDrive, backup do Firebird não deve incluí-la); antivírus/indexação sem exposição da pasta; remover a faixa "Demo Copy" (licença ReportBuilder) antes de produção; backup tratando a pasta como dado pessoal.
+
+### Achados do lote
+
+| # | Achado | Severidade | Situação |
+|---|---|---|---|
+| SG11-01 (= A11-02 + retenção) | PDF com PII (nome, CPF/CNPJ, e-mail) pode ficar órfão em `PastaPdfTemp` (falha de `Print` em `RelatorioPedido.pas:76-113`, falha de e-mail, queda do app); sem varredura de arquivos antigos | Média (LGPD retenção/minimização) | Débito com prazo: limpar arquivo parcial no `except` de `GerarPdf` + varrer `Pedido_*.pdf` com mais de N horas na inicialização (ou em `Create`); junto de A11-02; tarefa em `Refatoração Lote-11`, antes do smoke T54 |
+| SG11-02 (= A11-03) | ACL da pasta herdada e nome previsível (`Pedido_<Id>_<ms>`) permitem a outro usuário local ler/adivinhar PDFs | Baixa (média se estação multiusuário/compartilhada) | Débito: sufixo aleatório (GUID) no nome e, se viável, ACL restrita na criação; requisito operacional ao DevOps; `Refatoração Lote-11` |
+| SG11-03 (= A11-06) | `Limpar` não resolve symlink/junction (só prefixo textual) | Baixa (documental) | Registrar limitação; sem correção obrigatória |
+| SG11-04 | `PastaPdfTemp` sem validação (relativa, UNC/rede, raiz de unidade); `ForceDirectories` cria o que vier do INI (configuração confiável, controlada por administrador) | Baixa | Débito: exigir caminho absoluto local em `ERPV.Core.Config`; `Refatoração Lote-11` |
+| SG11-05 | CPF/CNPJ impresso completo no PDF (minimização, LGPD art. 6º III) | Baixa (observação) | Sinalizar; decisão de conteúdo é do produto/Gestor (o PDF vai ao próprio titular); sem código obrigatório |
+| SG11-06 (= A11-01) | `AVenda`/dependências nil geram AV bruta (mensagem do sistema, possivelmente com endereço) em vez de `EInfra` | Baixa | Junto de A11-01; `Refatoração Lote-11` |
+
+A11-04/A11-05/R11-1: sem implicação de segurança adicional.
+
+### Veredito do lote (chapéu DevSecOps)
+**Aprovado com débito** (SG11-01 média; SG11-02..06 baixos). Sem achado alto/crítico e sem compliance obrigatório em aberto: SQL parametrizado e somente leitura, `Limpar` confinado à pasta temp, mensagens fixas sem caminho/SQL, log mascarado, sem PII/segredo no .dfm/INI. Não bloqueia deploy. SG11-01 sobe para Alta se, em produção, a pasta ficar em local compartilhado/legível por outros usuários sem limpeza. Pendente no fechamento estrutural: registrar SG11-01, 02, 04 e 06 (com A11-01/02/03) em `Refatoração Lote-11`. Evidência apenas estática (nada compilado/executado).
+
+Escala para: nenhum (sem bloqueio). Gestor: SG11-05 (conteúdo do PDF/máscara do CPF) e licença ReportBuilder antes de produção, informativos e em paralelo. Coordenador: não. Executor: correção via `Refatoração Lote-11`, não imediata. DevOps: requisitos da seção 6.

@@ -623,3 +623,47 @@ A validação do Lote 10 reabriu T38 (`Em andamento`) por causa do mesmo BOM de 
 ### Veredito do lote (chapéu QA)
 
 **Aprovado com ressalvas.** Ressalvas: A2-A5, RF8-01 (corrigir antes do smoke T54), R1, R2 (IDE). A2-A5 (e o ajuste de cabeçalho) entram em `Refatoração Lote-9`. Este relatório não alterou código nem `TASK.md`. Liberado para o chapéu DevSecOps auditar o Lote 9. O Bloqueio 005 pode permanecer Resolvido.
+
+## Lote 11 — Relatório e PDF (T45, T46, T47) — chapéu QA (2026-09-24)
+
+Método: inspeção estática de `ERPV.Dados.VendaRepository.pas` (`SQL_RELATORIO`, `RelatorioDataSet`), `ERPV.Relatorios.PedidoLayout.pas/.dfm`, `ERPV.Relatorios.RelatorioPedido.pas`, `ERPV.Dominio.Contratos.IRelatorioPedido.pas`, `ERPV.App.Root.pas`, `.dpr`/`.dproj`. Nada compilado/executado por este agente (sem IDE Delphi). Nenhuma nota de implementação do Executor foi usada como base de aprovação.
+
+**Evidência do usuário (IDE, 2026-09-23/24, informada por ele, não reproduzida aqui):** build compila; `GerarPdf` gerou `C:\ERPVendas\temp\pdf\Pedido_7_<timestamp>.pdf`, arquivo existe, abriu no leitor com dados corretos; `Limpar` apagou o arquivo; casos de erro (pasta inválida, `Limpar` fora da pasta) aprovados; preview do layout no Designer conferido (e-mail/rodapé/rótulos/alinhamento ajustados a pedido).
+
+### Verificações por ponto
+
+1. **Colunas x layout (T45/T46):** `SQL_RELATORIO` devolve 11 colunas (VENDA_ID, DATA_VENDA, STATUS, VALOR_TOTAL, CLIENTE_NOME, CLIENTE_CPF_CNPJ, CLIENTE_EMAIL, PRODUTO_DESCRICAO, QUANTIDADE, PRECO_UNITARIO, SUBTOTAL), idênticas em nome às do `mtPedido` (FieldDefs e TFields) e aos 11 `DataField` dos `TppDBText` (DBText1-11, cada um em uma coluna distinta). Bandas: cabeçalho (venda + cliente + títulos), detalhe (itens), resumo (total), rodapé (data/hora e nº de páginas). No runtime o dataset é o do FireDAC (NUMERIC(15,2) chega como BCD/FMTBCD, o mtPedido de desenho usa ftCurrency); confirmado só pela evidência do usuário (PDF com dados corretos). Larguras dos campos do cabeçalho (17 mm) x conteúdo longo: não verificável estaticamente; usuário afirma ter ajustado no preview.
+2. **VALOR_TOTAL x SUBTOTAL:** SUBTOTAL = `QUANTIDADE * PRECO_UNITARIO` no banco; VALOR_TOTAL é a coluna gravada em VENDAS (o resumo imprime esse valor, não a soma dos itens). Coerência depende de T26/`VendaService` gravar total = soma dos itens (fora do Lote 11).
+3. **T47:** erro amigável — `MSG_FALHA_PDF` fixa, sem caminho/SQL; detalhe só em `FLogger.Erro` (OK). `Limpar` — `DentroDaPastaTemp` usa `ExpandFileName` (resolve `..` e relativo) e compara com prefixo terminado em `\`, logo `C:\x\temp2` não passa por `C:\x\temp`; case-insensitive (adequado a Windows); só apaga arquivo existente; aviso em log, sem exceção. Liberação: Layout liberado antes do DataSet (correto: o DataSource aponta para o dataset), ambos em `finally`; falha em `RelatorioDataSet` libera a query. Nome `Pedido_<Id>_yyyymmddhhnnsszzz.pdf` (previsível; colisão só no mesmo milissegundo). Venda inexistente: `JOIN CLIENTES` => vazio => `EInfra`, nenhum arquivo. Venda sem itens: `LEFT JOIN` gera 1 linha com item vazio (aceitável).
+4. **nil:** `AVenda = nil` em `GerarPdf` (linha 81, fora do `try`) gera AV bruta, não `EInfra`; `FVendaRepository`/`FLogger` nil idem. `RelatorioDataSet` com ID inexistente devolve dataset vazio (não nil). Chamadores previstos (T49/T51) não passam nil: risco baixo.
+5. **Dados de teste no .dfm:** `mtPedido.Active = True`, porém o .dfm não contém linhas (sem `Data`) — nenhum dado real/PII. Faixa "Demo Copy" é do trial (T67, `docs/ambiente-licencas.md` §3.2), esperada e documentada.
+6. **Domínio:** `IRelatorioPedido` usa só `ERPV.Dominio.Venda`; sem ReportBuilder/Vcl/FireDAC (ADR-001/010). `ppTypes` só em `Relatorios.RelatorioPedido`. Montagem no Root (`TRelatorioPedido.Create(PastaPdfTemp, VendaRepository, Logger)`; `nil` no `Destroy` antes dos repositórios) e registro no `.dpr` (linhas 36-37) e `.dproj` (107/112) presentes.
+7. **Cabeçalho-roteiro:** presente nas units. `RelatorioPedido.pas` tem BOM UTF-8 (acento em `MSG_FALHA_PDF` ok); `PedidoLayout.pas` é ASCII puro.
+
+### Achados
+
+| ID | Sev. | Local | Descrição |
+|---|---|---|---|
+| A11-01 | Simples | `ERPV.Relatorios.RelatorioPedido.pas:81` | `AVenda`/dependências nil não tratados: AV bruta em vez de `EInfra` (mover cálculo do caminho para dentro do `try` e/ou checar nil). |
+| A11-02 | Simples | `ERPV.Relatorios.RelatorioPedido.pas:76-113` | Se `Print` falhar após criar arquivo parcial, ele permanece na pasta temp (sem limpeza no `except`). |
+| A11-03 | Simples | `ERPV.Relatorios.RelatorioPedido.pas:82` | Nome com timestamp em ms, sem sufixo único; colisão teórica. |
+| A11-04 | Simples | `ERPV.Dados.VendaRepository.pas:473` | `RelatorioDataSet` reporta falha como `TratarFalha('obter', ...)` (rótulo de "obter venda"); só afeta log/mensagem. |
+| A11-05 | Simples | `PedidoLayout.dfm` (DBText1-6, `mmWidth = 17198`) | Campos de cabeçalho com largura fixa 17 mm, sem `WordWrap`/`DisplayFormat` explícitos; e-mail/nome longos e formato de moeda/data dependem do RB/locale. Usuário conferiu no preview, sem teste com 100 chars. |
+| A11-06 | Simples (doc.) | `ERPV.Relatorios.RelatorioPedido.pas:71-73` | `Limpar` não resolve symlink/junction (só prefixo textual); aceitável em pasta temp local; registrar como limitação. |
+| R11-1 | Informativo | — | `VALOR_TOTAL` impresso é o gravado, não a soma dos itens (depende de T26). |
+
+Reprovações críticas: nenhuma. Achados Simples entram em `Refatoração Lote-11` (prazo: antes do smoke T54; A11-01/02 preferencialmente junto com T49).
+
+### Não verificável por falta de IDE
+
+Compilação (usuário confirmou); tipos FMTBCD reais no pipeline; estouro visual com dados longos; formatação de moeda/data no PDF; `Print` em pasta sem permissão além do caso testado; quebra de página com muitos itens.
+
+### Veredito por tarefa
+
+- T45: **Aprovada** (ressalvas menores: A11-04, R11-1).
+- T46: **Aprovada com ressalvas** (A11-05).
+- T47: **Aprovada com ressalvas** (A11-01, A11-02, A11-03, A11-06).
+
+### Veredito do lote (chapéu QA)
+
+**Aprovado com ressalvas.** Nenhuma reprovação crítica; `TASK.md` não alterado (T45-T47 seguem `Concluída`). Liberado ao chapéu DevSecOps. Pontos para a auditoria: path traversal em `Limpar`, vazamento de caminho em log/mensagem, dados de cliente no PDF em pasta temp.
