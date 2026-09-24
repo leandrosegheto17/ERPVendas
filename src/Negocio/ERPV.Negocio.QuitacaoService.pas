@@ -109,6 +109,8 @@ type
     FFilaRepositorio: IFilaRepository;
     procedure EnfileirarIndisponivel(AVendaId: Integer;
       var AResultado: TResultadoQuitacao);
+    function GravarQuitada(AVendaId: Integer; const AData: TDateTime;
+      var AResultado: TResultadoQuitacao): Boolean;
     class function ResultadoCancelamento(ADesfecho: TDesfechoCancelamento;
       const AMensagem: string = ''): TResultadoCancelamento; static;
   public
@@ -171,6 +173,28 @@ begin
   end;
 end;
 
+function TQuitacaoService.GravarQuitada(AVendaId: Integer;
+  const AData: TDateTime; var AResultado: TResultadoQuitacao): Boolean;
+begin
+  // RF9-01: o Financeiro ja quitou; se a gravacao local falhar (EInfra), a
+  // excecao nao escapa: venda segue Pendente e QUITACAO e enfileirada para
+  // reenvio/reconciliacao. Mensagem sem dados do Financeiro nem erro tecnico.
+  Result := True;
+  try
+    FVendaRepositorio.AtualizarStatus(AVendaId, svQuitada, AData, '');
+  except
+    on EInfra do
+    begin
+      Result := False;
+      AResultado.Desfecho := qdIndisponivel;
+      AResultado.Mensagem := 'A quitação foi confirmada no Financeiro, mas não ' +
+        'foi possível gravá-la localmente; a venda segue Pendente e será ' +
+        'reconciliada pela fila de pendências';
+      EnfileirarIndisponivel(AVendaId, AResultado);
+    end;
+  end;
+end;
+
 function TQuitacaoService.Confirmar(AVendaId: Integer): TResultadoQuitacao;
 var
   Venda: TVenda;
@@ -205,9 +229,11 @@ begin
         if Data = 0 then
           Data := Now;
         // Commit curto, isolado (ADR-006).
-        FVendaRepositorio.AtualizarStatus(AVendaId, svQuitada, Data, '');
-        Result.Desfecho := qdSucesso;
-        Result.DataQuitacao := Data;
+        if GravarQuitada(AVendaId, Data, Result) then
+        begin
+          Result.Desfecho := qdSucesso;
+          Result.DataQuitacao := Data;
+        end;
       end
       else
       begin
@@ -238,11 +264,13 @@ begin
           Data := Resp.DataQuitacao;
           if Data = 0 then
             Data := Now; // GET status nao devolve data
-          FVendaRepositorio.AtualizarStatus(AVendaId, svQuitada, Data, '');
-          Result.Desfecho := qdSucesso;
-          Result.DataQuitacao := Data;
-          Result.Mensagem := 'Quitação já registrada no Financeiro; ' +
-            'venda concluída localmente (reconciliação por consulta de status)';
+          if GravarQuitada(AVendaId, Data, Result) then
+          begin
+            Result.Desfecho := qdSucesso;
+            Result.DataQuitacao := Data;
+            Result.Mensagem := 'Quitação já registrada no Financeiro; ' +
+              'venda concluída localmente (reconciliação por consulta de status)';
+          end;
         end
         else
         begin
