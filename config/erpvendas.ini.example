@@ -42,10 +42,12 @@ UsaTLS=1
 ; Remetente (opcional; padrao nao-responder@erpvendas.local). Em producao use
 ; um endereco de dominio autorizado a enviar (SPF/DKIM/DMARC, ver README).
 ;Remetente=nao-responder@erpvendas.local
-; TLS (RF12-05). Com UsaTLS=1 o STARTTLS e exigido e o certificado verificado.
+; TLS (RF12-05). Com UsaTLS=1 o STARTTLS e exigido e o padrao e o modo ESTRITO:
+; exige CaFile e verifica a cadeia do certificado. Em DESENVOLVIMENTO com
+; Mailtrap/Ethereal, sem bundle de CAs, use VerificarCertificado=0 (so dev).
 ; CaFile: caminho de um .pem com as CAs confiaveis (OBRIGATORIO com
 ; VerificarCertificado=1, pois o OpenSSL 1.0.2 nao usa o repositorio do Windows).
-;CaFile=C:ERPVendasconfigcacert.pem
+;CaFile=C:\ERPVendas\config\cacert.pem
 ; VerificarCertificado (padrao 1). 0 = nao verifica (SOMENTE dev: Mailtrap/Ethereal).
 ; Producao: VerificarCertificado=1 e CaFile apontando para o bundle de CAs.
 ;VerificarCertificado=1

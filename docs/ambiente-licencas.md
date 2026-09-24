@@ -554,6 +554,10 @@ Seção 2 — o caminho principal (com TLS) já está validado. Para T48
 junto ao `.exe`, `sslvTLSv1_2`, `utUseExplicitTLS`, porta configurável pelo
 INI (padrão 587).
 
+> Atualização (RF12-05): o `EmailSender` real não usa mais `utUseExplicitTLS`;
+> com `UsaTLS=1` usa `utUseRequireTLS` (STARTTLS obrigatório, sem downgrade). O
+> texto acima é o histórico do spike.
+
 ### 11.6 Lote 12 / E-mail — notas de segurança e DevOps (SG12-02, SG12-05)
 
 - **OpenSSL 1.0.2 está sem suporte (fim de vida desde 2019).** Usar a última

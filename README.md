@@ -74,7 +74,7 @@ Verificação: `SELECT RDB$CHARACTER_SET_NAME FROM RDB$DATABASE;` deve retornar 
 |---|---|---|
 | `[Banco]` | `Caminho`, `Usuario`, `Senha` | Caminho do `.FDB` |
 | `[Financeiro]` | `BaseUrl`, `TimeoutSegundos`, `ApiKey` | `ApiKey` vazia = não envia `X-Api-Key`. Contrato: `docs/contrato-api-financeiro.md` |
-| `[SMTP]` | `Host`, `Porta`, `Usuario`, `Senha`, `UsaTLS`, `Remetente` (opcional), `CaFile` (opcional; .pem de CAs, obrigatório com TLS estrito), `VerificarCertificado` (opcional; padrão `1`; `0` só em dev). Produção: `VerificarCertificado=1` e `CaFile` apontando para o bundle de CAs | Use caixa de teste (Mailtrap/Ethereal) |
+| `[SMTP]` | `Host`, `Porta`, `Usuario`, `Senha`, `UsaTLS`, `Remetente` (opcional), `CaFile` (opcional; .pem de CAs, obrigatório com TLS estrito), `VerificarCertificado` (opcional; padrão `1`; `0` só em dev). Com `UsaTLS=1` o padrão é modo ESTRITO (exige `CaFile` e verifica a cadeia); em desenvolvimento com Mailtrap/Ethereal, sem bundle de CAs, use `VerificarCertificado=0` (só dev). Produção: `VerificarCertificado=1` e `CaFile` apontando para o bundle de CAs | Use caixa de teste (Mailtrap/Ethereal) |
 | `[Relatorio]` | `PastaPdfTemp` | Deve existir e ter escrita |
 | `[Log]` | `Pasta` | Deve existir e ter escrita |
 

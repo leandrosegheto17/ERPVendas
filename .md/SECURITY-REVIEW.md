@@ -780,3 +780,17 @@ Escala para: nenhum bloqueio. Executor: correção via `Refatoração Lote-15`. 
 Texto novo revisado: sem credencial/host real (só `<senha>` e 127.0.0.1); `ISC_PASSWORD`/prompt orientado corretamente, com limpeza da variável; aviso de rede do mock e `/_modo` sem autenticação (`--host 127.0.0.1`, sem `0.0.0.0`); §5 descreve com fidelidade o alcance de `MascararSensiveis` (CPF/CNPJ, e-mail, chave=valor de senha/apikey/token/secret; não cobre nome, telefone, endereço, formatos atípicos nem texto do Financeiro na UI) e o envio do `motivo` livre no cancelamento. Retenção sem prazo (SG15-05) segue informativo ao Gestor. Sem novos achados; SG15-01..04 tratados.
 
 **Veredito: Aprovado** (sem débito novo; débitos dos Lotes 11 a 13 mantidos).
+
+## Refatoração Lote-12 — validação (2026-09-24)
+
+Escopo: RF12-01..06 (leitura do código; nada executado).
+
+- RF12-05 (SG12-01): `UsaTLS=1` => `utUseRequireTLS` (sem STARTTLS o Indy recusa antes de AUTH/DATA; PDF só é anexado ao enviar); `VerifyMode [sslvrfPeer]`, `VerifyDepth 5`, `OnVerifyPeer` devolve `AOk`; `CaFile` obrigatório em modo estrito (checado antes de conectar); relaxar só com `VerificarCertificado=0`, com aviso no log; mensagens fixas (sem host, certificado ou senha); log só de etapa/classe. Correto quanto a cadeia e downgrade.
+- SG12-07 (nova, LIMITAÇÃO): hostname (CN/SAN) não verificado, só a cadeia. Classificação: **Média**, não Alta. Exige atacante no caminho de rede com certificado válido de qualquer outro domínio emitido por CA do bundle configurado; a exposição é credencial SMTP e PDF de venda; fica mitigada por bundle enxuto e rede controlada. Não bloqueia (sem compliance obrigatório em aberto, sem produção ainda); vira RF12-07 (P1, antes do smoke T54 e de produção).
+- RF12-01 Aprovada: log só com Id da venda (sem e-mail/CPF/mensagem técnica).
+- RF12-02 Aprovada: `RemetenteValido` recusa espaço/tab/CR/LF/vírgula/ponto e vírgula (sem injeção de cabeçalho); mensagem fixa sem ecoar o valor.
+- RF12-04 Aprovada: destinatário validado por `EmailValido` antes de conectar; ausência de CR/LF/lista.
+- RF12-06 Aprovada: docs sem segredos (só nomes de variável e dados fictícios); hash das DLLs "a preencher na T61" é débito registrado, prazo T61 (build/pacote).
+- Requisito DevOps: produção com `VerificarCertificado=1` + `CaFile` (bundle de CAs), senha só por `ERPV_SMTP_PASSWORD`, SPF/DKIM/DMARC.
+
+**Veredito: Aprovado com débito** (SG12-07 Média em RF12-07; sem achado Alto/Crítico). Gestor: informativo (SG12-07). Deploy segue.
