@@ -28,7 +28,7 @@ uses
   Winapi.Windows,
   System.SysUtils, System.Classes, System.UITypes,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Graphics,
-  cxButtons, ERPV.UI.Tokens, ERPV.UI.Tema;
+  cxButtons, ERPV.UI.Tokens, ERPV.UI.Tema, ERPV.UI.Icones;
 
 type
   TFormBaseLista = class(TForm)
@@ -133,6 +133,11 @@ begin
   FBtnEditar := CriarBotao('Editar', upbSecundario, ClickEditar);
   FBtnExcluir := CriarBotao('Excluir', upbPerigoso, ClickExcluir);
   FBtnFechar := CriarBotao('Fechar', upbSecundario, ClickFechar);
+  // T69: icones (degradam para so texto se faltarem; Caption permanece)
+  AplicarIcone(FBtnNovo, ERPVIconeNovo);
+  AplicarIcone(FBtnEditar, ERPVIconeEditar);
+  AplicarIcone(FBtnExcluir, ERPVIconeExcluir);
+  AplicarIcone(FBtnFechar, ERPVIconeFechar);
   // TabOrder explicito: Novo, Editar, Excluir, Fechar; depois o conteudo.
   FBtnNovo.TabOrder := 0;
   FBtnEditar.TabOrder := 1;

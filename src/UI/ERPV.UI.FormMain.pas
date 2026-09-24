@@ -43,7 +43,7 @@ uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants,
   System.Classes, Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs,
   Vcl.ExtCtrls, Vcl.StdCtrls, Vcl.Menus, cxButtons,
-  ERPV.UI.Tokens, ERPV.UI.Tema,
+  ERPV.UI.Tokens, ERPV.UI.Tema, ERPV.UI.Icones,
   ERPV.Negocio.ClienteService, ERPV.UI.FormListaClientes,
   ERPV.Negocio.ProdutoService, ERPV.UI.FormListaProdutos;
 
@@ -90,9 +90,9 @@ type
       const ATextoAlinhamento: TAlignment): TPanel;
     procedure AdicionarGrupoNav(const ATitulo: string; var ATopo: Integer);
     procedure AdicionarItemNav(const ADestino: TDestinoShell; const ACaption: string;
-      var ATopo: Integer);
+      const AIcone: string; var ATopo: Integer);
     procedure AdicionarBotaoNav(const ACaption: string; const ATag: Integer;
-      var ATopo: Integer; const AAcao: TNotifyEvent);
+      const AIcone: string; var ATopo: Integer; const AAcao: TNotifyEvent);
     procedure AtualizarItemAtivo(const ADestino: TDestinoShell);
     procedure DefinirTextoStatus(APainel: TPanel; const ATexto: string);
     procedure AoClicarDestino(Sender: TObject);
@@ -235,6 +235,8 @@ begin
 end;
 
 procedure TFormMain.MontarStatusBar;
+var
+  IconePend: TImage;
 begin
   FPainelStatus := TPanel.Create(Self);
   FPainelStatus.Parent := Self;
@@ -250,6 +252,14 @@ begin
   FStatusPendencias.Hint := 'Abrir Pendências de Integração';
   FStatusPendencias.ShowHint := True;
   FStatusPendencias.OnClick := AoClicarPendencias;
+  // T69: icone 'sinc' ao lado do texto (o texto "Pendencias: N" permanece)
+  IconePend := TImage.Create(FStatusPendencias);
+  IconePend.Parent := FStatusPendencias;
+  IconePend.Align := alLeft;
+  IconePend.Width := TamanhoIconeAtual + EscalarPx(ERPVEspaco8);
+  IconePend.OnClick := AoClicarPendencias;
+  if not AplicarIconeImagem(IconePend, ERPVIconeSinc) then
+    IconePend.Visible := False;
 
   FStatusFinanceiro := CriarAreaStatus(alLeft, LARGURA_STATUS_LATERAL, taLeftJustify);
   FStatusEstado := CriarAreaStatus(alClient, 0, taCenter);
@@ -323,7 +333,7 @@ begin
 end;
 
 procedure TFormMain.AdicionarBotaoNav(const ACaption: string; const ATag: Integer;
-  var ATopo: Integer; const AAcao: TNotifyEvent);
+  const AIcone: string; var ATopo: Integer; const AAcao: TNotifyEvent);
 var
   Linha: TPanel;
   Barra: TPanel;
@@ -353,6 +363,7 @@ begin
   Botao.Tag := ATag;
   Botao.OnClick := AAcao;
   EstilizarBotao(Botao, upbSecundario);
+  AplicarIcone(Botao, AIcone); // T69: degrada para so texto; Caption permanece
 
   if (ATag >= Ord(Low(TDestinoShell))) and (ATag <= Ord(High(TDestinoShell))) then
   begin
@@ -363,9 +374,9 @@ begin
 end;
 
 procedure TFormMain.AdicionarItemNav(const ADestino: TDestinoShell; const ACaption: string;
-  var ATopo: Integer);
+  const AIcone: string; var ATopo: Integer);
 begin
-  AdicionarBotaoNav(ACaption, Ord(ADestino), ATopo, AoClicarDestino);
+  AdicionarBotaoNav(ACaption, Ord(ADestino), AIcone, ATopo, AoClicarDestino);
 end;
 
 procedure TFormMain.MontarNavegacaoLateral;
@@ -382,15 +393,15 @@ begin
 
   Topo := EscalarPx(ERPVEspaco8);
   AdicionarGrupoNav('Cadastros', Topo);
-  AdicionarItemNav(dsClientes, '&Clientes', Topo);
-  AdicionarItemNav(dsProdutos, '&Produtos', Topo);
+  AdicionarItemNav(dsClientes, '&Clientes', ERPVIconeBuscar, Topo);
+  AdicionarItemNav(dsProdutos, '&Produtos', ERPVIconePastaVazia, Topo);
   AdicionarGrupoNav('Vendas', Topo);
-  AdicionarItemNav(dsVendas, '&Vendas', Topo);
+  AdicionarItemNav(dsVendas, '&Vendas', ERPVIconeConfirmar, Topo);
   AdicionarGrupoNav('Integração', Topo);
-  AdicionarItemNav(dsPendencias, 'P&endências', Topo);
+  AdicionarItemNav(dsPendencias, 'P&endências', ERPVIconeSinc, Topo);
   AdicionarGrupoNav('Ajuda', Topo);
-  AdicionarBotaoNav('&Sobre', TAG_SEM_DESTINO, Topo, AoClicarSobre);
-  AdicionarBotaoNav('Sai&r', TAG_SEM_DESTINO, Topo, AoClicarSair);
+  AdicionarBotaoNav('&Sobre', TAG_SEM_DESTINO, ERPVIconeInfo, Topo, AoClicarSobre);
+  AdicionarBotaoNav('Sai&r', TAG_SEM_DESTINO, ERPVIconeFechar, Topo, AoClicarSair);
 end;
 
 procedure TFormMain.MontarMenuDeBarra;
