@@ -414,3 +414,48 @@ CPF/CNPJ/e-mail continuam mascarados em log e ausentes de mensagens. Nenhum requ
 **Aprovado com débito** (RF6-01 média; RF6-04 e achado 2 baixos). Sem achado alto/crítico nem compliance obrigatório em aberto; sem risco de injeção; sem vazamento de dado sensível. Não bloqueia deploy. Pendente no fechamento estrutural: registrar RF6-01 e RF6-04 em `Refatoração Lote-6` com o prazo acima.
 
 Escala para: nenhum (sem bloqueio). Gestor: sem relevância estratégica. Coordenador: não. Executor: correção de RF6-01/RF6-04 via `Refatoração Lote-6`, não imediata.
+
+## Lote 7 — Vendas: telas (D3)
+
+Escopo: `ERPV.UI.FormListaVendas` (T31), `ERPV.UI.FormEdicaoVenda` (T32) e a integração em `ERPV.UI.FormMain` (destino `dsVendas`). QA do lote: Aprovado com ressalvas (RF7-01..RF7-03, RF7-05; não duplicados aqui). Análise por leitura de código e busca textual (sem SAST automatizado; sem recompilação). Itens de T42 (`ERPV.UI.ConfirmacaoVenda`, botões Confirmar) são do Lote 9 e só citados.
+
+### 1. Segredo/credencial no repositório
+Nenhum segredo, string de conexão, caminho ou credencial nas duas units nem na integração do `FormMain`. Sem achado.
+
+### 2. Forms sem SQL/HTTP/regra (GUARDRAILS, ADR-001/010)
+Busca por `SELECT/INSERT/UPDATE/DELETE`, `.SQL`, `TFDQuery` e clientes HTTP = 0 nas duas telas. `uses` só de `Negocio` (Venda/Cliente/Produto/Quitação), Domínio e UI; nenhuma referência a `Dados`. A regra vive em `TVendaService`. O único cálculo na tela é prévia de exibição (qtd x preço do produto). Sem achado.
+
+### 3. Dado de tela como fonte de verdade / integridade de estado
+- `MontarVenda` preenche só `Id`, `ClienteId` e, por item, `ProdutoId` e `Quantidade`. Preço, subtotal e total não são enviados; após `Salvar` a tela relê por `Obter` e exibe o que o serviço calculou. Colunas Preço/Subtotal com `Editing := False` e `Focusing := False`; `Appending/Deleting/Inserting := False` na grade. Quantidade inteira 1..999999 no editor, revalidada pelo serviço.
+- Status/DataQuitacao/Motivo: a tela não tem controle que os edite e `MontarVenda` não os atribui; o `TVenda` novo nasce com `Status = svPendente`, `DataQuitacao = 0`, `Motivo = ''` (construtor do domínio). Como `ExigirPendente` lê o status do banco e a edição só grava para Pendente, o caminho da UI é Pendente -> Pendente. **RF6-01/RF6-04 continuam latentes no serviço e não são exploráveis por estas telas**; a tela não os agrava nem mitiga. Mantêm o prazo já registrado (antes de T38); não são reabertos.
+- Somente leitura (Quitada/Cancelada): `Validar` retorna False de imediato, Salvar oculto, controles desabilitados. A habilitação de Editar/Excluir na lista usa o status exibido na grade (dado de tela), mas é só conveniência: a barreira real é `ExigirPendente` no serviço. Sem achado.
+
+### 4. Mensagens ao usuário (ADR-008, regra 17)
+`E.Message` só é usado quando `E is EErpVendas` (lista: carga, filtro de clientes e Excluir) ou em `EValidacao`/`ERegraNegocio` (edição); qualquer outra exceção vira `MSG_ERRO_GENERICO`/`MSG_ERRO_LISTA`, sem SQL, caminho ou stack. Na edição, exceção diferente (ex.: `EInfra`) sobe ao handler global, mesmo padrão dos Lotes 4-6. Saída sempre por `Notificar` ou rótulos inline; sem `MessageDlg`/`ShowMessage`. Risco residual: `EErpVendas` inclui `EInfra` e o repositório usa `EInfra`, não `EInfraMensagemSegura`; os textos hoje são fixos e amigáveis (verificado no Lote 6), logo é o **achado 2 já registrado** (Baixa), sem tarefa nova. Mensagens de exclusão citam só o Nº da venda; nenhuma tem nome, CPF/CNPJ ou e-mail.
+
+### 5. Log e vazamento (regra 17, LGPD)
+Nenhuma das telas nem a integração chama `TLogger`, `OutputDebugString` ou `WriteLn`. Não há dado pessoal em log a partir da UI; o detalhe técnico de erro fica só no repositório (mascarado, T10). Sem achado.
+
+### 6. Compliance (LGPD básica)
+Nome do cliente aparece na coluna Cliente da lista e no filtro; nome e **CPF/CNPJ** aparecem no dropdown do lookup de cliente da edição (`ListColumns` NOME + CPF_CNPJ, sem máscara). É exibição ao operador do sistema, dentro da finalidade (identificar o cliente, distinguir homônimos), sem ir a log, mensagem ou terceiros: não é violação. **Achado 1 (Baixa, minimização):** o CPF/CNPJ completo no dropdown poderia ser mascarado para reduzir exposição por olhar de terceiros; decisão de UX/negócio, sem prazo obrigatório. E-mail não é exibido nestas telas.
+
+### 7. Integridade de estado: duplo envio (Salvar/Excluir)
+- **Salvar:** `Confirmar` -> `Validar` (chama `Salvar` síncrono) -> `mrOk`. VCL é single-thread e `Salvar` bloqueia a fila de mensagens, então um segundo clique/Enter só é tratado depois; em sucesso o form já fechou. Em falha de validação/regra, `FVendaId` não muda e nada é gravado. Em falha após gravar (ex.: `Obter` lançando), `FVendaId` já recebeu o Id real e um novo Salvar vira **alteração** da mesma venda, não duplicata. Transação única mestre+itens (Lote 6). Sem achado.
+- **Excluir:** exige `Notificar(utnPergunta)` modal antes; após excluir, `Recarregar` refaz a seleção. Excluir repetido sobre o mesmo Id é silencioso no serviço (RF6-02, integridade, não segurança). Sem achado novo.
+- T42 (fora do escopo): o helper desabilita controles durante a espera; a edição confirma a versão gravada (RF7-05 do QA), a validar no Lote 9.
+
+### 8. Integração `FormMain`
+`dsVendas` só cria a lista se `FVendaService <> nil`, libera a anterior antes, usa `FreeAndNil` e fecha por `PostMessage` (sem liberar o form dentro do próprio handler). Serviços são do Root e as telas não os liberam. Sem achado.
+
+### Achados do lote
+
+| # | Achado | Severidade | Situação |
+|---|---|---|---|
+| Achado 1 | CPF/CNPJ completo no dropdown de cliente da edição (sem máscara) | Baixa | Débito opcional (decisão de UX/negócio). Se aceito, `Refatoração Lote-7`, prazo antes do Lote 16 |
+| Achado 2 (herdado) | `EInfra` vs `EInfraMensagemSegura` via `E.Message` em `EErpVendas` | Baixa | Coberto por RF6-02/RF4-02/RF5-01; antes do Lote 16 |
+| RF6-01 / RF6-04 (herdado) | Transição de status/DataQuitacao/Motivo por `Salvar` | Média / Baixa | Não explorável pelas telas do Lote 7; prazo mantido: antes do Lote 9 (T38) |
+
+### Veredito do lote (chapéu DevSecOps)
+**Aprovado com débito baixo** (achado 1 novo; achado 2 e RF6-01/RF6-04 herdados). Sem achado alto/crítico nem compliance obrigatório em aberto; sem SQL/HTTP/regra nas telas; sem vazamento em log ou mensagem; dado de tela não é fonte de verdade; duplo envio não duplica venda. Não bloqueia deploy.
+
+Escala para: nenhum (sem bloqueio). Gestor: sem relevância estratégica. Coordenador: não. Executor: nada imediato; RF6-01/RF6-04 seguem via `Refatoração Lote-6` antes de T38.
