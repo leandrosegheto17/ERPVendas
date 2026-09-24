@@ -18,6 +18,7 @@ uses
   ERPV.Dados.ClienteRepository in 'src\Dados\ERPV.Dados.ClienteRepository.pas',
   ERPV.Dados.ProdutoRepository in 'src\Dados\ERPV.Dados.ProdutoRepository.pas',
   ERPV.Dados.VendaRepository in 'src\Dados\ERPV.Dados.VendaRepository.pas',
+  ERPV.Dados.FilaRepository in 'src\Dados\ERPV.Dados.FilaRepository.pas',
   ERPV.Negocio.ClienteService in 'src\Negocio\ERPV.Negocio.ClienteService.pas',
   ERPV.Negocio.ProdutoService in 'src\Negocio\ERPV.Negocio.ProdutoService.pas',
   ERPV.Negocio.VendaService in 'src\Negocio\ERPV.Negocio.VendaService.pas',

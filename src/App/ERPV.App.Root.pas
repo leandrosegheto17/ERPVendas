@@ -114,6 +114,8 @@ uses
   ERPV.Dominio.Contratos.IClienteRepository,
   ERPV.Dados.ProdutoRepository,
   ERPV.Dominio.Contratos.IProdutoRepository,
+  ERPV.Dados.FilaRepository,
+  ERPV.Dominio.Contratos.IFilaRepository,
   ERPV.Negocio.ClienteService,
   ERPV.Negocio.ProdutoService,
   ERPV.Negocio.VendaService;
@@ -139,6 +141,7 @@ type
     FProdutoRepository: IProdutoRepository;
     FProdutoService: TProdutoService;
     FVendaService: TVendaService;
+    FFilaRepository: IFilaRepository;
   public
     /// <exception cref="EConfiguracao">INI ausente ou invalido (T09).</exception>
     /// <exception cref="EInfra">Falha ao conectar ao banco (T12).</exception>
@@ -155,6 +158,7 @@ type
     property ProdutoRepository: IProdutoRepository read FProdutoRepository;
     property ProdutoService: TProdutoService read FProdutoService;
     property VendaService: TVendaService read FVendaService;
+    property FilaRepository: IFilaRepository read FFilaRepository;
 
     // Proximos incrementos (T17 ClienteRepository, T21 ProdutoRepository,
     // T25 VendaRepository, T37 FilaRepository, servicos de negocio etc.):
@@ -198,6 +202,7 @@ begin
   FProdutoService := TProdutoService.Create(FProdutoRepository, FVendaRepository); // T22
   FVendaService := TVendaService.Create(FVendaRepository, FClienteRepository,
     FProdutoRepository); // T27
+  FFilaRepository := TFilaRepository.Create(FConexao, FLogger); // T37
 
   // Proximos incrementos (T37...) entram aqui.
 end;
@@ -213,6 +218,7 @@ begin
 
   FVendaService.Free; // T27, antes dos repositorios
   FVendaRepository := nil; // T25, antes de FConexao
+  FFilaRepository := nil; // T37, antes de FConexao
   FProdutoService.Free; // T22, antes do repositorio
   FProdutoRepository := nil; // T21, antes de FConexao
   FClienteService.Free; // T18, antes do repositorio
