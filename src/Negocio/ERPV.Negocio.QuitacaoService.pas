@@ -1,54 +1,72 @@
 unit ERPV.Negocio.QuitacaoService;
 
 {
+  T38 (Lote 9) - QuitacaoService.Confirmar, caminho feliz (RF-12/13, ADR-006).
+  Camada Negocio: so depende de interfaces do Dominio e do Core.
+  T43 (Lote 10) acrescenta Cancelar nesta mesma classe (ver abaixo).
+
   T43 - QuitacaoService.Cancelar (RF-16/17, RN-02/08, ADR-005/006).
-  Camada Negocio: so depende de interfaces do Dominio. T38 acrescenta
-  Confirmar nesta mesma classe (mesmas dependencias, sem retrabalho).
+  Cancelar(AVendaId, AMotivo): le a venda do banco; nao encontrada, Quitada ou
+  Cancelada => dcNaoPermitida, SEM POST (RN-02). POST de cancelamento fora de
+  transacao (ADR-006). Sucesso com Status Cancelada => commit curto
+  (AtualizarStatus, status + motivo) => dcCancelada. Recusado (4xx) => Pendente,
+  nada na fila => dcRecusada (RN-08). Indisponivel => Pendente e enfileira
+  CANCELAMENTO => dcEnfileirada. Resposta invalida => Pendente, nao enfileira
+  (reconciliacao por GET e T50) => dcRespostaInvalida. Motivo opcional, aparado;
+  '' = nao enviar. Falha esperada vira resultado tipado, nunca excecao.
+  Roteiro manual T43: 1. mock ok + venda Pendente: Cancelar(Id,'Cliente
+  desistiu') => dcCancelada, STATUS='Cancelada' e motivo gravado. 2. mock
+  recusa: Pendente, fila sem linha, Mensagem preenchida => dcRecusada. 3. mock
+  erro500/timeout: Pendente, 1 linha CANCELAMENTO PENDENTE com ULTIMO_ERRO =>
+  dcEnfileirada; repetir = tentativas 2. 4. venda Quitada/Cancelada:
+  dcNaoPermitida e o mock NAO recebe POST.
 
-  Fluxo de Cancelar(AVendaId, AMotivo):
-   1. Le a venda do banco (o status do chamador nao e confiavel). Nao
-      encontrada ou nao Pendente => dcNaoPermitida, SEM POST (RN-02).
-   2. POST de cancelamento via IFinanceiroGateway - fora de qualquer
-      transacao (ADR-006: nada de transacao aberta durante HTTP).
-   3. Desfecho:
-      - Sucesso com Status Cancelada => commit curto (AtualizarStatus) de
-        status + motivo => dcCancelada.
-      - Recusado (4xx)        => venda continua Pendente, NADA na fila,
-        devolve a mensagem do Financeiro => dcRecusada (RN-08).
-      - Indisponivel (5xx/timeout/rede) => venda continua Pendente e
-        enfileira CANCELAMENTO com o erro em ULTIMO_ERRO => dcEnfileirada.
-      - Resposta invalida (200 ilegivel ou status diferente de Cancelada)
-        => Pendente, nao enfileira (estado no Financeiro incerto; o
-        reenvio com reconciliacao por GET status e T50) => dcRespostaInvalida.
-   Falha esperada vira resultado tipado, nunca excecao.
-
-  Motivo: opcional; espacos nas pontas removidos; '' = nao enviar.
-  Se AtualizarStatus falhar depois do POST ok, a excecao de infra sobe
-  (inesperada, ADR-008) e a venda segue Pendente localmente; a
-  reconciliacao (T41/T50) resolve.
+  Fluxo: (1) le a venda do banco e exige Pendente (senao ERegraNegocio, ANTES
+  do POST); (2) POST via IFinanceiroGateway SEM transacao aberta; (3) 200
+  Quitada => commit curto AtualizarStatus(Quitada, dataQuitacao).
+  Demais desfechos so sao MAPEADOS, sem efeito colateral: T39 (recusa), T40
+  (indisponivel + fila), T49 (PDF/e-mail) acrescentam comportamento.
 
   ==========================================================================
-  ROTEIRO MANUAL (sem Delphi na automacao; DEC-14: sem testes automatizados)
+  ROTEIRO MANUAL NA IDE (sem compilacao via CLI; pendente de confirmacao)
   ==========================================================================
-  Pre-requisitos: banco de T03, erpvendas.ini valido, mock:
-  python tools/mock-financeiro/mock_financeiro.py (porta 8101). Usar botao
-  temporario ou projeto de teste com
-  TQuitacaoService.Create(Root.VendaRepository, Gateway, Root.FilaRepository).
-  1. Mock ok + venda Pendente: Cancelar(Id, 'Cliente desistiu') =>
-     dcCancelada; no banco STATUS='Cancelada' e motivo gravado.
-  2. Mock modo recusa: venda continua Pendente, tabela de fila sem linha,
-     Mensagem preenchida => dcRecusada.
-  3. Mock erro500 (ou timeout): venda Pendente, 1 linha CANCELAMENTO
-     PENDENTE com ULTIMO_ERRO => dcEnfileirada; repetir = tentativas 2.
-  4. Venda Quitada (ou Cancelada): dcNaoPermitida e o mock NAO recebe POST
-     (conferir no log do mock).
-  Compilacao/execucao real pendente de confirmacao do usuario na IDE.
+  Pre: mock do Financeiro no ar, INI apontando para ele, venda Pendente.
+  1. Mock ok: Confirmar(Id) => Desfecho = qdSucesso; no banco STATUS=QUITADA e
+     DATA_QUITACAO preenchida.
+  2. Chamar Confirmar de novo na mesma venda => ERegraNegocio, sem POST
+     (conferir que o mock nao registrou nova requisicao).
+  3. Venda Cancelada ou inexistente => ERegraNegocio.
+  4. Mock recusa/erro500/timeout/parado => Desfecho qdRecusado/qdIndisponivel
+     com Mensagem; venda continua Pendente no banco, nada gravado.
+  T40 (manual): mock erro500 ou timeout ou parado => Confirmar devolve
+     qdIndisponivel (retorna em ate o timeout, UI nao trava); venda Pendente;
+     SELECT na FILA_SINCRONIZACAO: 1 linha TIPO=QUITACAO, STATUS=PENDENTE,
+     ULTIMO_ERRO preenchido. Repetir Confirmar: continua 1 item PENDENTE (sem
+     duplicar). Com a fila forcada a falhar: qdIndisponivel com "Aviso: nao
+     foi possivel enfileirar" na Mensagem, sem excecao.
+  T41 (reconciliacao): LIMITACAO do mock: o modo global "timeout" atrasa 11 s
+     tambem o GET status, entao o GET da reconciliacao tambem estoura e o fluxo
+     cai na fila (T40). Roteiro possivel: (a) mock ok, quitar via POST manual
+     (curl) SEM a venda local saber; (b) mock timeout; (c) Confirmar => POST
+     estoura, GET estoura => enfileira (comportamento T40, esperado). Para
+     validar o caminho T41 de ponta a ponta na IDE e preciso GET respondendo
+     ok com POST em timeout. Alteracao minima sugerida no mock (nao feita):
+     modo "timeout-post" que atrasa so POST e deixa GET /status normal; entao:
+     quitar via curl, "_modo?m=timeout-post", Confirmar => venda QUITADA,
+     DATA_QUITACAO = Now, FILA_SINCRONIZACAO vazia, log do mock com 1 POST
+     (o da confirmacao) e nenhum reenvio. Alternativa: teste unitario com
+     IFinanceiroGateway falso (POST=Indisponivel, GET=Quitada).
+  T39 (recusa 4xx): mock modo recusa => Desfecho = qdRecusado, Mensagem igual a
+     do Financeiro (se vazia: "Quitação recusada pelo Financeiro (código HTTP
+     xxx)"), CodigoHttp preenchido; venda segue Pendente e a fila de pendencias
+     fica vazia (nenhum item QUITACAO).
 }
 
 interface
 
 uses
   System.SysUtils,
+  ERPV.Core.Erros,
   ERPV.Dominio.Enums,
   ERPV.Dominio.Venda,
   ERPV.Dominio.Resultados,
@@ -57,6 +75,8 @@ uses
   ERPV.Dominio.Contratos.IFilaRepository;
 
 type
+  TDesfechoQuitacao = (qdSucesso, qdRecusado, qdIndisponivel, qdRespostaInvalida);
+
   TDesfechoCancelamento = (
     dcCancelada,        // Financeiro confirmou; venda gravada como Cancelada
     dcRecusada,         // 4xx: continua Pendente, nao enfileirou
@@ -72,16 +92,34 @@ type
     function Cancelou: Boolean; inline;
   end;
 
+  TResultadoQuitacao = record
+    Desfecho: TDesfechoQuitacao;
+    /// <summary>Mensagem do Financeiro (vazia no sucesso).</summary>
+    Mensagem: string;
+    CodigoHttp: Integer;
+    /// <summary>Preenchida so em qdSucesso.</summary>
+    DataQuitacao: TDateTime;
+    function EhSucesso: Boolean;
+  end;
+
   TQuitacaoService = class
   private
     FVendaRepositorio: IVendaRepository;
     FFinanceiro: IFinanceiroGateway;
     FFilaRepositorio: IFilaRepository;
-    class function Resultado(ADesfecho: TDesfechoCancelamento;
+    procedure EnfileirarIndisponivel(AVendaId: Integer;
+      var AResultado: TResultadoQuitacao);
+    class function ResultadoCancelamento(ADesfecho: TDesfechoCancelamento;
       const AMensagem: string = ''): TResultadoCancelamento; static;
   public
     constructor Create(const AVendaRepositorio: IVendaRepository;
       const AFinanceiro: IFinanceiroGateway; const AFilaRepositorio: IFilaRepository);
+
+    /// <summary>Confirma a quitacao no Financeiro. Falha esperada de
+    /// integracao vira resultado tipado, nunca excecao.</summary>
+    /// <exception cref="ERegraNegocio">Venda inexistente ou nao Pendente
+    /// (lancada antes do POST).</exception>
+    function Confirmar(AVendaId: Integer): TResultadoQuitacao;
 
     /// <summary>Cancela venda Pendente no Financeiro e localmente (T43).
     /// AMotivo opcional. Sem excecao para falha esperada de integracao.</summary>
@@ -97,7 +135,10 @@ begin
   Result := Desfecho = dcCancelada;
 end;
 
-{ TQuitacaoService }
+function TResultadoQuitacao.EhSucesso: Boolean;
+begin
+  Result := Desfecho = qdSucesso;
+end;
 
 constructor TQuitacaoService.Create(const AVendaRepositorio: IVendaRepository;
   const AFinanceiro: IFinanceiroGateway; const AFilaRepositorio: IFilaRepository);
@@ -108,7 +149,113 @@ begin
   FFilaRepositorio := AFilaRepositorio;
 end;
 
-class function TQuitacaoService.Resultado(ADesfecho: TDesfechoCancelamento;
+procedure TQuitacaoService.EnfileirarIndisponivel(AVendaId: Integer;
+  var AResultado: TResultadoQuitacao);
+var
+  Erro: string;
+begin
+  // Ponto unico de enfileiramento (T41 reconcilia por GET antes de chamar).
+  // Decisao: falha ao enfileirar (EInfra) NAO mascara o desfecho nem propaga:
+  // devolve qdIndisponivel com aviso na mensagem; venda segue Pendente.
+  Erro := AResultado.Mensagem;
+  if Trim(Erro) = '' then
+    Erro := 'Financeiro indisponível (código HTTP ' +
+      IntToStr(AResultado.CodigoHttp) + ')';
+  AResultado.Mensagem := Erro;
+  try
+    FFilaRepositorio.Enfileirar(AVendaId, tfQuitacao, Erro);
+  except
+    on E: EInfra do
+      AResultado.Mensagem := Erro +
+        ' | Aviso: não foi possível enfileirar o reenvio (' + E.Message + ')';
+  end;
+end;
+
+function TQuitacaoService.Confirmar(AVendaId: Integer): TResultadoQuitacao;
+var
+  Venda: TVenda;
+  Resp: TResultadoFinanceiro;
+  Data: TDateTime;
+begin
+  // Status sempre lido do banco (mesmo padrao de VendaService.ExigirPendente).
+  Venda := FVendaRepositorio.Obter(AVendaId);
+  try
+    if Venda = nil then
+      raise ERegraNegocio.Create('Venda não encontrada');
+    if Venda.Status <> svPendente then
+      raise ERegraNegocio.Create(
+        'Somente venda pendente pode ser quitada (status atual: ' +
+        StatusVendaToStr(Venda.Status) + ')');
+
+    // ADR-006: nenhuma transacao aberta durante o HTTP.
+    Resp := FFinanceiro.ConfirmarQuitacao(Venda);
+  finally
+    Venda.Free;
+  end;
+
+  Result.Mensagem := Resp.Mensagem;
+  Result.CodigoHttp := Resp.CodigoHttp;
+  Result.DataQuitacao := 0;
+
+  case Resp.Categoria of
+    rfSucesso:
+      if Resp.Status = svQuitada then
+      begin
+        Data := Resp.DataQuitacao;
+        if Data = 0 then
+          Data := Now;
+        // Commit curto, isolado (ADR-006).
+        FVendaRepositorio.AtualizarStatus(AVendaId, svQuitada, Data, '');
+        Result.Desfecho := qdSucesso;
+        Result.DataQuitacao := Data;
+      end
+      else
+      begin
+        // 200 com status diferente de Quitada: nao confiavel, sem efeito.
+        Result.Desfecho := qdRespostaInvalida;
+        Result.Mensagem := 'Resposta do Financeiro com status inesperado';
+      end;
+    rfRecusado:
+      begin
+        // T39 (RF-15, RN-08): 4xx => nao grava status, nao enfileira; a venda
+        // segue Pendente. Mensagem do Financeiro chega integra; se vazia,
+        // fallback com o codigo HTTP.
+        Result.Desfecho := qdRecusado;
+        if Trim(Result.Mensagem) = '' then
+          Result.Mensagem := 'Quitação recusada pelo Financeiro (código HTTP ' +
+            IntToStr(Result.CodigoHttp) + ')';
+      end;
+    rfIndisponivel:
+      begin
+        // T40 (RF-14, RN-07/08): 5xx/timeout/rede => venda segue Pendente e
+        // enfileira QUITACAO para reenvio.
+        // T41 (RF-18, ADR-005): antes de enfileirar, reconcilia por GET status
+        // (sem transacao aberta). Quitada no Financeiro => conclui local, sem
+        // novo POST e sem fila. Qualquer outro resultado segue o fluxo T40.
+        Resp := FFinanceiro.ConsultarStatus(AVendaId);
+        if (Resp.Categoria = rfSucesso) and (Resp.Status = svQuitada) then
+        begin
+          Data := Resp.DataQuitacao;
+          if Data = 0 then
+            Data := Now; // GET status nao devolve data
+          FVendaRepositorio.AtualizarStatus(AVendaId, svQuitada, Data, '');
+          Result.Desfecho := qdSucesso;
+          Result.DataQuitacao := Data;
+          Result.Mensagem := 'Quitação já registrada no Financeiro; ' +
+            'venda concluída localmente (reconciliação por consulta de status)';
+        end
+        else
+        begin
+          Result.Desfecho := qdIndisponivel;
+          EnfileirarIndisponivel(AVendaId, Result);
+        end;
+      end;
+  else
+    Result.Desfecho := qdRespostaInvalida;
+  end;
+end;
+
+class function TQuitacaoService.ResultadoCancelamento(ADesfecho: TDesfechoCancelamento;
   const AMensagem: string): TResultadoCancelamento;
 begin
   Result.Desfecho := ADesfecho;
@@ -126,7 +273,7 @@ begin
   // Status sempre lido do banco (RN-02); libera a entidade antes do HTTP.
   Venda := FVendaRepositorio.Obter(AVendaId);
   if Venda = nil then
-    Exit(Resultado(dcNaoPermitida, 'Venda não encontrada'));
+    Exit(ResultadoCancelamento(dcNaoPermitida, 'Venda não encontrada'));
   try
     StatusAtual := Venda.Status;
   finally
@@ -134,9 +281,9 @@ begin
   end;
 
   if StatusAtual = svQuitada then
-    Exit(Resultado(dcNaoPermitida, 'Venda já quitada não pode ser cancelada'));
+    Exit(ResultadoCancelamento(dcNaoPermitida, 'Venda já quitada não pode ser cancelada'));
   if StatusAtual = svCancelada then
-    Exit(Resultado(dcNaoPermitida, 'Venda já está cancelada'));
+    Exit(ResultadoCancelamento(dcNaoPermitida, 'Venda já está cancelada'));
 
   Motivo := Trim(AMotivo);
 
@@ -148,20 +295,20 @@ begin
       if Resp.Status = svCancelada then
       begin
         FVendaRepositorio.AtualizarStatus(AVendaId, svCancelada, 0, Motivo);
-        Result := Resultado(dcCancelada);
+        Result := ResultadoCancelamento(dcCancelada);
       end
       else
-        Result := Resultado(dcRespostaInvalida,
+        Result := ResultadoCancelamento(dcRespostaInvalida,
           'O Financeiro respondeu com um status inesperado para o cancelamento');
     rfRecusado:
-      Result := Resultado(dcRecusada, Resp.Mensagem);
+      Result := ResultadoCancelamento(dcRecusada, Resp.Mensagem);
     rfIndisponivel:
       begin
         FFilaRepositorio.Enfileirar(AVendaId, tfCancelamento, Resp.Mensagem);
-        Result := Resultado(dcEnfileirada, Resp.Mensagem);
+        Result := ResultadoCancelamento(dcEnfileirada, Resp.Mensagem);
       end;
   else
-    Result := Resultado(dcRespostaInvalida, Resp.Mensagem);
+    Result := ResultadoCancelamento(dcRespostaInvalida, Resp.Mensagem);
   end;
 end;
 
