@@ -895,3 +895,48 @@ Chapéu DevSecOps, por leitura (commit 484fe9c; só comentário/texto, QA Aprova
 - Severidade: nenhum achado novo. Nenhum compliance em aberto. Bloqueio 006 não afeta os lotes.
 
 **Veredito: Aprovado** (sem débito novo). Deploy não afetado.
+
+---
+
+## Lote 16 — Aceite, build e pacote (T59-T64) — chapéu DevSecOps (2026-09-24)
+
+Escopo: `scripts/montar-bin.ps1`, `.gitignore`, `ERPVendas.dproj`, `docs/varredura-segredos-licencas.md`, `docs/ambiente-licencas.md`, README. Sem alteração de código. T59/T62/T64 dispensadas por decisão do usuário; T60 sem verificação registrada.
+
+### 1. Pacote de entrega
+- `montar-bin.ps1` não copia `erpvendas.ini` real (só o `.example`) e falha se ele existir em `bin\`; confere x86 em exe/dll/bpl e aborta em mistura. Bom.
+- `.gitignore` cobre `erpvendas.ini`, `config/*.ini` (exceto `.example`), `*.log`/`logs/`, `*.pdf`, `.env*`, `*.fdb`, `*.fbk`, `*.bpl`, `bin/`, `Win32/`, `*.exe`, `*.slip/*.lic/*.key`. `git ls-files` não lista nenhum INI real, log, PDF, banco, bpl, dll, exe ou chave. Sem achado.
+- `ERPVendas.dproj` Release (Cfg_1): `DCC_DebugInformation=0`, `LocalDebugSymbols=false`, `SymbolReferenceInfo=0`, define RELEASE; runtime packages ativos (o exe carrega `.bpl` da própria pasta). Sem debug info: ok.
+- Origem de DLL/BPL (SG16-01): `-BplDirs`, `-OpenSslDir` e `-FirebirdDir` são parâmetros livres e o script copia sem validar assinatura/hash/publisher; as DLLs vão para a pasta do exe, que o Windows pesquisa primeiro (DLL planting). Mitigado por ser script de desenvolvedor com padrões fixos em diretórios do Delphi/DevExpress/Firebird, mas não há verificação (Authenticode/SHA-256) nem registro de versão/origem no pacote. A descoberta de `.bpl` por regex sobre bytes ASCII do binário é heurística (o próprio código admite lixo colado e tenta `Substring(1)`); um nome forjado só resulta em cópia de arquivo com esse nome dos `BplDirs`, sem path traversal (regex `[A-Za-z0-9_]+\.bpl`, sem separadores), portanto risco baixo. Faltam também: instrução de ACL da pasta de instalação (usuário comum não deve escrever na pasta do exe, senão planting/substituição de `.bpl`) e de assinatura do exe.
+
+### 2. Varredura de segredos (T63)
+Conferido por amostragem: `git grep` de atribuição literal de senha/chave/token em `src`, `config`, `tests`, `tools`: só placeholders em `.claude/skills/**` (documentação de terceiros); nenhum UUID de chave fora de GUIDs de interface. Nenhum binário/INI/log/banco versionado. Concordo com "zero ocorrências reais" do doc. Ressalva de método (SG16-05): a varredura é por regex, sem ferramenta dedicada (gitleaks/trufflehog) e sem registro do comando exato; aceitável para o MVP.
+
+### 3. Licenças e compliance
+- DevExpress trial vence ~2026-10-22; `.bpl` não redistribuíveis: o README avisa. Entregar o pacote a terceiros com esses `.bpl` viola a licença e o app para de abrir após o vencimento (SG16-02, média: bloqueia entrega/produção real; decisão de negócio de licenciar).
+- ReportBuilder demo (marca "Demo Copy", 5 páginas) e Delphi Community (limite de receita/uso comercial não detalhado): decisão de negócio; informativo ao Gestor.
+- `fbclient.dll` (IDPL/IPL), Indy e OpenSSL 1.0.2 (obsoleto, sem suporte de segurança; EOL) sem registro de licença/versão/origem (SG16-03, baixa). OpenSSL 1.0.2 tem CVEs conhecidos sem correção: uso restrito a SMTP TLS (SG12-01 já registrado) (SG16-04, média se usado em produção).
+- LGPD: seed e roteiro usam dados fictícios (CPF/CNPJ de teste, `example.com`); README §5 traz a nota LGPD; sem dado pessoal real no repo. Retenção sem prazo segue informativo (SG15-05). Sem achado novo.
+
+### 4. Dispensas
+- T64 (teste de instalação limpa não executado): não há evidência de que o pacote roda sem dependências ocultas nem de que não vaza caminho/INI de dev. Mitigado por: `strings` do exe sem caminhos de usuário, `bin/` sem INI. Risco residual de o instalado depender de algo fora do pacote; sem impacto direto de segurança (SG16-06, baixa).
+- T59/T62 (aceite): sem impacto de segurança novo se os fluxos já foram cobertos pelos lotes 11 a 14; o aceite funcional é decisão do usuário.
+- T60 sem verificação registrada: não há evidência para afirmar nada de segurança; nenhum requisito de segurança do SDD Seção 7 depende dela, sem achado próprio.
+- Produção (não documentado): ACL de `erpvendas.ini` (contém senha do banco, SMTP e ApiKey) não é instruída (o README cobre só `PastaPdfTemp`) e a pasta de instalação não tem orientação de escrita restrita (SG16-07, média para produção). Uso de https com o Financeiro real: README/INI não exigem `https://` nem avisam que `http://` expõe a ApiKey e os dados em trânsito (SG16-08, média para produção; confirmar contra SDD Seção 7 e Bloqueio 006).
+
+### Achados do lote
+
+| # | Achado | Severidade | Situação |
+|---|---|---|---|
+| SG16-01 | `montar-bin.ps1` copia DLL/BPL de diretórios parametrizáveis sem verificar assinatura/hash; sem ACL/assinatura orientada na pasta de instalação | Baixa | Débito: validar Authenticode/SHA-256 (ou avisar), registrar hash no pacote, README com ACL da pasta do exe |
+| SG16-02 | DevExpress trial (~2026-10-22) e `.bpl` não redistribuíveis | Média | Débito/decisão do Gestor: licenciar antes de entregar; bloqueia entrega real |
+| SG16-03 | Licença/versão/origem de `fbclient.dll`, Indy, RTL/VCL `.bpl` sem registro | Baixa | Débito: registrar em `ambiente-licencas.md` |
+| SG16-04 | OpenSSL 1.0.2 fim de vida (CVEs sem correção) para SMTP TLS | Média | Débito: usar OpenSSL 1.1/3 compatível ou TLS via alternativa antes de produção com SMTP real (junto de SG12-01) |
+| SG16-05 | Varredura de segredos manual/regex sem ferramenta dedicada | Baixa | Débito: rodar gitleaks/trufflehog antes da release e registrar |
+| SG16-06 | Sem teste de instalação limpa (T64 dispensada) | Baixa | Débito: executar antes da entrega |
+| SG16-07 | Sem instrução de ACL para `erpvendas.ini` e pasta de instalação | Média (produção) | Débito: README com `icacls` do INI (só o usuário/serviço) e pasta do exe somente leitura para usuários comuns |
+| SG16-08 | Sem exigência/aviso de https para o Financeiro e ApiKey em trânsito | Média (produção) | Débito: exigir `https://` fora de localhost (validação em Config ou doc) |
+
+### Veredito do lote (chapéu DevSecOps)
+**Aprovado com ressalvas (sem achado bloqueante).** Nenhum alto/crítico, nenhum segredo real, nenhum compliance obrigatório em aberto que impeça o pacote de desenvolvimento. SG16-02, 04, 07 e 08 (médias) devem estar resolvidos antes de produção/entrega a terceiros; demais baixas com prazo antes da entrega.
+
+Escala para: nenhum bloqueio. Executor: `Refatoração Lote-16` com SG16-01, 03, 05, 06, 07, 08 (e SG16-04 junto de SG12-01). Gestor: informativo/decisão (SG16-02 licenciamento DevExpress/ReportBuilder/Delphi; SG15-05). Coordenador: não. DevOps: pacote não deve incluir INI real; ACL e https antes de produção.

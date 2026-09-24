@@ -1009,3 +1009,59 @@ T54 e T55 `Concluída`; dependências da Seção 4 (T54 <- T38..T44/T06; T55 <- 
 ### Veredito do lote (chapéu QA)
 
 **Aprovado com ressalvas.** Nenhuma reprovação crítica; execução (curl, app na IDE, DUnitX 78/78) por pessoa, código/docs verificados por leitura. Liberado ao chapéu DevSecOps. Pontos para auditoria: chave X-Api-Key (fonte INI/variável de ambiente, nunca registrada, mensagem 401 fixa), saneamento de `erro.mensagem`/`codigo`, SMTP sem TLS fora de produção.
+
+## Lote 16 — Aceite, build e pacote (T59-T64) — chapéu QA (2026-09-24)
+
+Método: só leitura de arquivos, nada reexecutado, nenhum código editado. Verificados: `scripts/montar-bin.ps1`, `.gitignore`, `README.md` §6 (e l. 39), `docs/varredura-segredos-licencas.md`, `ERPVendas.dproj` (Cfg_1: `DCC_UsePackages`/`UsePackages` = true), `.md/UX-SPEC.md` §5, código de UI (`FormBaseEdicao/Lista`, forms de edição), `.md/BLOCKERS.md`. Notas do Executor não usadas como base de aprovação. **Este lote NÃO foi executado em sua maior parte: 3 de 6 tarefas foram dispensadas pelo usuário e 1 foi marcada sem verificação. "Concluída" no TASK.md não significa "passou".**
+
+### Critérios (acceptance-criteria-validation)
+
+**T59** (roteiro completo com evidências em `docs/evidencias/`; cada cenário OK/falha) — **DISPENSADA por decisão do usuário; critério NÃO atendido.** `docs/evidencias/` não existe; roteiro (`docs/roteiro-testes-manuais.md`) não executado. Única evidência relacionada é o smoke da T54 (Lote 14: quitação, data local, e-mail Mailtrap, cancelamento contra o C# real) e 78/78 DUnitX. Sem execução manual: C1-C4, C6 (mock), C8, C10-C12. A dispensa está clara no TASK.md ("DISPENSADA por decisão do usuário", "NÃO executado"), mas o Status começa com "Concluída", o que pode ser lido como aprovado (ver A16-05).
+
+**T60** (checklist UX §5 sem pendência crítica; contraste AA medido; troca de clWhite por token no FormMain; DPI 100% e 125%; foco visível) — **Concluída sem verificação registrada; critério NÃO comprovado.** O TASK.md trazia apenas "Concluída" (marcada a pedido do usuário no início da sessão). Busca em `docs/`, README, BLOCKERS, UX-SPEC: não há checklist §5 marcado, medição de contraste, nem registro de teste em DPI 100%/125%. Só há evidência indireta de projeto no código: `Scaled := True` em `FormBaseEdicao`/`FormBaseLista`/`FormMain.dfm`, tokens escaláveis (`EscalarPx`), `TabOrder` nos forms de lista/edição, `VK_ESCAPE` nas bases, `SetFocus` no campo inválido em Cliente/Produto/Venda. Mostra intenção correta, não validação (não prova ordem de tab, foco visível, contraste nem layout a 125%).
+
+**T61** (exe roda sem IDE; arquitetura coerente exe/fbclient/OpenSSL; original: "sem runtime packages" + DLLs OpenSSL) — **Atendida com desvio formal e documentado (Bloqueio 008).** Por leitura: `.dproj` Cfg_1 com `DCC_UsePackages`/`UsePackages` = true (Release com runtime packages); `montar-bin.ps1` copia exe, `fbclient.dll` (Firebird 32 bits), `erpvendas.ini.example`, descobre `.bpl` importados de forma transitiva e confere a arquitetura PE (x86/x64) de cada binário, saindo com código 1 se faltar algo ou houver incoerência; não copia ini real/log/PDF; OpenSSL só com `-OpenSslDir`. Usuário validou o exe fora da IDE e do repositório. Desvios: (i) "sem runtime packages" virou "com" (DevExpress trial sem `.dcu`); (ii) DLLs OpenSSL 1.0.2 ausentes do ambiente, TLS do SMTP não testado, não estão em `bin/`. O pacote só serve para avaliação local e expira ~2026-10-22, declarado no README §6 e no TASK.
+
+**T62** (`gbak -c` restaura sem erro; app conecta) — **DISPENSADA por decisão do usuário; critério NÃO atendido.** `db/ERPVENDAS.FBK` não gerado, sem restore validado. Caminho alternativo documentado (README opção B, scripts `db/00..02`).
+
+**T63** (zero ocorrências; `.gitignore` cobre INI/log/PDF; resultado anotado) — **Atendida.** `.gitignore` conferido: `erpvendas.ini`, `config/*.ini` (exceto `.example`), `*.log`/`logs/`, `*.pdf`, `.env*`, `bin/`, `Win32/`, `*.fdb`, `*.fbk`, `*.bpl`, `*.slip/*.lic/*.key`. `docs/varredura-segredos-licencas.md` registra método (árvore, 227 commits, `strings` do exe, `bin/`), achados todos fictícios/placeholder e "achados reais: nenhum". Ressalva: varredura feita por terceiro, não reexecutada aqui; o documento lista lacunas de licença abertas (origem/licença do `fbclient.dll`, termos de ReportBuilder demo/Community/Indy/OpenSSL). O README avisa expiração da trial e não redistribuição dos `.bpl`.
+
+**T64** (instalação limpa só pelo README: FB3 -> restore -> INI -> executar -> quitação) — **DISPENSADA por decisão do usuário; critério NÃO atendido.** Só verificação parcial (exe do `bin/` aberto fora da IDE/repositório, banco por scripts, sem restore).
+
+### Integração (cross-platform-integration-testing)
+
+N/A neste lote (integração Delphi <-> C# coberta no Lote 14).
+
+### Requisitos não funcionais (non-functional-validation)
+
+- Acessibilidade/DPI/contraste: não verificados (T60, A16-01). Desempenho: não medido.
+- Segurança/LGPD (para o DevSecOps): varredura sem segredos; `bin/` sem ini real; `.bpl` de trial não redistribuíveis; TLS/SMTP produtivo não testado (OpenSSL ausente).
+
+### Achados (bug-documentation) — nenhum Crítico, 5 Simples
+
+| ID | Sev. | Local | Descrição |
+|---|---|---|---|
+| A16-01 | Simples (risco residual relevante) | T60, `.md/TASK.md` l. 175 | Tarefa P0 marcada Concluída sem verificação registrada: sem checklist §5, medição de contraste AA, teste em DPI 100%/125% ou confirmação de foco visível/TabOrder. Só há implementação por design (Scaled, TabOrder, Esc, SetFocus no inválido). Classificado Simples e não Crítico porque a marcação foi pedido explícito do usuário, o código traz as práticas do §5 e não há defeito comprovado; NÃO é aprovação. Ação: nota da T60 no TASK.md ganha "marcada sem verificação registrada" (feito); executar o checklist §5 (teclado, DPI 125%, contraste) antes de qualquer entrega além do processo seletivo. |
+| A16-02 | Simples | T59/T62/T64 | Critérios originais não atendidos por dispensa do usuário. Risco residual: roteiro C1-C4, C6 (mock), C8, C10-C12 sem execução manual; sem `docs/evidencias/`; sem FBK/restore `gbak` (RF-25 só via scripts SQL); sem teste de instalação limpa seguindo só o README (lacunas do README não descobertas). Dispensa documentada com clareza no TASK.md. |
+| A16-03 | Simples | T61, TASK | Desvio do critério (com runtime packages; sem OpenSSL; TLS não testado) justificado por Bloqueio 008, mas a coluna Tarefa da T61 ainda cita "DLLs OpenSSL" e o pacote não as inclui. Ação: alinhar o texto e registrar que SMTP real com TLS não foi validado (Mailtrap 2525 sem TLS). |
+| A16-04 | Simples | `docs/varredura-segredos-licencas.md` §4, `docs/ambiente-licencas.md` | Origem/licença do `fbclient.dll` (e termos de Indy/OpenSSL/Community/RB demo) não registradas. |
+| A16-05 | Simples | TASK.md, status | "Concluída — DISPENSADA" (T59, T62, T64) e "Concluída" sem verificação (T60) podem ser lidos como aprovação; o Gate 4 deve listar essas 4 tarefas como não verificadas. |
+
+Reprovações críticas: nenhuma. As dispensas foram decisão explícita do usuário (processo seletivo) e o desvio da T61 tem Bloqueio formal; o que falta é risco residual, não defeito comprovado.
+
+### Fechamento estrutural
+
+Todas as 6 tarefas constam `Concluída` (3 com dispensa; T60 sem verificação); dependências da Seção 4 sem órfãs (T64 <- T61/T62/T63/T57 formalmente satisfeitas, embora T62 dispensada); nenhuma tarefa `Bloqueada`; nenhuma inconsistência que exija redesenho. A16-01 a A16-05 aguardam criação em `Refatoração Lote-16` na consolidação pós-DevSecOps. A nota da T60 no TASK.md recebeu a ressalva.
+
+### Veredito por tarefa
+
+- T59: **Não executada (dispensa do usuário)**; critério não atendido.
+- T60: **Aprovada com ressalva forte** (não verificada; A16-01).
+- T61: **Aprovada com ressalvas** (desvio Bloqueio 008; A16-03).
+- T62: **Não executada (dispensa do usuário)**; critério não atendido.
+- T63: **Aprovada com ressalvas** (A16-04).
+- T64: **Não executada (dispensa do usuário)**; critério não atendido.
+
+### Veredito do lote (chapéu QA)
+
+**Aprovado com ressalvas**, somente sob a decisão de escopo do usuário (projeto de processo seletivo); não é aprovação de aceite completo. Nenhuma reprovação crítica. Efetivamente verificados: T61 (com desvio) e T63. Não verificados: T59, T60, T62, T64. Liberado ao chapéu DevSecOps; pontos: varredura de segredos, `.bpl` não redistribuíveis, TLS/SMTP produtivo não testado, licença do `fbclient.dll`.
