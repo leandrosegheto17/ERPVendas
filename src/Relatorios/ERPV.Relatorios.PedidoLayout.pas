@@ -27,7 +27,7 @@ uses
   FireDAC.Stan.Param, FireDAC.Stan.Error, FireDAC.DatS, FireDAC.Phys.Intf,
   FireDAC.DApt.Intf, ppVar, ppCtrls, ppPrnabl, ppClass, ppBands, ppCache,
   ppDesignLayer, ppParameter, ppProd, ppReport, ppDB, ppComm, ppRelatv,
-  ppDBPipe, Data.DB, FireDAC.Comp.DataSet, FireDAC.Comp.Client;
+  ppDBPipe, Data.DB, ERPV.Core.Formatacao, FireDAC.Comp.DataSet, FireDAC.Comp.Client;
 
 type
   TDMPedidoLayout = class(TDataModule)
@@ -71,6 +71,9 @@ type
     ppDBText11: TppDBText;
     ppSystemVariable1: TppSystemVariable;
     ppSystemVariable2: TppSystemVariable;
+    // RF11-08: data e moeda em pt-BR fixo (independe do locale do Windows)
+    procedure DataHoraGetText(Sender: TObject; var Text: string);
+    procedure MoedaGetText(Sender: TObject; var Text: string);
   public
     /// <summary>Liga o layout ao DataSet do relatorio (T45,
     /// IVendaRepository.RelatorioDataSet). O DataSet segue sendo do chamador.
@@ -88,6 +91,28 @@ implementation
 {%CLASSGROUP 'System.Classes.TPersistent'}
 
 {$R *.dfm}
+
+procedure TDMPedidoLayout.DataHoraGetText(Sender: TObject; var Text: string);
+var
+  Campo: TField;
+begin
+  if dsPedido.DataSet = nil then
+    Exit;
+  Campo := dsPedido.DataSet.FindField((Sender as TppDBText).DataField);
+  if (Campo <> nil) and not Campo.IsNull then
+    Text := FormatarDataHoraPtBR(Campo.AsDateTime);
+end;
+
+procedure TDMPedidoLayout.MoedaGetText(Sender: TObject; var Text: string);
+var
+  Campo: TField;
+begin
+  if dsPedido.DataSet = nil then
+    Exit;
+  Campo := dsPedido.DataSet.FindField((Sender as TppDBText).DataField);
+  if (Campo <> nil) and not Campo.IsNull then
+    Text := FormatarMoedaPtBR(Campo.AsCurrency);
+end;
 
 procedure TDMPedidoLayout.AtribuirDados(ADataSet: TDataSet);
 begin

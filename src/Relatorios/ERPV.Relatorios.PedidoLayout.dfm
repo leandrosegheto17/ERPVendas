@@ -356,7 +356,7 @@ object DMPedidoLayout: TDMPedidoLayout
         Font.Size = 10
         Font.Style = []
         Transparent = True
-        DisplayFormat = 'dd/mm/yyyy hh:nn'
+        OnGetText = DataHoraGetText
         DataPipelineName = 'plPedido'
         mmHeight = 4233
         mmLeft = 46302
@@ -584,7 +584,7 @@ object DMPedidoLayout: TDMPedidoLayout
         Font.Size = 10
         Font.Style = []
         Transparent = True
-        DisplayFormat = '#,0.00'
+        OnGetText = MoedaGetText
         DataPipelineName = 'plPedido'
         mmHeight = 4233
         mmLeft = 128588
@@ -605,7 +605,7 @@ object DMPedidoLayout: TDMPedidoLayout
         Font.Size = 10
         Font.Style = []
         Transparent = True
-        DisplayFormat = '#,0.00'
+        OnGetText = MoedaGetText
         DataPipelineName = 'plPedido'
         mmHeight = 4233
         mmLeft = 173832
@@ -673,7 +673,7 @@ object DMPedidoLayout: TDMPedidoLayout
         Font.Size = 10
         Font.Style = []
         Transparent = True
-        DisplayFormat = '#,0.00'
+        OnGetText = MoedaGetText
         DataPipelineName = 'plPedido'
         mmHeight = 4233
         mmLeft = 173567
