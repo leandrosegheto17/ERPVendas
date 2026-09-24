@@ -545,3 +545,48 @@ Escala para: nenhum (sem bloqueio). Gestor: apenas SG10-02 (retenção/anonimiza
 Delta do Lote 10 após a correção do BOM: o único diff em `src` desde a auditoria é a inserção de EF BB BF na linha 1 de `QuitacaoService.pas` (e das units do Bloqueio 005), sem mudança de lógica. Sem código novo, a superfície de segurança não mudou: SG10-01 (média) e SG10-02..04 (baixas) continuam válidos, sem alteração de severidade nem de prazo. Nenhum achado novo.
 
 **Veredito DevSecOps: APROVADO COM DÉBITO (inalterado).** Não bloqueia deploy. Evidência apenas estática (nada compilado/executado).
+
+## Lote 9 — Fluxo Confirmar venda (T37-T42) — chapéu DevSecOps
+
+Escopo: `ERPV.Dados.FilaRepository` (T37), `ERPV.Negocio.QuitacaoService.Confirmar` (T38-T41), `ERPV.UI.ConfirmacaoVenda` (T42) e chamadas em `FormListaVendas`/`FormEdicaoVenda`; `ERPV.App.Root` só para segredo. Análise **estática por leitura** (sem SAST automatizado, sem Delphi, nada executado). SG8-01(=RF8-01)/SG8-02/SG8-03 já registrados no Lote 8, referenciados e não duplicados. Referências: SDD §7, GUARDRAILS 16/17/18, ADR-005/006/007/008, LGPD.
+
+### 1. Segredo/credencial e dependências (regra 16, ADR-007)
+Nenhum segredo literal nas units do lote. `Root` só repassa `FConfiguracao.Financeiro.ApiKey` ao `TFinanceiroClient` (env sobre INI, Lote 8). Sem dependência nova. Sem achado.
+
+### 2. FilaRepository (T37): SQL, transação, ULTIMO_ERRO
+- SQL 100% parametrizado (`:VENDA_ID`, `:TIPO`, `:ERRO`, `:ID`); constantes fixas, sem concatenação de entrada. `Listar` só concatena constantes. Sem injeção.
+- Transação curta e só iniciada se o chamador não abriu; `Desfazer` em falha; `Q.Free` em `finally`. Falha vira `EInfra` com texto fixo (`MSG_FALHA_GRAVAR/CONSULTAR`); o detalhe vai só a `FLogger.Erro` (com máscara de `TLogger`). Sem SQL/caminho na mensagem.
+- `ULTIMO_ERRO` truncado a 500 (`Copy`, VARCHAR(500)); **não mascarado no repositório**. Origem rastreada: `EnfileirarIndisponivel` grava `Resp.Mensagem` de `rfIndisponivel`, que no cliente é **texto fixo** ("Financeiro indisponivel (...)" / "... código HTTP n"), nunca corpo do Financeiro; a mensagem 4xx (única vinda do Financeiro) **não é enfileirada** (RN-08). Logo, hoje **nenhum dado do Financeiro nem dado pessoal chega a `ULTIMO_ERRO`**; minimização LGPD atendida. Ver SG9-05: a proteção é acidental (depende do contrato do cliente), não do repositório.
+- Unicidade PENDENTE por venda+tipo feita por SELECT+UPDATE/INSERT na mesma transação (app monousuário desktop, ADR-005); sem corrida realista.
+
+### 3. QuitacaoService.Confirmar (T38-T41)
+- Status lido do banco e exigido Pendente **antes** do POST; `Venda.Free` antes de qualquer trabalho posterior; HTTP sem transação aberta (ADR-006); `AtualizarStatus` em commit curto. Reconciliação por GET só em `rfIndisponivel`, sem novo POST e sem fila quando Quitada. OK.
+- Sem log e sem dado pessoal no service; mensagens de `ERegraNegocio` fixas (só o status por `StatusVendaToStr`).
+- `EnfileirarIndisponivel` captura `EInfra` e anexa `E.Message` (texto fixo amigável) à mensagem, sem vazamento; o "Aviso: ..." não aparece na UI (a UI usa texto fixo em `qdIndisponivel`).
+- **Integridade (Financeiro quitou, local falha):** `AtualizarStatus` (`:208`, `:241`) não é protegido: `EInfra` ali escapa **depois** do 200 Quitada, deixando o local Pendente **sem fila** e sem reconciliação (mesma classe de RF8-01/SG10-01; ver SG9-01).
+- **RF8-01/SG8-01 (avaliação com o fluxo real):** o defeito segue no código (`TryIsoToDateTime` só captura `EConvertError`, `FinanceiroDTOs.pas:132`). Efeito no Confirmar: a exceção sai de `ConfirmarQuitacao`, antes de `AtualizarStatus`, fila e reconciliação; a UI relança e o handler global mostra mensagem genérica (sem vazamento). Severidade **real: Média** (não Alta): (a) só dispara com `dataQuitacao` malformado num 200, fora do contrato, e `ISO8601ToDate` lança `EConvertError` para formato/valor inválido na prática, então o tipo não capturado é raro; (b) nada é perdido nem exposto: o operador vê erro, a venda segue Pendente e pode repetir (idempotência RN-06/C3 assumida do contrato); (c) exige Financeiro defeituoso/comprometido, sem escalada de privilégio. Não bloqueia o Lote 9, mas **permanece débito vencido** (prazo do Lote 8 = antes do fechamento do Lote 9): corrigir antes de produção com Financeiro real.
+
+### 4. UI (T42): mensagens e concorrência
+- `TextoDesfechoQuitacao` usa textos fixos, exceto `qdRecusado`, que concatena `AResultado.Mensagem` (4xx do Financeiro): **SG8-02 persiste** (sem limite/sanitização; ver RF8-03, não duplicado). Sem SQL/caminho/stack/exceção nas mensagens; exceções relançadas ao handler global (texto genérico + log mascarado). `qdRespostaInvalida` não ecoa corpo.
+- Duplo clique/reentrância: pergunta Sim/Não antes de qualquer POST; controles listados desabilitados durante a espera e restaurados em `finally` (também com exceção); chamada síncrona, sem pump de mensagens durante o HTTP, então cliques ficam enfileirados. Cliques enfileirados podem ser entregues depois do `finally`, mas cada novo `Confirmar` exige nova confirmação e o service relê o status (Quitada => `ERegraNegocio`, sem POST; Pendente após falha => novo pedido consciente; a fila não duplica). **Sem POST duplicado silencioso**; risco residual só de UX (SG9-04).
+
+### 5. Bloqueio de edição com fila pendente (T53, aceito)
+Não implementado neste lote (aceito). Nota de integridade: como SG9-01/RF8-01 deixam a venda Pendente **sem** item na fila, T53 **não** protege esse cenário: a venda quitada no Financeiro continuaria editável/excluível localmente. A correção deve criar registro de pendência (ou reconciliar), não depender só de T53.
+
+### 6. Compliance (LGPD básica) e operacional
+Sem dado pessoal em log, fila (`ULTIMO_ERRO`), mensagem de UI ou exceção; payload de quitação minimizado (Lote 8). Sem compliance obrigatório em aberto. DevOps (Lote 16): sem mudança (https, ApiKey por env, log sem corpo, backup do Firebird como dado pessoal).
+
+### Achados do lote
+
+| # | Achado | Severidade | Situação |
+|---|---|---|---|
+| SG9-01 | `AtualizarStatus` sem proteção em `Confirmar` (`:208`, `:241`): `EInfra` após o Financeiro quitar deixa o local Pendente, sem fila e sem reconciliação; operador vê erro genérico. Sem vazamento | Média (integridade; segurança: baixa) | Débito com prazo: antes do Lote 11/T50 e antes de produção; capturar `EInfra` ao gravar, enfileirar/registrar pendência e devolver desfecho tipado; junto de SG10-01 (mesmo padrão em `Cancelar`); tarefa em `Refatoração Lote-9` |
+| SG9-02 (= RF8-01/SG8-01, reavaliado) | Exceção de parse de data escapa de `ConfirmarQuitacao`: Financeiro Quitada, local Pendente sem fila | Média (confirmada; não sobe a Alta: fora do contrato, sem perda nem vazamento) | Débito **vencido**; corrigir antes de uso com Financeiro real; sobe a Alta/bloqueante se chegar a produção sem correção |
+| SG9-03 (= SG8-02, RF8-03) | Mensagem 4xx exibida em `qdRecusado` sem limite/sanitização | Baixa | Referência ao Lote 8; sem tarefa nova; prazo antes do Lote 16 |
+| SG9-04 | Cliques enfileirados durante a espera síncrona podem reabrir a pergunta depois do `finally` | Baixa (UX) | Débito opcional: flag de reentrância no fluxo ou descarte de mensagens pendentes; sem POST silencioso |
+| SG9-05 | `ULTIMO_ERRO` sem máscara no repositório: hoje só recebe texto fixo, mas T50 gravando mensagem/corpo do Financeiro exporia dado no banco | Baixa (observação) | Débito preventivo: máscara de `ERPV.Core.Log` em `TruncarErro`/`Enfileirar`, revisar quando T50 entrar |
+
+### Veredito do lote (chapéu DevSecOps)
+**Aprovado com débito** (SG9-01 e SG9-02 médios; SG9-03..05 baixos). Sem achado alto/crítico e sem compliance obrigatório em aberto: SQL parametrizado, transação curta, HTTP fora de transação, status lido do banco, `ULTIMO_ERRO` só com texto fixo (LGPD/minimização OK), mensagens sem SQL/caminho/exceção, ApiKey fora de log/URL/mensagem. RF8-01 no fluxo real: **Média, não bloqueante**, mas débito vencido e agravado por SG9-01 (dois caminhos de "Financeiro Quitada, local Pendente sem fila", não cobertos por T53). Não bloqueia deploy. Pendente no fechamento estrutural: registrar SG9-01 (com RF8-01 e SG10-01) e SG9-04/05 em `Refatoração Lote-9`. Evidência apenas estática (nada compilado/executado).
+
+Escala para: nenhum (sem bloqueio). Gestor: nenhum item novo (vira relevância estratégica só se SG9-01/SG9-02 forem a produção sem correção). Coordenador: não. Executor: correção de SG9-01/SG9-02 via `Refatoração Lote-8/9`, prioritária antes do Lote 11/T50; SG9-04/05 não imediatos.
