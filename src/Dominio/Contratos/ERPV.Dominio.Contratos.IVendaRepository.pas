@@ -50,6 +50,14 @@ type
     /// ou 0 significam "sem filtro" naquele critério.</summary>
     function ListarDataSet(const AStatusFiltro: string; AClienteIdFiltro: Integer): TDataSet;
 
+    /// <summary>T45 (RF-19): DataSet somente leitura para o relatório
+    /// "Confirmação de Pedido" — uma linha por item, com venda e cliente
+    /// repetidos (VENDA_ID, DATA_VENDA, STATUS, VALOR_TOTAL, CLIENTE_NOME,
+    /// CLIENTE_CPF_CNPJ, CLIENTE_EMAIL, PRODUTO_DESCRICAO, QUANTIDADE,
+    /// PRECO_UNITARIO, SUBTOTAL). Vazio se a venda não existir. O
+    /// chamador libera o DataSet.</summary>
+    function RelatorioDataSet(AVendaId: Integer): TDataSet;
+
     /// <summary>Usado por T30 (excluir cliente = inativar quando há
     /// venda).</summary>
     function ExisteVendaPorCliente(AClienteId: Integer): Boolean;
