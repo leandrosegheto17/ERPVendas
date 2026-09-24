@@ -573,6 +573,17 @@ T43 e T44 `Concluída` (pendentes de confirmação na IDE). Dependências da Se�
 
 **REPROVADO (crítica, A10-01 — T43; T44 volta a Em andamento por dependência).** Revisão do veredito anterior ("Aprovado com ressalvas"): a primeira passada não conferiu o BOM de `QuitacaoService.pas`. Tirando A10-01, T43 e T44 estão aprovadas com ressalvas (5 ajustes simples: RF10-01..RF10-05); ressalva geral de compilação/execução pendente na IDE/mock (evidência apenas estática). Segue para auditoria de segurança (chapéu DevSecOps), que deve olhar em especial o motivo livre (LGPD, SG8-03, RF10-03), a mensagem técnica exibida em RF10-01 e a ausência de log do motivo.
 
+### Revalidação (2026-09-23)
+
+Escopo: delta do Lote 10 (T43, T44) após a correção do BOM (T-42 / Bloqueio 005). Evidência apenas estática; nada compilado/executado.
+
+- **A10-01 corrigido.** `src/Negocio/ERPV.Negocio.QuitacaoService.pas` começa com EF BB BF. `git diff 03cfdcd HEAD -- src` mostra exatamente 3 arquivos, 1 linha cada, só a inserção do BOM na linha 1 (QuitacaoService, FilaRepository, ConfirmacaoVenda); nenhum outro conteúdo alterado.
+- **Varredura por bytes** em `src/**` (`.pas/.dfm/.dpr/.dpk`): nenhum arquivo com byte não-ASCII sem BOM. `FormCancelamentoVenda`, `FormListaVendas`, `FormEdicaoVenda` e `QuitacaoService` confirmados com BOM e acentos. Nenhuma outra ocorrência do achado crítico.
+- **T43/T44 vs. critério de aceite:** código inalterado desde a validação anterior (exceto BOM), portanto a conclusão anterior vale. RF10-01..RF10-05 continuam válidos, todos simples, sem mudança de severidade.
+- **Fechamento estrutural:** T43 e T44 `Concluída` no `TASK.md`; Seção 4 sem alteração (T43->T35,T37,T25,T29; T44->T32,T43,T68); nenhuma tarefa `Bloqueada`; RF10-01..05 seguem agendados em `Refatoração Lote-10`. Sem escalação ao coordenador.
+
+**Veredito final do lote 10 (chapéu QA): APROVADO COM RESSALVAS** (5 ajustes simples RF10-01..RF10-05 em `Refatoração Lote-10`; ressalva geral: compilação/execução pendente na IDE/mock). Nenhum achado novo. Lote liberado para `Validado` junto com o chapéu DevSecOps.
+
 ## Lote 9 — revalidação (pós-correção A1) — chapéu QA (2026-09-23)
 
 Complementa a seção "Lote 9 — Fluxo Confirmar venda (T37-T42)" acima (texto anterior mantido). Método: inspeção estática + verificação de bytes; nada compilado/executado (Delphi 10.3 sem CLI). Correção avaliada: Bloqueio 005 Resolvido (commits ec58871 e b39a790).

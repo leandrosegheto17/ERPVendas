@@ -540,6 +540,12 @@ RF10-02, RF10-04 e RF10-05: sem implicação de segurança adicional além do re
 
 Escala para: nenhum (sem bloqueio). Gestor: apenas SG10-02 (retenção/anonimização do motivo), informativo e em paralelo. Coordenador: não. Executor: correção de SG10-01/SG10-04 via `Refatoração Lote-10`, não imediata.
 
+### Revalidação (2026-09-23)
+
+Delta do Lote 10 após a correção do BOM: o único diff em `src` desde a auditoria é a inserção de EF BB BF na linha 1 de `QuitacaoService.pas` (e das units do Bloqueio 005), sem mudança de lógica. Sem código novo, a superfície de segurança não mudou: SG10-01 (média) e SG10-02..04 (baixas) continuam válidos, sem alteração de severidade nem de prazo. Nenhum achado novo.
+
+**Veredito DevSecOps: APROVADO COM DÉBITO (inalterado).** Não bloqueia deploy. Evidência apenas estática (nada compilado/executado).
+
 ## Lote 9 — Fluxo Confirmar venda (T37-T42) — chapéu DevSecOps
 
 Escopo: `ERPV.Dados.FilaRepository` (T37), `ERPV.Negocio.QuitacaoService.Confirmar` (T38-T41), `ERPV.UI.ConfirmacaoVenda` (T42) e chamadas em `FormListaVendas`/`FormEdicaoVenda`; `ERPV.App.Root` só para segredo. Análise **estática por leitura** (sem SAST automatizado, sem Delphi, nada executado). SG8-01(=RF8-01)/SG8-02/SG8-03 já registrados no Lote 8, referenciados e não duplicados. Referências: SDD §7, GUARDRAILS 16/17/18, ADR-005/006/007/008, LGPD.
