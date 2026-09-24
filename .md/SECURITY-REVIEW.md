@@ -292,6 +292,40 @@ aprovação QA+DevSecOps deste lote, para `/deploy` quando o usuário decidir
 (preparação de infraestrutura/CI-CD segue em paralelo desde o início,
 conforme timing padrão).
 
+## Lote 3 — Casca de UI, tokens e tema (D2)
+
+Escopo: `ERPV.UI.Tokens`, `ERPV.UI.Tema`, `ERPV.UI.Icones`, `ERPV.UI.FormMain`, `ERPV.UI.FormBaseLista`, `ERPV.UI.FormBaseEdicao`, `scripts/gerar-icones.js`, `assets/icones`. QA do lote: Aprovado com ressalvas. Análise por leitura de código (sem SAST automatizado disponível); sem recompilação.
+
+### 1. Segredo/credencial no repositório
+`scripts/gerar-icones.js` só importa `fs`, `path`, `zlib` (gera PNG localmente, sem rede, sem `eval`/`child_process`, sem credencial). `assets/` contém apenas 48 PNGs (nenhum outro tipo de arquivo). Nenhuma senha/token/chave nas units do lote. Sem achado.
+
+### 2. Forms sem SQL/regra/HTTP (GUARDRAILS)
+`FormMain`, `FormBaseLista`, `FormBaseEdicao` não referenciam FireDAC, Dados nem cliente HTTP; `FormMain` depende só de Tokens/Tema/Icones e dos Services de Cliente/Produto. A URL do Financeiro chega por parâmetro (`Configurar`) e é só exibida. Sem achado.
+
+### 3. Mensagens ao usuário
+Nenhum `MessageDlg`/`ShowMessage`/`MessageBox` nos forms do lote; tudo passa por `Notificar` (o único `Vcl.Dialogs` em `Tema` é a implementação de `Notificar`). Mensagens do shell são fixas e sem dado sensível. Sem achado.
+
+### 4. Camadas ADR-001/010
+UI -> Negocio (Services) apenas; sem referência a `Dados`. Sem achado.
+
+### 5. Tokens (cores/fontes)
+Todas as cores e fontes vêm de `ERPV.UI.Tokens`, exceto `clWhite` (texto da faixa de marca em `FormMain` e texto/hover/pressed do botão Primário em `Tema.EstilizarBotao`). **Achado 1 (baixa, qualidade/consistência, não segurança):** vira RF3-01 (já declarado em parte pelo Executor).
+
+### 6. `ERPV.UI.Icones`
+Degrada sem exceção (pasta ausente, arquivo ausente ou corrompido, tamanho divergente: ignorado; todas as rotinas públicas com try/except). Só lê `assets\icones\{16,24,32}\<nome>.png`, onde `<nome>` vem de constantes fixas (`ERPVIcone*`), nunca de entrada do usuário: sem path traversal. A busca da pasta sobe no máximo 7 níveis a partir do `.exe` procurando `assets\icones` (leitura apenas); risco residual desprezível. Sem achado.
+
+### 7. BOM/encoding
+`FormMain`, `FormBaseEdicao`, `Icones`, `Tema`, `Tokens` com BOM UTF-8. **Achado 2 (baixa):** `FormBaseLista.pas` sem BOM (hoje só ASCII, sem mojibake; risco se entrar acento). Vira RF3-02.
+
+### 8. Superfície de release
+**Achado 3 (baixa):** `ERPV.UI.FormTesteTema` (form de teste do tema) continua no `.dpr`/`.dproj`; fora do fluxo, mas seria compilado no build final. Vira RF3-03.
+
+### 9. Compliance e operacional
+Sem dado pessoal manipulado neste lote. Nenhum requisito operacional novo para o chapéu DevOps (nota herdada: perfil Debug com `DCC_UsePackages=true` a revisar antes do build de T61, já registrado em T68). Nada de relevância estratégica para o Gestor.
+
+### Veredito do lote (chapéu DevSecOps)
+**Aprovado com débito baixo** (achados 1-3, RF3-01 a RF3-03). Sem achado alto/crítico nem compliance em aberto. Libera para `/deploy` quando o usuário decidir.
+
 ## Lote 4 — Cadastro de Clientes (D2)
 
 Escopo: `ERPV.Dados.ClienteRepository`, `ERPV.Negocio.ClienteService`, `ERPV.Core.Validadores`, `FormListaClientes`, `FormEdicaoCliente`. QA do lote: Aprovado com ressalvas. Análise por leitura de código (sem SAST automatizado disponível); sem recompilação.

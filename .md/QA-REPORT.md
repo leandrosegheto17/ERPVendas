@@ -213,6 +213,34 @@ confirmada e revisada pelo Validador, para T12/T13).
 específico, sem reprovação crítica ou simples, e sem achado pendente em
 `Refatoração Lote-2`. Segue para auditoria de segurança (chapéu DevSecOps).
 
+## Lote 3 — Casca de UI, tokens e tema (D2)
+
+Base: critério de aceite de T14, T15, T68 e T69 no `TASK.md`, código real lido (`ERPV.UI.Tokens`, `ERPV.UI.Tema`, `ERPV.UI.Icones`, `ERPV.UI.FormMain`, `ERPV.UI.FormBaseLista`, `ERPV.UI.FormBaseEdicao`, `ERPVendas.dpr`, `assets/icones`), sem usar a nota do Executor como base. Limitação declarada: sem CLI de compilação (Delphi Community) e sem testes automatizados; a evidência de execução é a verificação real do usuário na IDE (2026-09-23), cruzada com a leitura do código. O Validador não recompilou. Nota: este lote foi validado depois de os Lotes 4 e 5 já consumirem suas bases (listas de Clientes/Produtos embutidas no `FormMain`, herdando de `TFormBaseLista`/`TFormBaseEdicao`), o que é evidência adicional de que as bases funcionam.
+
+| Tarefa | Critério (resumo) | Verificação | Veredito |
+|---|---|---|---|
+| T68 | Skin aplicado; fallback sem skin; form de teste com grade zebra, 3 papéis de botão e `Notificar`; contraste AA; nenhuma cor fora dos tokens | Leitura: `AplicarTema`/`ConfigurarGrade`/`EstilizarBotao`/`Notificar` só usam `clERPV*`/`ERPVFontePrincipal`/`ERPVTam*`; estilos próprios (sem mutar valor lido, correção do AV). Execução real: skin Office2019Colorful, 3 papéis (T15), Notificar Info e Pergunta, zebra (T19/T23) | **Aprovado com ressalva** (itens já movidos para T60: fallback sem skin, Notificar Aviso/Erro, contraste AA medido; `clWhite` fora de token, RF3-01) |
+| T15 | Filho herda base e abre; Esc fecha, Enter aciona OK; 3 papéis via `EstilizarBotao` | Leitura: só `Notificar` (sem `MessageDlg`), cores/fontes por token. Execução real com form filho temporário (removido): Esc, Enter, Tab, papéis, pergunta de descarte; e uso real por T19/T20/T23/T24 (Lotes 4/5) | **Aprovado** |
+| T14 | Shell com faixa, navegação, 3 áreas da status bar; fallback de menu; URL do INI; Alt+letra; só tokens | Leitura: `FormMain` só depende de Tokens/Tema/Icones e Services (sem SQL/FireDAC/HTTP); item ativo em negrito (não só cor); destinos sem tela usam `Notificar(utnInfo)`. Execução real: faixa, nav lateral, status bar ("Financeiro: http://localhost:5000" do INI, "Pronto", "Pendências: 0"), Alt+letra | **Aprovado com ressalva** (fallback `ERPV_NAV_LATERAL` e DPI 125%/1366x768 não testados, já em T60; `clWhite`, RF3-01) |
+| T69 | Ícones carregam em botões/navegação/status bar; licença registrada; nenhum botão só com ícone | Leitura: `AplicarIcone` nunca altera `Caption`; 48 PNGs (16 x 3 tamanhos) presentes em `assets/icones`; nomes = constantes `ERPVIcone*`; degrada sem exceção (try/except em todas as rotinas públicas). Execução real: ícones com texto na navegação e botões, transparência correta | **Aprovado** (ícones em menu de barra, erro/alerta/sucesso e pasta_vazia não plugados: declarado no TASK, observação) |
+
+### Testes de integração (dentro do lote)
+
+`FormMain` -> Tema/Icones -> bases -> listas de Clientes e Produtos exercitado pelo usuário na IDE (Lotes 4 e 5). `.dpr` chama `AplicarTema` antes de criar qualquer form e `FormMain.Configurar(BaseUrl, ...)`. Dependências T13 (INI/BaseUrl) e T07 satisfeitas.
+
+### Observações (não são reprovação)
+
+- Já declarados como pendentes/movidos: fallback de menu (`ERPV_NAV_LATERAL`) e DPI 125%/1366x768 não testados (T14); fallback sem skin, `Notificar` Aviso/Erro e contraste AA medido movidos para T60; ícones no menu de barra, erro/alerta/sucesso e `pasta_vazia` não plugados (T69); contorno pesado dos `TcxButton` na navegação = dívida visual.
+- `clWhite` aparece também em `ERPV.UI.Tema.EstilizarBotao` (texto do botão Primário), não só no `FormMain`; `ERPV.UI.FormBaseLista.pas` está sem BOM (hoje só ASCII); `FormTesteTema` segue no `.dpr`. Tudo isso virou tarefa (abaixo).
+
+### Fechamento estrutural
+
+Todas as 4 tarefas `Concluída`. Dependências da Seção 4 (T14->T13,T68; T15->T07,T68; T68->T01,T07; T69->T68) resolvidas e não órfãs; os Lotes 4 e 5 já usaram as bases sem inconsistência. Nenhuma tarefa `Bloqueada`. Tarefas criadas em `Refatoração Lote-3` (fim da Seção 3 do `TASK.md`): RF3-01, RF3-02, RF3-03. Nenhuma escalação ao `coordenador`.
+
+### Veredito do lote (chapéu QA)
+
+**Aprovado com ressalvas.** Nenhuma reprovação crítica; ajustes simples viraram tarefas em `Refatoração Lote-3`. Segue para auditoria de segurança.
+
 ## Lote 4 — Cadastro de Clientes (D2)
 
 Base: critério de aceite de T16-T20 no `TASK.md`, código real lido (`ERPV.Core.Validadores`, `ERPV.Dados.ClienteRepository`, `ERPV.Negocio.ClienteService`, `ERPV.UI.FormListaClientes`, `ERPV.UI.FormEdicaoCliente`), sem usar a nota do Executor como base. Limitação declarada: sem CLI de compilação (Delphi Community) e sem testes automatizados; a evidência de execução é a verificação real do usuário na IDE (2026-09-23), cruzada com a leitura do código. O Validador não recompilou.
