@@ -1,4 +1,4 @@
-unit ERPV.Dados.FilaRepository;
+﻿unit ERPV.Dados.FilaRepository;
 
 {
   T37 (Lote 9) - Implementacao FireDAC de IFilaRepository (ADR-005/010).

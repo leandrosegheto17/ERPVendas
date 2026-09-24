@@ -1,4 +1,4 @@
-unit ERPV.UI.ConfirmacaoVenda;
+﻿unit ERPV.UI.ConfirmacaoVenda;
 
 {
   T42 (Lote 9) - Fluxo de UI "Confirmar venda" (quitacao), compartilhado pela

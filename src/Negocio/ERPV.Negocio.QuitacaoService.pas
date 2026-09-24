@@ -1,4 +1,4 @@
-unit ERPV.Negocio.QuitacaoService;
+﻿unit ERPV.Negocio.QuitacaoService;
 
 {
   T38 (Lote 9) - QuitacaoService.Confirmar, caminho feliz (RF-12/13, ADR-006).
