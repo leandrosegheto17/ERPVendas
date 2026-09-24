@@ -78,6 +78,8 @@ Verificação: `SELECT RDB$CHARACTER_SET_NAME FROM RDB$DATABASE;` deve retornar 
 | `[Relatorio]` | `PastaPdfTemp` | Deve existir e ter escrita |
 | `[Log]` | `Pasta` | Deve existir e ter escrita |
 
+> **Transporte (https):** fora da máquina local use `BaseUrl=https://...`. Com `ApiKey` preenchida, o app **recusa** `http://` para host que não seja `localhost`/`127.x.x.x`/`::1` (a chave e os dados de venda iriam em claro na rede); a operação falha com mensagem de configuração e não entra na fila. `http://localhost` continua funcionando (dev/mock). Ref.: SG14-01.
+
 > **Atenção (porta):** o `BaseUrl` do `config/erpvendas.ini.example` aponta para `http://localhost:5000`, mas o mock do Financeiro (seção 4) escuta por padrão na porta **8080** (`--port`). Ao usar o mock, ajuste `BaseUrl=http://127.0.0.1:8080` no seu `erpvendas.ini` (ou inicie o mock com `--port 5000`).
 
 **Remetente do e-mail (produção):** `[SMTP] Remetente` (padrão `nao-responder@erpvendas.local`; INI antigo sem a chave continua valendo). Em produção use endereço de domínio próprio; o DNS do domínio deve ter SPF autorizando o servidor SMTP usado, DKIM assinado pelo provedor SMTP e DMARC com política (ex.: `p=quarantine`), senão o e-mail cai em spam ou é rejeitado. Em Mailtrap/Ethereal (dev) qualquer remetente é aceito.
