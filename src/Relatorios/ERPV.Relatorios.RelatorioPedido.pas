@@ -21,6 +21,14 @@
   3. R.Limpar(Caminho): arquivo some. Limpar de caminho inexistente ou fora
      da pasta temp: nao levanta excecao e nao apaga nada fora da pasta.
   4. Venda inexistente: EInfra amigavel, nenhum arquivo criado.
+
+  ROTEIRO RF11-02 NA IDE (nao compilado):
+  5. Simular falha no Print (ex.: forcar excecao apos criar o arquivo): a
+     pasta temp nao deve conter o PDF parcial; erro no log; EInfra amigavel.
+  6. Colocar na PastaPdfTemp um Pedido_x.pdf com data > 24 h (RETENCAO_PDF_HORAS),
+     um Pedido_y.pdf recente e um outro.txt antigo; chamar GerarPdf: so o
+     Pedido_x.pdf some, aviso "Limpeza de PDFs antigos" no log; nada fora da
+     pasta e tocado. Arquivo travado: aviso no log, GerarPdf segue normal.
 *)
 
 interface
@@ -43,6 +51,7 @@ type
     FVendaRepository: IVendaRepository;
     FLogger: TLogger;
     function DentroDaPastaTemp(const ACaminho: string): Boolean;
+    procedure LimparAntigos;
   public
     constructor Create(const APastaTemp: string;
       AVendaRepository: IVendaRepository; ALogger: TLogger);
@@ -53,6 +62,7 @@ type
 implementation
 
 const
+  RETENCAO_PDF_HORAS = 24;
   MSG_FALHA_PDF = 'Não foi possível gerar o PDF do pedido. Tente novamente.';
 
 constructor TRelatorioPedido.Create(const APastaTemp: string;
@@ -73,6 +83,41 @@ begin
   Result := SameText(Copy(Arquivo, 1, Length(Pasta)), Pasta);
 end;
 
+procedure TRelatorioPedido.LimparAntigos;
+var
+  Pasta, Caminho: string;
+  SR: TSearchRec;
+  DataArquivo: TDateTime;
+  Removidos: Integer;
+begin
+  Removidos := 0;
+  try
+    Pasta := IncludeTrailingPathDelimiter(FPastaTemp);
+    if FindFirst(Pasta + 'Pedido_*.pdf', faAnyFile and not faDirectory, SR) = 0 then
+    try
+      repeat
+        Caminho := Pasta + SR.Name;
+        if DentroDaPastaTemp(Caminho) and FileAge(Caminho, DataArquivo) and
+          (Now - DataArquivo > RETENCAO_PDF_HORAS / 24) then
+        begin
+          if DeleteFile(Caminho) then
+            Inc(Removidos)
+          else
+            FLogger.Aviso('Não foi possível remover PDF antigo: ' + Caminho);
+        end;
+      until FindNext(SR) <> 0;
+    finally
+      FindClose(SR);
+    end;
+    if Removidos > 0 then
+      FLogger.Aviso(Format('Limpeza de PDFs antigos: %d arquivo(s) removido(s) da pasta temp.',
+        [Removidos]));
+  except
+    on E: Exception do
+      FLogger.Aviso('Falha na limpeza de PDFs antigos: ' + E.Message);
+  end;
+end;
+
 function TRelatorioPedido.GerarPdf(const AVenda: TVenda): string;
 var
   Dados: TDataSet;
@@ -82,6 +127,7 @@ begin
     Format('Pedido_%d_%s.pdf', [AVenda.Id, FormatDateTime('yyyymmddhhnnsszzz', Now)]);
   try
     ForceDirectories(FPastaTemp);
+    LimparAntigos;
     Dados := FVendaRepository.RelatorioDataSet(AVenda.Id);
     try
       if Dados.IsEmpty then
@@ -106,6 +152,10 @@ begin
     on E: Exception do
     begin
       FLogger.Erro('Falha ao gerar PDF do pedido ' + IntToStr(AVenda.Id), E);
+      // RF11-02: nao deixa PDF parcial (Print falhou apos criar o arquivo)
+      if FileExists(Result) and DentroDaPastaTemp(Result) then
+        if not DeleteFile(Result) then
+          FLogger.Aviso('Não foi possível remover o PDF parcial: ' + Result);
       if E is EInfra then
         raise;
       raise EInfra.Create(MSG_FALHA_PDF);
