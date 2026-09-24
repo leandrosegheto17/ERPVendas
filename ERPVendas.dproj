@@ -109,6 +109,7 @@
         <DCCReference Include="src\UI\ERPV.UI.FormEdicaoProduto.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.FormListaClientes.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.FormListaProdutos.pas"/>
+        <DCCReference Include="src\UI\ERPV.UI.FormListaVendas.pas"/>
         <DCCReference Include="src\UI\ERPV.UI.FormMain.pas">
             <Form>FormMain</Form>
         </DCCReference>
