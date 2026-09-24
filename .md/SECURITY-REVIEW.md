@@ -733,3 +733,44 @@ Sem achados de: PII em log, injeção SQL, credencial, erro técnico exposto, bl
 **Aprovado com débito (sem achado bloqueante).** Nenhum alto/crítico e nenhum compliance obrigatório em aberto; SG13-01..04 baixos, com prazo antes do smoke T54/Lote 16, junto dos débitos dos Lotes 11/12. SG12-01 (TLS) continua bloqueando produção com SMTP real.
 
 Escala para: nenhum bloqueio. Executor: correção via `Refatoração Lote-13` (SG13-02 junto de A1; SG13-01 e SG13-03 antes do smoke T54). Gestor: informativo (SG11-05, SG12-05 mantidos). Coordenador: não. DevOps: seção 8.
+
+---
+
+## Lote 15 — Documentação (README.md, docs/roteiro-testes-manuais.md, docs/decisoes.md) — chapéu DevSecOps
+
+Escopo: só documentação; nenhum código alterado. Verificado o que os docs afirmam contra `ERPV.Core.Log`, `ERPV.Core.Config`, `erpvendas.ini.example`, `db/02_seed.sql`, `docs/contrato-api-financeiro.md` e `tools/mock-financeiro`.
+
+### 1. Varredura de segredos e dados pessoais
+Nenhum segredo, chave ou credencial real nos três docs. Senhas aparecem só como `<senha>` (README) ou `senha_ficticia_*` (INI example, marcado como fictício). CPFs/CNPJs do roteiro (`52998224725`, `11222333000181`, `39053344705`) são de teste, com e-mails `example.com`/`.test`, coerentes com o seed e com GUARDRAILS regra 18. `.gitignore` cobre `erpvendas.ini` e `config/*.ini`. Sem achado.
+
+### 2. Segredos (SDD Seção 7 / ADR-007)
+README §3 confere com o código: `ERPV_BANCO_SENHA`, `ERPV_SMTP_PASSWORD` e `ERPV_FINANCEIRO_APIKEY` existem em `ERPV.Core.Config` e têm prioridade sobre o INI. "Nunca versione o .ini" está correto. O roteiro instrui a preencher senha SMTP no INI do Mailtrap (sandbox, aceitável). Ressalva: `gbak/isql ... -password <senha>` na linha de comando deixa a senha no histórico do shell e na lista de processos, o que é normal em dev, mas o README não sugere `ISC_PASSWORD` (SG15-03).
+
+### 3. /_modo
+O mock escuta em `127.0.0.1` por padrão e o README diz "usar só em localhost". Rota sem autenticação, só em mock de dev. O doc não avisa contra `--host 0.0.0.0` nem contra usar o mock fora da máquina de dev (SG15-04).
+
+### 4. Fidelidade da nota LGPD
+- Dados tratados, finalidade e PDF só ao e-mail do cliente: conforme o SDD/código.
+- "Logs: CPF/CNPJ e e-mail são mascarados": verdadeiro para CPF/CNPJ (formatado ou só dígitos), e-mail e `senha/token/apikey=valor`. A afirmação é ampla demais: não cobre nome, telefone, endereço nem CPF em formato atípico, e a mensagem devolvida à UI não passa pela máscara (SG13-01 já registrado). "Corpo de mensagens não é gravado": coerente com o cabeçalho do Log (SG15-02).
+- "Financeiro recebe somente IDs, valores e itens (sem dados pessoais)": verdadeiro para quitação (`vendaId`, `clienteId`, `valorTotal`, `itens`). Impreciso no cancelamento: o contrato envia `motivo` de texto livre, que pode conter dado pessoal (mesmo risco de SG10-04, cujo hint na UI ainda é débito). O `clienteId` é identificador pseudônimo (SG15-01).
+- Retenção: descrição fiel (inativação, sem exclusão física, PDF temporário apagado após envio). A nota reconhece que não há prazo de guarda nem expurgo e o delega ao controlador. Não menciona atendimento a pedido de eliminação/anonimização do titular (art. 18), pois a inativação não elimina o dado. É decisão de negócio (SG15-05).
+
+### 5. Sensitive-data-exposure no roteiro
+Passos usam dados fictícios. O roteiro exige "log sem senha nem CPF/e-mail completos", o que verifica a máscara real. Sem exposição de credencial nos passos de erro (mensagens amigáveis). O uso de Mailtrap evita e-mail real.
+
+### Achados do lote
+
+| # | Achado | Severidade | Situação |
+|---|---|---|---|
+| SG15-01 | README diz que o Financeiro não recebe dado pessoal, mas o cancelamento envia `motivo` livre (pode ter PII) e `clienteId` é identificador | Baixa | Débito: reformular ("IDs, valores, itens e, no cancelamento, motivo informado pelo operador"); junto do hint SG10-04. Prazo: antes da entrega (25/09) |
+| SG15-02 | "Logs mascaram CPF/CNPJ e e-mail" sem informar o limite (nome, telefone, endereço, formatos atípicos, texto da UI) | Baixa | Débito: acrescentar o limite e citar SG13-01. Prazo: antes da entrega |
+| SG15-03 | `-password <senha>` na linha de comando no passo de restauração/isql | Baixa (dev) | Débito: sugerir `ISC_PASSWORD` ou prompt |
+| SG15-04 | Sem aviso de não expor o mock (`--host 0.0.0.0`) nem de que `/_modo` é sem autenticação fora do dev | Baixa | Débito: uma linha no README/mock |
+| SG15-05 | Retenção sem prazo e sem previsão de eliminação/anonimização a pedido do titular | Baixa (decisão de negócio) | Informativo ao Gestor (definir prazo e procedimento no responsável pelo tratamento); não bloqueia MVP |
+
+Sem achados de: segredo/credencial real, dado pessoal real, nome de variável de ambiente divergente do código, instrução insegura de produção.
+
+### Veredito do lote (chapéu DevSecOps)
+**Aprovado com débito (sem achado bloqueante).** Nenhum alto/crítico e nenhum compliance obrigatório em aberto; SG15-01..05 são de baixa severidade e viram tarefas em `Refatoração Lote-15` (correções só de texto, SG15-01/02 antes da entrega de 25/09). Débitos dos Lotes 11 a 13 mantidos; SG12-01 (TLS) continua bloqueando produção com SMTP real.
+
+Escala para: nenhum bloqueio. Executor: correção via `Refatoração Lote-15`. Gestor: informativo (SG15-05, mais SG11-05 e SG12-05 mantidos). Coordenador: não. DevOps: nenhum requisito novo; o pacote de entrega não deve incluir `erpvendas.ini` real.
