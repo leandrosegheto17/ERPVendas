@@ -108,17 +108,14 @@ uses
   ERPV.Core.Log,
   ERPV.Core.Erros,
   ERPV.Dados.Conexao,
-<<<<<<< HEAD
   ERPV.Dados.VendaRepository,
   ERPV.Dominio.Contratos.IVendaRepository;
-=======
   ERPV.Dados.ClienteRepository,
   ERPV.Dominio.Contratos.IClienteRepository,
   ERPV.Dados.ProdutoRepository,
   ERPV.Dominio.Contratos.IProdutoRepository,
   ERPV.Negocio.ClienteService,
   ERPV.Negocio.ProdutoService;
->>>>>>> main
 
 type
   /// <summary>
@@ -135,14 +132,11 @@ type
     FLogger: TLogger;
     FTratador: TTratadorDeExcecoes;
     FConexao: TConexao;
-<<<<<<< HEAD
     FVendaRepository: IVendaRepository;
-=======
     FClienteRepository: IClienteRepository;
     FClienteService: TClienteService;
     FProdutoRepository: IProdutoRepository;
     FProdutoService: TProdutoService;
->>>>>>> main
   public
     /// <exception cref="EConfiguracao">INI ausente ou invalido (T09).</exception>
     /// <exception cref="EInfra">Falha ao conectar ao banco (T12).</exception>
@@ -153,14 +147,11 @@ type
     property Logger: TLogger read FLogger;
     property Tratador: TTratadorDeExcecoes read FTratador;
     property Conexao: TConexao read FConexao;
-<<<<<<< HEAD
     property VendaRepository: IVendaRepository read FVendaRepository;
-=======
     property ClienteRepository: IClienteRepository read FClienteRepository;
     property ClienteService: TClienteService read FClienteService;
     property ProdutoRepository: IProdutoRepository read FProdutoRepository;
     property ProdutoService: TProdutoService read FProdutoService;
->>>>>>> main
 
     // Proximos incrementos (T17 ClienteRepository, T21 ProdutoRepository,
     // T25 VendaRepository, T37 FilaRepository, servicos de negocio etc.):
@@ -197,19 +188,13 @@ begin
 
   FConexao := TConexao.Create(FConfiguracao, FLogger);
 
-<<<<<<< HEAD
   FVendaRepository := TVendaRepository.Create(FConexao, FLogger); // T25
-
-  // Proximos incrementos entram aqui, ex.:
-  // FClienteRepository := TClienteRepository.Create(FConexao, FLogger); (T17)
-=======
   FClienteRepository := TClienteRepository.Create(FConexao, FLogger); // T17
   FClienteService := TClienteService.Create(FClienteRepository); // T18
   FProdutoRepository := TProdutoRepository.Create(FConexao, FLogger); // T21
   FProdutoService := TProdutoService.Create(FProdutoRepository); // T22
 
-  // Proximos incrementos (T21, T25, T37...) entram aqui.
->>>>>>> main
+  // Proximos incrementos (T37...) entram aqui.
 end;
 
 destructor TRootAplicacao.Destroy;
@@ -221,14 +206,11 @@ begin
   if Assigned(Application) then
     Application.OnException := nil;
 
-<<<<<<< HEAD
   FVendaRepository := nil; // T25, antes de FConexao
-=======
   FProdutoService.Free; // T22, antes do repositorio
   FProdutoRepository := nil; // T21, antes de FConexao
   FClienteService.Free; // T18, antes do repositorio
   FClienteRepository := nil; // antes de FConexao (T17)
->>>>>>> main
   FConexao.Free;
   FTratador.Free;
   FLogger.Free;
