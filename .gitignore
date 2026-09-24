@@ -50,3 +50,6 @@ logs/
 *.lic
 *.license
 *.key
+
+# Pacote de entrega gerado por scripts/montar-bin.ps1 (T61)
+bin/
