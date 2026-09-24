@@ -34,11 +34,18 @@
     ERPV.UI.ConfirmacaoVenda. Banner de fila pendente: T53.
   - Listas de lookup: clientes/produtos ATIVOS quando Pendente; todos quando
     somente leitura (para exibir itens/cliente historicos inativos).
+  - RF7-01: Enter com o foco na grade (celula/editor inline) NAO aciona Salvar
+    (EnterAcionaSalvar = False): a tecla segue para o cxGrid, que confirma a
+    celula. Ordem de Tab: Cliente > Adicionar > Remover > grade > Salvar >
+    Cancelar (> Cancelar venda, se habilitado) > Confirmar venda. Confirmar
+    fica no cabecalho (1o painel), entao sai do percurso automatico
+    (TabStop=False) e o Tab/Shift+Tab e tratado em CMDialogKey.
 *)
 
 interface
 
 uses
+  Winapi.Windows, Winapi.Messages,
   System.SysUtils, System.Classes, System.Variants,
   Data.DB,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Graphics,
@@ -126,6 +133,8 @@ type
     procedure AtualizarCancelar;
     function MontarVenda: TVenda;
   protected
+    procedure CMDialogKey(var Message: TCMDialogKey); message CM_DIALOGKEY;
+    function EnterAcionaSalvar: Boolean; override;
     function Validar: Boolean; override;
     procedure Gravar; override;
     procedure AoExcluir; override; // = "Cancelar venda" (T44)
@@ -211,6 +220,52 @@ begin
   FQryClientes.Free;
   FQryProdutos.Free;
   inherited Destroy;
+end;
+
+function TFormEdicaoVenda.EnterAcionaSalvar: Boolean;
+begin
+  // Grade (ou editor inline, controle-filho) com foco: Enter e do cxGrid.
+  Result := not ((FGrade <> nil) and (ActiveControl <> nil) and
+    FGrade.ContainsControl(ActiveControl));
+end;
+
+procedure TFormEdicaoVenda.CMDialogKey(var Message: TCMDialogKey);
+var
+  Ultimo, Alvo: TWinControl;
+  Volta: Boolean;
+begin
+  if (Message.CharCode = VK_TAB) and (GetKeyState(VK_CONTROL) >= 0) and
+    (FBtnConfirmar <> nil) and FBtnConfirmar.Enabled and
+    FBtnConfirmar.Visible and (ActiveControl <> nil) then
+  begin
+    Volta := GetKeyState(VK_SHIFT) < 0;
+    if BtnExcluir.Visible and BtnExcluir.Enabled then
+      Ultimo := BtnExcluir
+    else
+      Ultimo := BtnCancelar;
+    Alvo := nil;
+    if not Volta then
+    begin
+      if Ultimo.ContainsControl(ActiveControl) then
+        Alvo := FBtnConfirmar
+      else if FBtnConfirmar.ContainsControl(ActiveControl) then
+        Alvo := FCmbCliente;
+    end
+    else
+    begin
+      if FCmbCliente.ContainsControl(ActiveControl) then
+        Alvo := FBtnConfirmar
+      else if FBtnConfirmar.ContainsControl(ActiveControl) then
+        Alvo := Ultimo;
+    end;
+    if (Alvo <> nil) and Alvo.CanFocus then
+    begin
+      Alvo.SetFocus;
+      Message.Result := 1;
+      Exit;
+    end;
+  end;
+  inherited;
 end;
 
 { ---- construcao da tela ---- }
@@ -394,6 +449,10 @@ begin
   FLblErroItens.Font.Color := clERPVErroTexto;
 
   MontarGrade;
+  // RF7-01: FBtnConfirmar fora do percurso automatico (ver CMDialogKey); a
+  // grade e a ultima do PnlCampos (cliente/barra de itens vem antes, criados antes).
+  FBtnConfirmar.TabStop := False;
+  FGrade.TabOrder := PnlCampos.ControlCount - 1;
   ExibirExcluir := True; // reaproveitado como "Cancelar venda" (perigoso)
   BtnExcluir.Caption := 'Cancelar venda';
   // Habilitacao por status (UX 4.2) em AtualizarCancelar.
@@ -432,6 +491,9 @@ begin
   FBtnAdicionar.OnClick := AdicionarClick;
   EstilizarBotao(FBtnAdicionar, upbSecundario);
   FBtnAdicionar.Left := 0; // alRight empilha da direita: Remover fica mais a direita
+  // RF7-01: Tab Adicionar > Remover (TabOrder nao altera o alinhamento)
+  FBtnAdicionar.TabOrder := 0;
+  FBtnRemover.TabOrder := 1;
 end;
 
 procedure TFormEdicaoVenda.MontarGrade;

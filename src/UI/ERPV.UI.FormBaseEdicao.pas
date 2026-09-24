@@ -47,6 +47,9 @@ type
     procedure SetExibirExcluir(AValor: Boolean);
   protected
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
+    /// <summary>RF7-01: False = Enter nao aciona Salvar (a tecla segue para o
+    /// controle focado, ex.: grade em edicao). Default True.</summary>
+    function EnterAcionaSalvar: Boolean; virtual;
     /// <summary>False = nao fecha (filho ja exibiu o erro inline).</summary>
     function Validar: Boolean; virtual;
     procedure Gravar; virtual;
@@ -189,6 +192,11 @@ begin
   ModalResult := mrCancel;
 end;
 
+function TFormBaseEdicao.EnterAcionaSalvar: Boolean;
+begin
+  Result := True;
+end;
+
 procedure TFormBaseEdicao.KeyDown(var Key: Word; Shift: TShiftState);
 begin
   inherited KeyDown(Key, Shift);
@@ -200,7 +208,7 @@ begin
     Descartar;
   end
   else if (Key = VK_RETURN) and not (ActiveControl is TCustomMemo)
-    and not (ActiveControl is TcxButton) then
+    and not (ActiveControl is TcxButton) and EnterAcionaSalvar then
   begin
     Key := 0;
     Confirmar;
