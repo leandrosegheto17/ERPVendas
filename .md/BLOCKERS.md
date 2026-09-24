@@ -196,3 +196,9 @@
 - Sugestão (ordem): (1) recriar o banco de desenvolvimento em UTF8 e reaplicar `db/01_schema.sql` e `db/02_seed.sql` (passos em `docs/ambiente-licencas.md` §11 e `db/00_criar_banco.sql`; a busca das listas falha em banco `NONE`); (2) compilar o projeto inteiro na IDE (Shift+F9 e depois F9) e rodar `tests/` (DUnitX); trazer os erros de compilação para o Executor corrigir em lote; (3) rodar os roteiros manuais das notas (RF4-03 busca com acento, RF7-01 a RF7-04, RF9-02, RF12-03, RF13-01/03/07, RF11-06/09, mock `timeout-post` da RF9-03); (4) só então RF11-07/08, RF12-07/09 e RF13-10 com a IDE aberta (pode-se pedir ao Executor a parte de código depois de confirmados os pontos de API); (5) `T54` contra o C# real (ou registrar a indisponibilidade e demonstrar com o mock, como manda o critério) e, em seguida, T55, T59-T64; (6) decidir se T65/T66 entram (cortáveis, P2).
 - Relação com outros bloqueios: o Bloqueio 006 (idempotência e saga) continua adiado para o fim; RF12-01 e RF13-02 reduziram parte dele (ver a atualização no próprio 006).
 - Status: **Aberto**
+
+Atualização 2026-09-24 (Bloqueio 007, ambiente real parcialmente verificado): o projeto **compilou e rodou na IDE**
+(após incluir `IdReplySMTP` e trocar `EIdOSSLException` por `EIdOpenSSLError` em `ERPV.Integracao.EmailSender.pas`).
+Verificados no app contra o Financeiro real (T54): quitação, cancelamento de venda Pendente, data de quitação local,
+e-mail com PDF no Mailtrap (porta 2525, sem TLS). Ainda **não** verificados: DUnitX (`tests/`), banco recriado em UTF8,
+Report Designer, TLS/`CaFile`, timeout/5xx/indisponibilidade. O bloqueio segue Aberto para esses itens.
