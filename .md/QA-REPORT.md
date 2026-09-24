@@ -353,3 +353,51 @@ T25-T30 `Concluída`. Dependências da Seção 4 (T25->T08,T12; T26->T25; T27->T
 ### Veredito do lote (chapéu QA)
 
 **Aprovado com ressalvas.** Nenhuma reprovação crítica; T25-T28 e T30 aprovadas, T29 aprovada com ressalva (RF6-01); 3 ajustes simples. Segue para auditoria de segurança (chapéu DevSecOps), que deve olhar em especial RF6-01 (transição de status por fora do fluxo de quitação).
+
+## Lote 7 — Vendas: telas (D3)
+
+Base: critério de aceite de T31 e T32 no `TASK.md`, UX-SPEC §2.4/§2.5/§4.1/§4.2/§5, e código real lido no estado atual da branch (`ERPV.UI.FormListaVendas`, `ERPV.UI.FormEdicaoVenda`, `ERPV.UI.FormBaseEdicao`, `ERPV.UI.FormMain`, `ERPVendas.dpr`/`.dproj`), sem usar a nota do Executor como base. Limitação declarada: Delphi Community não compila por CLI e não há testes automatizados; o Validador não recompilou nem executou o app. A **única evidência de execução** é a aprovação real do usuário na IDE em 2026-09-23 (registrada nas linhas T31/T32 do `TASK.md`), que cobre o fluxo geral (abrir Vendas, criar venda com itens, editar, total/chip, salvar) e dois achados já corrigidos (`cxDropDownEdit` no `uses`; `CellSelect=True` na grade de itens). O que o usuário não descreveu item a item (Visualizar de Quitada/Cancelada, filtros, vazio/erro, DPI) consta abaixo como "leitura" e **não** como provado em execução. Nota de estado: a main já trouxe o Lote 9 (T42); o código atual contém o botão Confirmar (lista e edição) e o helper `ERPV.UI.ConfirmacaoVenda`. A aprovação do usuário para T31/T32 é anterior a essa mudança; o veredito abaixo se restringe ao escopo T31/T32, e o que é de T42 é citado só como interferência.
+
+### Validação por tarefa
+
+| Tarefa | Critério (resumo) | Verificação | Veredito |
+|---|---|---|---|
+| T31 | Lista com colunas Nº/Data/Cliente/Total/Situação/Sinc; status como chip (texto+cor); valores à direita; Sinc reservada; botões por status (UX 4.2); "Cancelar venda" só no menu de contexto e dentro da venda; vazio/erro (UX 4.1); Novo/Editar abrem T32 e recarregam | **Execução real (usuário):** lista abre no menu Vendas, mostra vendas, Novo/Editar abrem a edição (fluxo geral aprovado). **Leitura:** 6 colunas conforme UX 2.4; Total formatado `R$ #,##0.00` pt-BR com alinhamento à direita (célula e cabeçalho); situação desenhada com texto em negrito + cor de fonte por token (`clERPVAvisoTexto`/`SucessoTexto`/`InativoTexto`); Sinc = coluna sem campo, vazia; `AtualizarEstado`: Pendente => Editar+Excluir; Quitada/Cancelada => Editar vira "Visualizar" e Excluir desabilitado; `AoExcluir` reconfere Pendente e pede confirmação; menu de contexto com "Cancelar venda" `Enabled := False`; painel vazio "Nenhum registro. Use Novo." e painel de erro com "Tentar novamente"; filtros Situação e Cliente (cliente inclui inativos) recarregam via `ListarDataSet`; recarrega só em `mrOk`. **Não provado em execução:** Visualizar de Quitada/Cancelada, filtros, menu desabilitado, vazio, erro, DPI 125% | **Aprovado com ressalvas** (RF7-03) |
+| T32 | Cliente ativo em lookup; grade de itens editável (produto ativo, qtd inteira); preço/subtotal/total somente leitura; total em destaque; chip no cabeçalho; salvar sem item recusado; Quitada/Cancelada somente leitura com banner; preço não editável; hierarquia de botões | **Execução real (usuário):** criar/editar venda com itens, total, chip; achados corrigidos (`cxDropDownEdit`, `CellSelect`). **Leitura:** lookup de cliente e de produto só com ativos quando Pendente (todos quando somente leitura); Qtd = `TcxSpinEdit` inteiro, min 1; Preço/Subtotal com `Editing := False` e `Focusing := False`; total em fonte `ERPVTamTotalVenda` alinhado à direita; chip texto (maiúsculas) + cor por token; validação visual (cliente, >= 1 item, produto e qtd por linha) com ícone U+2716 + texto, e `EValidacao` do serviço mapeada por campo; `MontarVenda` envia **só** ClienteId, ProdutoId e Quantidade; total/preço exibidos são prévia, após Salvar relê por `Obter` (fonte de verdade = `TVendaService`, T27-T29); não Pendente: banner, controles desabilitados, Salvar oculto, Cancelar vira "Fechar"; "Cancelar venda" (botão perigoso) desabilitado com dica. **Não provado em execução:** abrir Quitada/Cancelada, banner, recusa "sem item/sem cliente" (mensagens inline), DPI | **Aprovado com ressalvas** (RF7-01, RF7-02) |
+
+### Testes de integração (dentro do lote)
+
+- Telas -> serviços: `TFormListaVendas` usa `TVendaService.ListarDataSet/Excluir` e `TClienteService.ListarDataSet` (filtro); `TFormEdicaoVenda` usa `Obter/Salvar` de venda, `ListarDataSet` de cliente e produto. Sem acesso a repositório/FireDAC nas duas telas (leitura de `uses` e corpo). Execução real: criar/editar venda de ponta a ponta pela tela (aprovação do usuário).
+- Contrato T31 -> T32: `TFormEdicaoVenda.Create(Owner, VendaService, ClienteService, ProdutoService, VendaId)`, `ShowModal = mrOk` recarrega a lista; conferido por leitura e coberto pelo fluxo aprovado.
+- `FormMain`: destino `dsVendas` cria `TFormListaVendas` embutida (`BorderStyle := bsNone`, `Align := alClient`, `OnFechada`), recebe `QuitacaoService`, liberada em `FecharListaVendas`/destruição; item "&Vendas" na navegação lateral e no menu. Conferido por leitura; a abertura pelo menu foi o fluxo aprovado.
+- Interferência de T42 (não é escopo de T31/T32): botão Confirmar na barra de filtros da lista (TabOrder 2) e no cabeçalho da edição; `ERPV.UI.ConfirmacaoVenda` sem BOM com 8 linhas com caracteres não ASCII (risco de mojibake, mesmo problema já visto em T15) — registrado como RF7-05, mas pertence a T42/Lote 9.
+- Higiene: `ERPVendas.dpr` e `ERPVendas.dproj` sem `ERPV.Temp.*`/`RodarTeste*` (0 ocorrências); as duas units estão referenciadas.
+- Não aplicável: teste cross-platform e `API-CONTRACT.yaml` (VCL desktop; contrato fora do escopo do lote).
+
+### Requisitos não funcionais (acessibilidade básica e padrões)
+
+- Sem SQL nem regra de negócio nas telas: busca por `SELECT/INSERT/UPDATE/DELETE/.SQL/TFDQuery` nas duas units = 0 (o único match textual é `CellSelect`). Totais e preços vêm do serviço; a tela nunca envia preço/total como fonte.
+- Notificações só por `Notificar`; sem `MessageDlg`/`ShowMessage`.
+- Tokens/sem cor solta: nenhuma cor literal (`clRed`, `TColor(`) nas duas units; só `clERPV*` de `ERPV.UI.Tokens`, fontes por `ERPVFontePrincipal`/`ERPVTam*`.
+- Cor sempre com texto: chip de situação com texto na lista e na edição; erro com ícone U+2716 + texto; banner com texto. Nota: a lista aplica só cor de **fonte** no chip (sem fundo), a documentação da unit fala em "fundo/fonte" (RF7-03, cosmético).
+- Enter/Esc: vêm de `TFormBaseEdicao` (T15, aprovado em execução). Esc = descartar (pergunta se houver alteração); Enter = Salvar exceto em botão/memo. Risco: com o foco na grade de itens, Enter **não** é excluído e aciona `Confirmar` (RF7-01).
+- TabOrder: lista: filtros 0/1, Confirmar 2 (T42), grade 1 no painel de conteúdo; edição: não há `TabOrder` explícito para os controles do form de venda, vale a ordem de criação (Confirmar de T42 no cabeçalho vem antes do Cliente; `Remover` criado antes de `Adicionar`, invertendo a ordem visual) — RF7-01. Não exercitado por teclado em execução.
+- UTF-8: `FormListaVendas`, `FormEdicaoVenda` e `FormMain` com BOM.
+- Não verificados: DPI 125%/150% (usa `EscalarPx` na edição; lista com larguras fixas de coluna e filtros em px), desempenho com muitas vendas, leitor de tela.
+
+### Achados (bug-documentation) — todos Simples, nenhum Crítico
+
+- **RF7-01 (Simples, teclado):** (a) `TFormBaseEdicao.KeyDown` trata Enter como Salvar sempre que o foco não é botão/memo; com a grade de itens em edição por célula, Enter para confirmar a célula pode gravar a venda inteira antes de o usuário terminar (não reproduzido; o usuário aprovou o fluxo geral). (b) A tela de venda não define `TabOrder`: Tab passa por Confirmar (T42) antes de Cliente e por Remover antes de Adicionar. Esperado (UX 5): Cliente -> Adicionar -> Remover -> grade -> Salvar/Cancelar. Correção: `TabOrder` explícito e, se confirmado (a), ignorar Enter quando `ActiveControl` for a grade/editor.
+- **RF7-02 (Simples):** venda Pendente cujo item aponta para produto inativado depois: o lookup de produto (só ativos) exibe a célula vazia, e o serviço recusa salvar (observação de regra do Lote 6). Usuário vê linha "sem produto" sem explicação. Sem impacto no critério de aceite; alinhar com a decisão de negócio pendente do Lote 6.
+- **RF7-03 (Simples, cosmético/doc):** chip de situação da lista só muda a cor da fonte (negrito), sem fundo como o chip da edição/UX-SPEC; texto sempre presente, então a regra "nunca só cor" está cumprida. Cabeçalho da unit cita "cor de fundo/fonte". Inclui higiene de `TASK.md`: T31 com "Detalhes:" vazio e T32 ainda dizendo "(não compilado)".
+- **RF7-05 (Simples, fora do escopo T31/T32, pertence ao T42):** `ERPV.UI.ConfirmacaoVenda.pas` sem BOM com caracteres não ASCII. Além disso, `ConfirmarVendaClick` (edição) confirma a versão **gravada** da venda (relê `Obter`) e ignora alterações ainda não salvas na grade; validar no lote do T42.
+
+Padrão recorrente: nenhum (RF7-01 é de base/ordem de criação, não de decomposição). Sem escalação ao `coordenador`. Este relatório não alterou o `TASK.md`; RF7-01..RF7-03 devem entrar em `Refatoração Lote-7` (Seção 3) no fechamento estrutural (RF7-05 vai para o lote do T42).
+
+### Fechamento estrutural
+
+T31 e T32 `Concluída`. Dependências da Seção 4 (T31->T14,T15,T26,T29; T32->T14,T15,T27,T28,T29) resolvidas, sem órfãs; T31 destrava T53 e T32 destrava T42/T44, sem inconsistência. Nenhuma tarefa `Bloqueada`. Pendências assumidas e fora do escopo: menu/botão "Cancelar venda" desabilitado até T43/T44; coluna Sinc vazia até T53. Pendente, fora desta execução: registrar RF7-01..RF7-03 em `Refatoração Lote-7` e marcar o lote `Validado`.
+
+### Veredito do lote (chapéu QA)
+
+**Aprovado com ressalvas.** Nenhuma reprovação crítica; T31 e T32 aprovadas com ressalvas (achados simples RF7-01..RF7-03); o critério central de cada tarefa está coberto pelo fluxo real aprovado pelo usuário e pela leitura do código, mas Visualizar de Quitada/Cancelada, filtros, vazio/erro e DPI **não** foram provados em execução. Segue para auditoria de segurança (chapéu DevSecOps).
