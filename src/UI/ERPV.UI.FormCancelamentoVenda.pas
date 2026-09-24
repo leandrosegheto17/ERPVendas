@@ -48,6 +48,8 @@
      mesmo fluxo; sucesso fecha a edicao e a lista mostra o banner.
      Quitada/Cancelada aberta como Visualizar: botao desabilitado.
   7. Teclado: Tab percorre Motivo > Confirmar > Voltar; Esc = Voltar.
+  8. Sob "Motivo (opcional)": texto de apoio "Não informe dados pessoais (CPF,
+     telefone, e-mail) no motivo." (RF10-03/SG8-03), legivel, sem sobreposicao.
 *)
 
 interface
@@ -107,10 +109,10 @@ end;
 
 procedure TFormCancelamentoVenda.MontarTela;
 var
-  L: TLabel;
+  L, Apoio: TLabel;
 begin
   PnlCampos.AutoSize := False;
-  ClientHeight := EscalarPx(140);
+  ClientHeight := EscalarPx(160);
 
   // Botoes (UX 2.6): Confirmar cancelamento = perigoso; Voltar = secundario.
   BtnSalvar.Caption := 'Confirmar cancelamento';
@@ -132,11 +134,25 @@ begin
   L.Font.Style := [fsBold];
   L.Font.Color := clERPVTextoPrincipal;
 
+  // Texto de apoio LGPD (SG8-03): nao digitar dado pessoal no motivo.
+  Apoio := TLabel.Create(Self);
+  Apoio.Parent := PnlCampos;
+  Apoio.AutoSize := False;
+  Apoio.WordWrap := True;
+  Apoio.Align := alTop;
+  Apoio.Top := EscalarPx(cAlturaLinha);
+  Apoio.Height := EscalarPx(cAlturaLinha);
+  Apoio.Layout := tlCenter;
+  Apoio.Caption := 'Não informe dados pessoais (CPF, telefone, e-mail) no motivo.';
+  Apoio.Font.Name := ERPVFontePrincipal;
+  Apoio.Font.Size := ERPVTamCorpo;
+  Apoio.Font.Color := clERPVTextoSecundario;
+
   FMotivo := TcxTextEdit.Create(Self);
   FMotivo.Parent := PnlCampos;
   FMotivo.Align := alTop;
   FMotivo.Properties.MaxLength := 255; // MOTIVO_CANCELAMENTO VARCHAR(255)
-  FMotivo.Top := EscalarPx(cAlturaLinha);
+  FMotivo.Top := EscalarPx(cAlturaLinha * 2);
   L.FocusControl := FMotivo;
   FMotivo.TabOrder := 0;
   ActiveControl := FMotivo;
