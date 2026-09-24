@@ -813,3 +813,13 @@ Achados (finding-severity-classification):
 - Gestor: sem relevância estratégica nova (informativo).
 
 **Veredito: Aprovado com débito baixo** (RF13-08/09 em `Refatoração Lote-13`). Deploy não afetado por este lote.
+
+## Refatoração Lote-11 — validação (2026-09-24)
+
+- RF11-03 (SG11-02): nome `Pedido_<Id>_<GUID>.pdf` com GUID aleatório (CreateGUID) elimina enumeração por timestamp; README exige ACL restrita e pasta fora de OneDrive/backup, com `icacls ... /inheritance:r /grant:r` (forma padrão). Fechado.
+- RF11-06 (SG11-04/SG11-03): validação no carregamento recusa relativo, raiz de unidade, UNC e caracteres inválidos; PastaPdfTemp não tem override por variável de ambiente, logo a validação cobre o valor final. Limite de symlink/junction documentado no cabeçalho de RelatorioPedido (aceito). Resíduo baixo: `..` e unidade mapeada de rede passam (RF11-09).
+- RF11-02 (LGPD): retenção de 24 h e remoção de parcial já integradas; RF11-01 (SG11-06): nil não gera AV, log sem dado pessoal. Fechados.
+- SG11-05 (CPF completo no PDF ao próprio titular): segue informativo ao Gestor, sem mudança.
+- Severidade (finding-severity-classification): nenhum alto/crítico; resíduo RF11-09 Baixo, com tarefa em `Refatoração Lote-11`. Nenhum compliance obrigatório em aberto. Bloqueio 006 não afeta o lote.
+
+**Veredito: Aprovado com débito baixo** (RF11-09). Deploy não afetado por este lote.

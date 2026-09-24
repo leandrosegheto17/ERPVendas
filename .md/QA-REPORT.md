@@ -913,3 +913,20 @@ Achados simples (sem retorno ao executor; viram tarefas em `Refatoração Lote-1
 Nenhum erro de compilação certo encontrado; dúvidas de API concentradas em RF13-10.
 
 **Veredito: Aprovado com ressalvas.** Sem reprovação crítica. Liberado ao DevSecOps.
+
+## Refatoração Lote-11 — validação (2026-09-24)
+
+Validação por leitura (nada compilado/executado). Escopo: RF11-01..06 (HEAD 69598c5).
+
+- RF11-01: `GerarPdf(nil)` => EInfra + log; `Caminho`/`Result` inicializados antes do try, calculados dentro; except apaga parcial só com `Caminho <> ''` e dentro da pasta temp; `Create` com repositório nil levanta EInfra antes de atribuir campos (destruidor sem campos a liberar); LogAviso/LogErro nil-safe, nenhuma chamada direta a FLogger restante (só dentro deles); assinatura `Erro(const; AExcecao: Exception = nil)` confere. OK.
+- RF11-03: variáveis declaradas (`Caminho, Sufixo: string; Guid: TGUID`), CreateGUID/GUIDToString/StringReplace em System.SysUtils (na uses); LimparAntigos casa `Pedido_*.pdf`. OK.
+- RF11-06: `PastaPdfTempValida` correta (Copy(...,3,MaxInt) começa após "C:", então o ':' proibido só vale após a posição 2; Exit(True) dentro do for válido; CharInSet com literais). INI de exemplo `C:\ERPVendas\temp\pdf`, espaços/acentos e barra final aceitos; recusados relativo, `C:`, `C:\`, `\srv\x`. PastaPdfTemp é lida só do INI (LerObrigatoria, sem override por ERPV_*), então a validação cobre o valor final. Config.pas ASCII sem BOM, EOL sem CR. OK.
+- RF11-04: TratarFalha('relatorio') com MSG_FALHA_RELATORIO fixa; coerente com RelatorioDataSet. OK.
+- RF11-05 (DFM): sintaxe íntegra (só propriedades já usadas no arquivo, inteiros). Geometria do cabeçalho sem sobreposição: linha 1 (título 3704..39158; VENDA_ID 4233..21431; data 46302..86302; status 94986..134986), linha 2 nome 4233..196233 (top 13229..17462), linha 3 CPF 4233..39233 e e-mail 42000..192000 (top 18521..22754), rótulos das colunas top 26723/26988..31221 < band 31750; direita 196233 < 210000-6350. DisplayFormat em DATA_VENDA, PRECO_UNITARIO, SUBTOTAL, VALOR_TOTAL. Não resolvido (não é reprovação, exige Designer): WordWrap/Stretch (texto longo trunca), descrição ~100 caracteres no Detail, quebra de página, independência de locale do DisplayFormat, aceitação de `hh:nn` — viram RF11-07 e RF11-08. "Concluída com limitação" aceitável: layout não quebra compilação/DFM, limitação documentada e coberta por tarefa.
+- BOM/EOL: RelatorioPedido e VendaRepository com BOM; Config e .dfm sem BOM; sem CR nos arquivos; acentos só em units com BOM (README/.md UTF-8). OK.
+
+Nenhum erro de compilação certo; dúvida de API só em DisplayFormat (RF11-08). Ressalva cosmética: célula de RF11-01 no TASK.md contém um caractere de tabulação no lugar de `\t` de "try" (herdado, sem efeito).
+
+Novas tarefas: RF11-07 (conferir cabeçalho/Detail/paginação no Designer), RF11-08 (formato pt-BR/locale e DisplayFormat), RF11-09 (ponto-ponto e unidade mapeada em PastaPdfTempValida).
+
+**Veredito: Aprovado com ressalvas.** Sem reprovação crítica. Liberado ao DevSecOps.
