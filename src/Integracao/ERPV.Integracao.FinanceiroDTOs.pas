@@ -130,8 +130,12 @@ begin
     ADataHora := ISO8601ToDate(Trim(AValor), False);
     Result := True;
   except
-    on EConvertError do
+    // ISO8601ToDate levanta EDateTimeException (nao so EConvertError).
+    on Exception do
+    begin
+      ADataHora := 0;
       Result := False;
+    end;
   end;
 end;
 
