@@ -107,7 +107,9 @@ uses
   ERPV.Core.Config,
   ERPV.Core.Log,
   ERPV.Core.Erros,
-  ERPV.Dados.Conexao;
+  ERPV.Dados.Conexao,
+  ERPV.Dados.VendaRepository,
+  ERPV.Dominio.Contratos.IVendaRepository;
 
 type
   /// <summary>
@@ -124,6 +126,7 @@ type
     FLogger: TLogger;
     FTratador: TTratadorDeExcecoes;
     FConexao: TConexao;
+    FVendaRepository: IVendaRepository;
   public
     /// <exception cref="EConfiguracao">INI ausente ou invalido (T09).</exception>
     /// <exception cref="EInfra">Falha ao conectar ao banco (T12).</exception>
@@ -134,6 +137,7 @@ type
     property Logger: TLogger read FLogger;
     property Tratador: TTratadorDeExcecoes read FTratador;
     property Conexao: TConexao read FConexao;
+    property VendaRepository: IVendaRepository read FVendaRepository;
 
     // Proximos incrementos (T17 ClienteRepository, T21 ProdutoRepository,
     // T25 VendaRepository, T37 FilaRepository, servicos de negocio etc.):
@@ -170,6 +174,8 @@ begin
 
   FConexao := TConexao.Create(FConfiguracao, FLogger);
 
+  FVendaRepository := TVendaRepository.Create(FConexao, FLogger); // T25
+
   // Proximos incrementos entram aqui, ex.:
   // FClienteRepository := TClienteRepository.Create(FConexao, FLogger); (T17)
 end;
@@ -183,6 +189,7 @@ begin
   if Assigned(Application) then
     Application.OnException := nil;
 
+  FVendaRepository := nil; // T25, antes de FConexao
   FConexao.Free;
   FTratador.Free;
   FLogger.Free;
