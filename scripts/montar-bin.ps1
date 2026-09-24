@@ -17,7 +17,11 @@ param(
   [string]$Exe = 'Win32\Release\ERPVendas.exe',
   [string]$FirebirdDir = 'C:\Program Files (x86)\Firebird\Firebird_3_0',
   [string]$OpenSslDir = '',
-  [string]$Destino = 'bin'
+  [string]$Destino = 'bin',
+  [string[]]$BplDirs = @(
+    'C:\Program Files (x86)\Embarcadero\Studio\37.0\bin',
+    'C:\Program Files (x86)\DevExpress\VCL\Library\RS37'
+  )
 )
 
 $ErrorActionPreference = 'Stop'
@@ -50,6 +54,40 @@ Copy-Item $Exe $Destino -Force
 Copy-Item $fb $Destino -Force
 Copy-Item 'config\erpvendas.ini.example' $Destino -Force
 
+# A configuracao Release usa runtime packages: o DevExpress trial nao traz .dcu,
+# so .bpl/.dcp (ver BLOCKERS 008). Descobre os .bpl importados pelo exe e,
+# transitivamente, por cada .bpl copiado, e copia todos para bin\.
+function Get-BplsImportados([string]$Caminho) {
+  $txt = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($Caminho))
+  [regex]::Matches($txt, '[A-Za-z0-9_]+\.bpl') | ForEach-Object { $_.Value } | Sort-Object -Unique
+}
+$fila = New-Object System.Collections.Queue
+$vistos = @{}
+Get-BplsImportados $Exe | ForEach-Object { $fila.Enqueue($_) }
+while ($fila.Count -gt 0) {
+  $n = $fila.Dequeue()
+  if ($vistos.ContainsKey($n.ToLower())) { continue }
+  $vistos[$n.ToLower()] = $true
+  $achou = $null
+  # O nome vem de bytes do binario: o byte de tamanho antes da string pode colar 1
+  # caractere no inicio (ex.: 'Vvclie370.bpl'); tenta tambem sem o 1o caractere.
+  foreach ($cand in @($n, $n.Substring(1))) {
+    foreach ($d in $BplDirs) {
+      $c = Join-Path $d $cand
+      if (Test-Path $c) { $achou = $c; $n = $cand; break }
+    }
+    if ($achou) { break }
+  }
+  if ($achou) {
+    $vistos[$n.ToLower()] = $true
+    Copy-Item $achou $Destino -Force
+    Get-BplsImportados $achou | ForEach-Object { $fila.Enqueue($_) }
+  } else {
+    $falhas += "$n (importado) nao encontrado em -BplDirs"
+  }
+}
+Write-Host ("Runtime packages copiados: {0}" -f $vistos.Count)
+
 if ($OpenSslDir -ne '') {
   foreach ($n in 'libeay32.dll', 'ssleay32.dll') {
     $p = Join-Path $OpenSslDir $n
@@ -62,7 +100,7 @@ if ($OpenSslDir -ne '') {
 
 Write-Host "`nArquitetura dos binarios em ${Destino}:"
 $arqs = @{}
-foreach ($f in Get-ChildItem $Destino -Include *.exe, *.dll -Recurse) {
+foreach ($f in Get-ChildItem $Destino -Include *.exe, *.dll, *.bpl -Recurse) {
   $a = Get-Arquitetura $f.FullName
   $arqs[$f.Name] = $a
   '{0,-22} {1}' -f $f.Name, $a

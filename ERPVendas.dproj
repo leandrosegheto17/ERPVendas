@@ -90,6 +90,10 @@
         <AppDPIAwarenessMode>none</AppDPIAwarenessMode>
         <UsePackages>true</UsePackages>
     </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_1)'!=''">
+        <DCC_UsePackages>true</DCC_UsePackages>
+        <UsePackages>true</UsePackages>
+    </PropertyGroup>
     <ItemGroup>
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>

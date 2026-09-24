@@ -204,3 +204,12 @@ e-mail com PDF no Mailtrap (porta 2525, sem TLS). Ainda **não** verificados: DU
 Report Designer, TLS/`CaFile`, timeout/5xx/indisponibilidade. O bloqueio segue Aberto para esses itens.
 
 Atualização 2026-09-24 (Bloqueio 007, T55): projeto de testes DUnitX criado (`tests/ERPVendasTests.dpr`, DUnitX do GitHub na Library path da IDE) e **executado na IDE: 78/78 testes passaram**. Resta para o 007: banco recriado em UTF8, Report Designer, TLS/`CaFile`, timeout/5xx/indisponibilidade reais, 409 `CONFLITO_CONCORRENCIA` contra o C#.
+
+## Bloqueio 008 — 2026-09-24
+- Reportado por: orquestrador do `/executar_tarefa T61` (build Release na IDE do usuário)
+- Escalado para: usuário (decisão tomada no mesmo dia: opção 1, Release COM runtime packages)
+- Artefato/trecho afetado: `TASK.md` T61 ("sem runtime packages"), SDD §7, `ERPVendas.dproj` (config Release), `scripts/montar-bin.ps1`
+- Descrição: o DevExpress VCL instalado (trial 26.1.4) só traz `.bpl/.dcp/.bpi/.lib` e `.hpp` em `Library\RS37`; não há `.dcu` nem `.pas` (ex.: `cxButtons.dcu` inexistente). Sem `.dcu` não existe build estático (`DCC_UsePackages=false`): a Release falhava com `F2613 Unit 'cxButtons' not found`. O Debug funciona porque usa runtime packages.
+- Decisão do usuário: **Release com runtime packages**. `ERPVendas.dproj` passou a ter `DCC_UsePackages/UsePackages = true` em `Cfg_1` (Release); `montar-bin.ps1` descobre e copia os `.bpl` (Delphi RTL/VCL + DevExpress, com dependências transitivas) para `bin\`.
+- Impacto/riscos: (1) os `.bpl` do DevExpress trial (vence ~2026-10-22) e do ReportBuilder demo NÃO são redistribuíveis livremente e o exe deixa de funcionar quando a trial expira; (2) `bin\` fica com ~70 MB; (3) T63 (varredura de licenças) deve registrar isso; (4) o SDD §7 ("sem runtime packages") fica superado por esta decisão.
+- Status: **Decidido (opção 1)** — T61 segue Pendente até o Release compilar, `montar-bin.ps1` sair OK e o exe rodar numa pasta sem a IDE.
