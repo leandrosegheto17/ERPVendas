@@ -206,6 +206,46 @@ rotas.
 |---|---|---|---|
 | 21/09/2026 | 1.0 | Contrato inicial recebido do lado C# (3 rotas, sem formato de erro/idempotência formalizados) | **Vigente** |
 | 22/09/2026 | 1.1 | Proposta C1-C8: formato de erro padronizado, códigos HTTP por cenário (incl. `409`/`422` para DEC-08/09), idempotência de quitação, enum fechado de status, formalização de serialização | **Proposta — enviada ao contato C# em 22/09/2026, aguardando confirmação até 23/09/2026** |
+| 24/09/2026 | smoke T54 | Smoke com curl contra o Financeiro C# real (http://localhost:5000, chave via `ERPV_FINANCEIRO_APIKEY`, nunca registrada). O C# implementa de fato a v1.1 (envelope `{erro:{codigo,mensagem}}`, 400/401/404/409, idempotência, `X-Correlation-Id`, alias `/api/v1`). Divergências D1-D9 abaixo, a tratar na T55. | **Registrado; ajustes de código na T55** |
+
+### 3.1 Divergências encontradas no smoke T54 (2026-09-24)
+
+Escopo executado: **curl** contra os 3 endpoints reais e, depois, o **app Delphi
+rodado na IDE** contra o mesmo Financeiro (o `dcc32` da edição Community não
+compila por linha de comando). Chave via `ERPV_FINANCEIRO_APIKEY`, omitida das
+evidências. Verificado no app em 2026-09-24: quitação de venda Pendente =>
+`Quitada` com `DATA_QUITACAO` no horário local correto (D4 verificado, sem
+deslocamento de fuso nem falha de parse); e-mail de confirmação com PDF entregue
+(Mailtrap, porta 2525, sem TLS); cancelamento de venda Pendente => `Cancelada`.
+Confirmar venda Cancelada e cancelar venda Quitada são barrados na UI (botão
+desabilitado; RF-11, INT-05/DEC-09): o app nunca envia essas chamadas, e o 409
+correspondente do C# só foi exercitado por curl. D1, D2 e D3 continuam vindo de
+leitura de código comparada com as respostas reais (não observados no app).
+
+Resultados reais (curl): health 200; quitação nova 200 `{status:Quitada,dataQuitacao}`;
+quitação repetida 200 (idempotente, mesma data); status Quitada/Cancelada 200;
+status de id inexistente 404 `VENDA_NAO_ENCONTRADA`; cancelamento de Quitada
+com motivo 200; cancelamento de id desconhecido 200 `Cancelada` (cria); cancelamento
+repetido 200; quitar Cancelada 409 `VENDA_JA_CANCELADA`; cancelar Quitada sem
+motivo 409 `MOTIVO_OBRIGATORIO`; `valorTotal` divergente 400
+`VALOR_TOTAL_DIVERGENTE`; `itens` vazio 400 `PAYLOAD_INVALIDO`; sem chave e chave
+errada 401 `NAO_AUTORIZADO` (corpos idênticos); alias `/api/v1/vendas/{id}/status` 200.
+
+| # | Divergência (cliente/contrato do Vendas x C# real) | Impacto | Ação (T55) |
+|---|---|---|---|
+| D1 | Envelope de erro: o C# devolve `{"erro":{"codigo","mensagem"}}`; `ExtrairMensagem` lê `mensagem` na raiz. | A mensagem real do Financeiro nunca é exibida; cai sempre no fallback "(código HTTP xxx)" | Ler `erro.mensagem` (e `erro.codigo`), mantendo fallback |
+| D2 | Não existe `422`: recusa por regra de negócio é 400 (`VALOR_TOTAL_DIVERGENTE`, `PAYLOAD_INVALIDO`) ou 409 (`VENDA_JA_CANCELADA`, `DADOS_DIVERGENTES`, `MOTIVO_OBRIGATORIO`, `CONFLITO_CONCORRENCIA`). Mock/roteiro do cliente assumem 422. | Tratamento genérico 4xx continua correto (Recusado, sem enfileirar), exceto `CONFLITO_CONCORRENCIA` (409, o C# diz que pode repetir) | Decidir se `CONFLITO_CONCORRENCIA` deve ser tratado como retentável; atualizar mock para 400/409 |
+| D3 | `X-Api-Key` é **obrigatório** no C# (todas as rotas exceto `/api/health`); o contrato do Vendas diz opcional (DEC-07) e o INI padrão vem com `ApiKey=` vazio. Chave ausente e inválida dão 401 idêntico. | Sem chave configurada, toda operação vira `Recusado` 401 (não enfileira) | Marcar chave como obrigatória em produção; mensagem específica para 401 (configuração, não recusa de negócio) |
+| D4 | `dataQuitacao` vem em UTC com sufixo `Z` e 7 casas fracionárias (`2026-09-24T12:57:36.3587666Z`); o contrato do Vendas dizia "sem timezone, sem conversão". O cliente usa `ISO8601ToDate(..., False)`. | **Verificado no app (2026-09-24):** `DATA_QUITACAO` gravada e exibida no horário local correto; parse com 7 casas e "Z" sem falha | Nenhuma correção; só documentar que o C# envia UTC |
+| D5 | Quitação repetida com payload diferente para venda **já Quitada** devolve 200 (não `409 DADOS_DIVERGENTES`; esse código só ocorre em venda Pendente registrada). | Sem impacto no fluxo normal; idempotência confirmada | Ajustar a descrição de `DADOS_DIVERGENTES` no contrato |
+| D6 | Cancelamento de `vendaId` desconhecido devolve 200 `Cancelada` (D-08, cria registro) e cancelar Quitada com motivo é aceito (200). | O Vendas só cancela Pendente, então sem impacto; confirma DEC-09 como "permitido com motivo" no C# | Registrar DEC-08/DEC-09 como respondidas |
+| D7 | `POST /api/vendas` (registrar Pendente) responde 404: não implementado no C#. | Vendas não o usa | Manter fora do escopo |
+| D8 | Mensagens do C# usam vírgula decimal (culture pt-BR do host) em `VALOR_TOTAL_DIVERGENTE`; JSON malformado devolve `PAYLOAD_INVALIDO` com mensagem enganosa ("vendaId é obrigatório"). | Só texto; o Vendas não deve parsear mensagem | Usar apenas `codigo` |
+| D9 | Ids como número JSON (`"vendaId":123`) também são aceitos pelo C#; o cliente envia string (correto). | Nenhum | Nenhuma |
+
+Não verificados: timeout de 10 s, erro 5xx e
+indisponibilidade real (o C# não foi derrubado), `CONFLITO_CONCORRENCIA` e
+`ERRO_INTERNO` (não provocados), persistência local do resultado.
 
 Quando a confirmação (total, parcial ou negativa) chegar do lado C#, esta
 tabela ganha uma nova linha com a data e o resultado (T55 do TASK.md é
