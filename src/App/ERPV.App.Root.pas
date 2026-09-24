@@ -122,6 +122,7 @@ uses
   ERPV.Dominio.Contratos.IFinanceiroGateway,
   ERPV.Integracao.FinanceiroClient,
   ERPV.Negocio.QuitacaoService,
+  ERPV.Negocio.FilaService,
   ERPV.Dominio.Contratos.IRelatorioPedido,
   ERPV.Relatorios.RelatorioPedido,
   ERPV.Dominio.Contratos.IEmailSender,
@@ -151,6 +152,7 @@ type
     FFilaRepository: IFilaRepository;
     FFinanceiro: IFinanceiroGateway;
     FQuitacaoService: TQuitacaoService;
+    FFilaService: TFilaService;
     FRelatorioPedido: IRelatorioPedido;
     FEmailSender: IEmailSender;
   public
@@ -172,6 +174,7 @@ type
     property FilaRepository: IFilaRepository read FFilaRepository;
     property Financeiro: IFinanceiroGateway read FFinanceiro;
     property QuitacaoService: TQuitacaoService read FQuitacaoService;
+    property FilaService: TFilaService read FFilaService;
     property RelatorioPedido: IRelatorioPedido read FRelatorioPedido;
     property EmailSender: IEmailSender read FEmailSender;
 
@@ -227,6 +230,9 @@ begin
   FQuitacaoService := TQuitacaoService.Create(FVendaRepository, FFinanceiro,
     FFilaRepository, FClienteRepository, FRelatorioPedido, FEmailSender); // T43/T49
 
+  FFilaService := TFilaService.Create(FVendaRepository, FFinanceiro,
+    FFilaRepository, FClienteRepository, FRelatorioPedido, FEmailSender); // T50/T51/T52
+
   // Proximos incrementos entram aqui.
 end;
 
@@ -241,6 +247,7 @@ begin
 
   FEmailSender := nil; // T48
   FRelatorioPedido := nil; // T47
+  FFilaService.Free; // T50/T52
   FQuitacaoService.Free; // T43, antes dos repositorios/gateway
   FFinanceiro := nil; // T34
   FVendaService.Free; // T27, antes dos repositorios
