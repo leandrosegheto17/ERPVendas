@@ -11,9 +11,8 @@
   - Excluir: apaga itens explicitamente e depois o mestre (o banco tambem tem
     ON DELETE CASCADE, T03).
   - Falha FireDAC => EInfra amigavel (sem SQL) + detalhe no log.
-  - ListarDataSet / ExisteVendaPorCliente / ExisteVendaPorProduto pertencem a
-    T26: aqui sao apenas stubs que levantam EInfra, para a classe cumprir a
-    interface. T26 os substitui (a interface nao foi alterada).
+  - ListarDataSet / ExisteVendaPorCliente / ExisteVendaPorProduto (T26) ja
+    estao implementados abaixo (nao sao mais stubs).
 
   ROTEIRO MANUAL NA IDE (compilacao/execucao pendentes do usuario):
   1. Com Root montado e cliente/produtos existentes, montar TVenda com 2 itens
@@ -63,7 +62,7 @@ type
     procedure PreencherMestre(AQuery: TFDQuery; const AVenda: TVenda);
     procedure InserirItens(const AVenda: TVenda);
     procedure TratarFalha(const AOperacao: string; E: Exception);
-    function Existe(const ASQL: string; AId: Integer): Boolean;
+    function Existe(const ASQL, AOperacao: string; AId: Integer): Boolean;
   public
     constructor Create(AConexao: TConexao; ALogger: TLogger);
 
@@ -88,6 +87,8 @@ const
   MSG_FALHA_CONSULTAR = 'Não foi possível consultar a venda. Tente novamente.';
   MSG_FALHA_EXCLUIR = 'Não foi possível excluir a venda. Tente novamente.';
   MSG_NAO_ENCONTRADA = 'Venda não encontrada.';
+  MSG_FALHA_VERIFICAR_CLIENTE = 'Não foi possível verificar as vendas do cliente. Tente novamente.';
+  MSG_FALHA_VERIFICAR_PRODUTO = 'Não foi possível verificar as vendas do produto. Tente novamente.';
 
   // T26: lista (JOIN p/ nome do cliente; VALOR_TOTAL ja e o total da venda)
   SQL_LISTAR_BASE =
@@ -188,10 +189,17 @@ begin
   FLogger.Erro('Falha no VendaRepository: ' + AOperacao, E);
   if AOperacao = 'excluir' then
     Mensagem := MSG_FALHA_EXCLUIR
+  else if AOperacao = 'verificar-cliente' then
+    Mensagem := MSG_FALHA_VERIFICAR_CLIENTE
+  else if AOperacao = 'verificar-produto' then
+    Mensagem := MSG_FALHA_VERIFICAR_PRODUTO
   else if AOperacao = 'obter' then
     Mensagem := MSG_FALHA_CONSULTAR
   else
     Mensagem := MSG_FALHA_GRAVAR;
+  if (Mensagem = MSG_FALHA_VERIFICAR_CLIENTE) or
+    (Mensagem = MSG_FALHA_VERIFICAR_PRODUTO) then
+    raise EInfraMensagemSegura.Create(Mensagem);
   raise EInfra.Create(Mensagem);
 end;
 
@@ -271,7 +279,7 @@ begin
       Q.ParamByName('ID').AsInteger := AVenda.Id;
       Q.ExecSQL;
       if Q.RowsAffected = 0 then
-        raise EInfra.Create(MSG_NAO_ENCONTRADA);
+        raise EInfraMensagemSegura.Create(MSG_NAO_ENCONTRADA);
 
       Q.SQL.Text := SQL_ITENS_EXCLUIR;
       Q.ParamByName('ID').AsInteger := AVenda.Id;
@@ -311,6 +319,8 @@ begin
       Q.SQL.Text := SQL_EXCLUIR;
       Q.ParamByName('ID').AsInteger := AId;
       Q.ExecSQL;
+      if Q.RowsAffected = 0 then
+        raise EInfraMensagemSegura.Create(MSG_NAO_ENCONTRADA);
       if Iniciou then
         FConexao.Confirmar;
     except
@@ -400,7 +410,7 @@ begin
       Q.ParamByName('ID').AsInteger := AId;
       Q.ExecSQL;
       if Q.RowsAffected = 0 then
-        raise EInfra.Create(MSG_NAO_ENCONTRADA);
+        raise EInfraMensagemSegura.Create(MSG_NAO_ENCONTRADA);
       if Iniciou then
         FConexao.Confirmar;
     except
@@ -476,7 +486,7 @@ begin
   end;
 end;
 
-function TVendaRepository.Existe(const ASQL: string; AId: Integer): Boolean;
+function TVendaRepository.Existe(const ASQL, AOperacao: string; AId: Integer): Boolean;
 var
   Q: TFDQuery;
 begin
@@ -493,7 +503,7 @@ begin
       begin
         if E is EInfra then
           raise;
-        TratarFalha('obter', E);
+        TratarFalha(AOperacao, E);
       end;
     end;
   finally
@@ -503,12 +513,12 @@ end;
 
 function TVendaRepository.ExisteVendaPorCliente(AClienteId: Integer): Boolean;
 begin
-  Result := Existe(SQL_EXISTE_CLIENTE, AClienteId);
+  Result := Existe(SQL_EXISTE_CLIENTE, 'verificar-cliente', AClienteId);
 end;
 
 function TVendaRepository.ExisteVendaPorProduto(AProdutoId: Integer): Boolean;
 begin
-  Result := Existe(SQL_EXISTE_PRODUTO, AProdutoId);
+  Result := Existe(SQL_EXISTE_PRODUTO, 'verificar-produto', AProdutoId);
 end;
 
 end.
