@@ -92,7 +92,7 @@ type
 implementation
 
 uses
-  ERPV.Core.Erros, ERPV.Dominio.Produto, ERPV.UI.FormEdicaoProduto;
+  ERPV.Core.Erros, ERPV.Dominio.Enums, ERPV.Dominio.Produto, ERPV.UI.FormEdicaoProduto;
 
 const
   MSG_ERRO_LISTA = 'Não foi possível carregar os produtos.';
@@ -464,6 +464,7 @@ end;
 procedure TFormListaProdutos.AoExcluir;
 var
   Id: Integer;
+  Resultado: TResultadoExclusao;
 begin
   Id := IdSelecionado;
   if Id <= 0 then
@@ -471,7 +472,7 @@ begin
   if not Notificar(utnPergunta, 'Excluir o produto "' + DescricaoSelecionada + '"?') then
     Exit;
   try
-    FService.Excluir(Id);
+    Resultado := FService.Excluir(Id);
   except
     on E: Exception do
     begin
@@ -482,6 +483,8 @@ begin
       Exit;
     end;
   end;
+  if Resultado = reInativado then
+    Notificar(utnInfo, 'Produto com vendas foi inativado (não excluído).');
   Recarregar;
 end;
 

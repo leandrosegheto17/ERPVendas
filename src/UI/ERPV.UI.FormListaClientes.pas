@@ -91,7 +91,7 @@ type
 implementation
 
 uses
-  ERPV.Core.Erros, ERPV.Dominio.Cliente, ERPV.UI.FormEdicaoCliente;
+  ERPV.Core.Erros, ERPV.Dominio.Enums, ERPV.Dominio.Cliente, ERPV.UI.FormEdicaoCliente;
 
 const
   MSG_ERRO_LISTA = 'Não foi possível carregar os clientes.';
@@ -447,6 +447,7 @@ end;
 procedure TFormListaClientes.AoExcluir;
 var
   Id: Integer;
+  Resultado: TResultadoExclusao;
 begin
   Id := IdSelecionado;
   if Id <= 0 then
@@ -454,7 +455,7 @@ begin
   if not Notificar(utnPergunta, 'Excluir o cliente "' + NomeSelecionado + '"?') then
     Exit;
   try
-    FService.Excluir(Id);
+    Resultado := FService.Excluir(Id);
   except
     on E: Exception do
     begin
@@ -465,6 +466,8 @@ begin
       Exit;
     end;
   end;
+  if Resultado = reInativado then
+    Notificar(utnInfo, 'Cliente com vendas foi inativado (não excluído).');
   Recarregar;
 end;
 

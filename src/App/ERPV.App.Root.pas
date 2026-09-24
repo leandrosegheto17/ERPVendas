@@ -193,9 +193,9 @@ begin
 
   FVendaRepository := TVendaRepository.Create(FConexao, FLogger); // T25
   FClienteRepository := TClienteRepository.Create(FConexao, FLogger); // T17
-  FClienteService := TClienteService.Create(FClienteRepository); // T18
+  FClienteService := TClienteService.Create(FClienteRepository, FVendaRepository); // T18
   FProdutoRepository := TProdutoRepository.Create(FConexao, FLogger); // T21
-  FProdutoService := TProdutoService.Create(FProdutoRepository); // T22
+  FProdutoService := TProdutoService.Create(FProdutoRepository, FVendaRepository); // T22
   FVendaService := TVendaService.Create(FVendaRepository, FClienteRepository,
     FProdutoRepository); // T27
 
