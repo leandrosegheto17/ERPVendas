@@ -37,7 +37,7 @@ uses
   Data.DB,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Graphics,
   cxEdit, cxGraphics, cxControls, cxStyles, cxCustomData, cxDataStorage,
-  cxCurrencyEdit, cxSpinEdit, cxDBLookupComboBox, cxButtons,
+  cxCurrencyEdit, cxSpinEdit, cxDropDownEdit, cxDBLookupComboBox, cxButtons,
   cxGridCustomTableView, cxGridTableView, cxGridLevel, cxGrid,
   ERPV.Core.Erros,
   ERPV.Dominio.Enums, ERPV.Dominio.Cliente, ERPV.Dominio.Produto,
