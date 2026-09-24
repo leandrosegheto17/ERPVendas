@@ -48,6 +48,8 @@ function AcoesDaVenda(const AStatus: string; ATemFilaPendente,
 
 function TextoTipoFila(const ATipo: string): string;
 function TextoSituacaoFila(const AStatus: string): string;
+/// <summary>RF13-01: so item com STATUS PENDENTE pode ser reenviado.</summary>
+function PodeReenviarItem(const AStatus: string): Boolean;
 function SubtituloPendencias(ATotal: Integer; ASomentePendentes: Boolean): string;
 function MensagemDeReenvio(const AResultado: TResultadoReenvio): TMensagemReenvio;
 
@@ -111,6 +113,11 @@ begin
     Result := 'Concluído'
   else
     Result := AStatus;
+end;
+
+function PodeReenviarItem(const AStatus: string): Boolean;
+begin
+  Result := SameText(AStatus, 'PENDENTE');
 end;
 
 function SubtituloPendencias(ATotal: Integer; ASomentePendentes: Boolean): string;

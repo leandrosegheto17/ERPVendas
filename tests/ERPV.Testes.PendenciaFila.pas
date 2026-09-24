@@ -25,6 +25,8 @@ type
     procedure Concluir(AVendaId: Integer; ATipo: TTipoFila);
     procedure Enfileirar(AVendaId: Integer; ATipo: TTipoFila; const AErro: string = '');
     function Listar(ASomentePendentes: Boolean): TDataSet;
+    function ObterItem(AId: Integer; out AVendaId: Integer; out ATipo: TTipoFila;
+      out APendente: Boolean): Boolean;
     procedure MarcarConcluido(AId: Integer);
     procedure RegistrarFalha(AId: Integer; const AErro: string);
     function ContarPendencias: Integer;
@@ -87,6 +89,15 @@ end;
 function TFilaMemoria.Listar(ASomentePendentes: Boolean): TDataSet;
 begin
   Result := nil;
+end;
+
+function TFilaMemoria.ObterItem(AId: Integer; out AVendaId: Integer;
+  out ATipo: TTipoFila; out APendente: Boolean): Boolean;
+begin
+  AVendaId := 0;
+  ATipo := tfQuitacao;
+  APendente := False;
+  Result := False;
 end;
 
 procedure TFilaMemoria.MarcarConcluido(AId: Integer);

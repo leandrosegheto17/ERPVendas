@@ -57,6 +57,8 @@ type
     FLblErro: TLabel;
     FBtnTentar: TcxButton;
     FOcupado: Boolean;
+    FLblEspera: TLabel;
+    procedure DefinirOcupado(AValor: Boolean);
     procedure MontarBarra;
     procedure MontarGrade;
     procedure MontarVazio;
@@ -102,6 +104,7 @@ uses
 
 const
   MSG_ERRO_LISTA = 'Não foi possível carregar as pendências.';
+  MSG_REENVIANDO = 'Reenviando...';
   MSG_ERRO_GENERICO = 'Ocorreu um erro inesperado. Tente novamente.';
   MSG_ERRO_REENVIO = 'Ainda não foi possível reenviar este item. Tente novamente.';
 
@@ -168,6 +171,18 @@ begin
   FChkSomentePendentes.OnClick := AoMudarFiltro;
 
   // Ordem de tabulacao: Reenviar, Atualizar, Somente pendentes, Fechar.
+  FLblEspera := TLabel.Create(Self);
+  FLblEspera.Parent := Pai;
+  FLblEspera.AutoSize := True;
+  FLblEspera.Transparent := True;
+  FLblEspera.Font.Name := ERPVFontePrincipal;
+  FLblEspera.Font.Color := clERPVTextoSecundario;
+  FLblEspera.Caption := MSG_REENVIANDO;
+  FLblEspera.Left := FChkSomentePendentes.Left + FChkSomentePendentes.Width +
+    ERPVEspaco16;
+  FLblEspera.Top := Topo + 6;
+  FLblEspera.Visible := False; // so durante o reenvio sincrono
+
   FBtnReenviar.TabOrder := 0;
   FBtnAtualizar.TabOrder := 1;
   FChkSomentePendentes.TabOrder := 2;
@@ -307,7 +322,8 @@ begin
   FPnlVazio.Visible := Vazio and not FPnlErro.Visible;
   Subtitulo := SubtituloPendencias(FView.DataController.RecordCount,
     FChkSomentePendentes.Checked);
-  FBtnReenviar.Enabled := (not FOcupado) and TemSelecao;
+  FBtnReenviar.Enabled := (not FOcupado) and TemSelecao and
+    PodeReenviarItem(VarToStr(ValorLinha(FColSituacao)));
 end;
 
 function TFormPendencias.ValorLinha(AColuna: TcxGridDBColumn): Variant;
@@ -326,6 +342,21 @@ begin
     (not VarIsNull(ValorLinha(FColId)));
 end;
 
+procedure TFormPendencias.DefinirOcupado(AValor: Boolean);
+begin
+  FOcupado := AValor;
+  FBtnReenviar.Enabled := (not AValor) and TemSelecao and
+    PodeReenviarItem(VarToStr(ValorLinha(FColSituacao)));
+  FBtnAtualizar.Enabled := not AValor;
+  FChkSomentePendentes.Enabled := not AValor;
+  BtnFechar.Enabled := not AValor;
+  FGrade.Enabled := not AValor; // bloqueia duplo clique/Enter/teclas na grade
+  FBtnTentar.Enabled := not AValor;
+  FLblEspera.Visible := AValor;
+  if AValor then
+    FLblEspera.Update; // repinta antes da chamada sincrona
+end;
+
 procedure TFormPendencias.AoReenviar(Sender: TObject);
 var
   FilaId, VendaId: Integer;
@@ -333,7 +364,8 @@ var
   Resultado: TResultadoReenvio;
   Msg: TMensagemReenvio;
 begin
-  if FOcupado or not TemSelecao then
+  if FOcupado or not TemSelecao or
+    not PodeReenviarItem(VarToStr(ValorLinha(FColSituacao))) then
     Exit;
   FilaId := ValorLinha(FColId);
   VendaId := ValorLinha(FColVenda);
@@ -344,9 +376,8 @@ begin
     Exit;
   end;
 
-  FOcupado := True;
-  FBtnReenviar.Enabled := False;
   Screen.Cursor := crHourGlass;
+  DefinirOcupado(True);
   try
     try
       Resultado := FService.Reenviar(FilaId, VendaId, Tipo);
@@ -363,7 +394,7 @@ begin
     end;
   finally
     Screen.Cursor := crDefault;
-    FOcupado := False;
+    DefinirOcupado(False);
   end;
 
   // Recarrega antes da mensagem modal: item concluido some do filtro.
@@ -395,7 +426,8 @@ procedure TFormPendencias.AoMudarFoco(Sender: TcxCustomGridTableView;
   APrevFocusedRecord, AFocusedRecord: TcxCustomGridRecord;
   ANewItemRecordFocusingChanged: Boolean);
 begin
-  FBtnReenviar.Enabled := (not FOcupado) and TemSelecao;
+  FBtnReenviar.Enabled := (not FOcupado) and TemSelecao and
+    PodeReenviarItem(VarToStr(ValorLinha(FColSituacao)));
 end;
 
 procedure TFormPendencias.AoTextoTipo(Sender: TcxCustomGridTableItem;

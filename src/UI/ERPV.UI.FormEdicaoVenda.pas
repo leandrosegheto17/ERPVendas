@@ -138,6 +138,7 @@ type
     procedure ProdutoGetDisplayText(Sender: TcxCustomGridTableItem;
       ARecord: TcxCustomGridRecord; var AText: string);
     procedure AplicarEstado;
+    procedure RecalcularBloqueioFila;
     procedure AtualizarCancelar;
     function MontarVenda: TVenda;
   protected
@@ -691,6 +692,7 @@ begin
     FView.OptionsData.Editing := False;
     FBtnAdicionar.Enabled := False;
     FBtnRemover.Enabled := False;
+    FBtnConfirmar.Enabled := False;
     BtnSalvar.Visible := False;
     BtnCancelar.Caption := 'Fechar';
   end;
@@ -965,6 +967,7 @@ begin
       on E: ERegraNegocio do
       begin
         Notificar(utnErro, E.Message);
+        RecalcularBloqueioFila; // RF13-03
         Exit;
       end;
     end;
@@ -1021,9 +1024,26 @@ begin
     Espera.Desabilitar := [FBtnConfirmar, BtnSalvar, BtnCancelar, FBtnAdicionar,
       FBtnRemover, FCmbCliente, FGrade];
     Espera.Rotulo := FLblEspera;
-    // Excecoes sobem ao handler global; UI restaurada no finally do helper.
-    if ConfirmarVendaComFeedback(FQuitacaoService, FVendaId, Total, Espera) then
-      ModalResult := mrOk; // quitada: fecha e a lista recarrega
+    // Demais excecoes sobem ao handler global; UI restaurada no finally do helper.
+    try
+      if ConfirmarVendaComFeedback(FQuitacaoService, FVendaId, Total, Espera) then
+      begin
+        ModalResult := mrOk; // quitada: fecha e a lista recarrega
+        Exit;
+      end;
+    except
+      on E: ERegraNegocio do
+      begin
+        // RF13-03: bloqueio de fila tratado aqui
+        RecalcularBloqueioFila;
+        if not FBloqueadaFila then
+          raise;
+        Notificar(utnAviso, E.Message);
+        Exit;
+      end;
+    end;
+    // Sem fechar (ex.: enfileirou): a tela pode ter passado a bloqueada
+    RecalcularBloqueioFila;
   finally
     FConfirmando := False;
   end;
@@ -1040,10 +1060,38 @@ begin
     FBloqueadaFila then
     Exit;
   // Regra no TQuitacaoService (T43); a tela so exibe (dialogo T44).
-  if CancelarVendaComDialogo(Self, FQuitacaoService, FVendaId) then
+  try
+    if CancelarVendaComDialogo(Self, FQuitacaoService, FVendaId) then
+    begin
+      FVendaCancelada := True;
+      ModalResult := mrOk; // a lista recarrega e exibe o banner Info
+      Exit;
+    end;
+  except
+    on E: ERegraNegocio do
+    begin
+      // RF13-03: bloqueio de fila tratado aqui; demais regras seguem ao global
+      RecalcularBloqueioFila;
+      if not FBloqueadaFila then
+        raise;
+      Notificar(utnAviso, E.Message);
+      Exit;
+    end;
+  end;
+  // Sem fechar (ex.: enfileirou): a tela pode ter passado a bloqueada
+  RecalcularBloqueioFila;
+end;
+
+procedure TFormEdicaoVenda.RecalcularBloqueioFila;
+begin
+  // RF13-03: mesma regra do construtor; so vale para Pendente ja gravada.
+  if FBloqueadaFila or (FVendaId <= 0) or (FStatus <> svPendente) then
+    Exit;
+  if FVendaService.TemPendenciaFila(FVendaId) then
   begin
-    FVendaCancelada := True;
-    ModalResult := mrOk; // a lista recarrega e exibe o banner Info
+    FBloqueadaFila := True;
+    FSomenteLeitura := True;
+    AplicarEstado;
   end;
 end;
 

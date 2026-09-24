@@ -153,6 +153,11 @@ type
     /// (lancada antes do POST).</exception>
     function Confirmar(AVendaId: Integer): TResultadoQuitacao;
 
+    /// <summary>RF13-02: pos-quitacao (PDF + e-mail; falha => item EMAIL na fila)
+    /// para quitacao concluida fora do caminho sincrono (Reenviar/Pendencias).
+    /// Nunca levanta excecao nem reposta o Financeiro; devolve o EmailStatus.</summary>
+    function ExecutarPosQuitacao(AVendaId: Integer): TEmailQuitacao;
+
     /// <summary>RF12-03: aviso opcional de fase (best-effort; default nil).
     /// Recebe 'pos-quitacao' no inicio de PosQuitacao (PDF + SMTP).</summary>
     property OnFase: TProc<string> read FOnFase write FOnFase;
@@ -337,6 +342,22 @@ begin
   end;
 end;
 
+function TQuitacaoService.ExecutarPosQuitacao(AVendaId: Integer): TEmailQuitacao;
+var
+  Res: TResultadoQuitacao;
+begin
+  Res := Default(TResultadoQuitacao);
+  Res.Desfecho := qdSucesso;
+  Res.EmailStatus := eqNaoAplicavel;
+  try
+    PosQuitacao(AVendaId, Res);
+  except
+    // defesa: pos-quitacao nunca deve derrubar o chamador
+    Res.EmailStatus := eqFalhouSemFila;
+  end;
+  Result := Res.EmailStatus;
+end;
+
 function TQuitacaoService.Confirmar(AVendaId: Integer): TResultadoQuitacao;
 var
   Venda: TVenda;
@@ -353,8 +374,20 @@ begin
         'Somente venda pendente pode ser quitada (status atual: ' +
         StatusVendaToStr(Venda.Status) + ')');
     // T53 (UX 4.2): QUITACAO/CANCELAMENTO pendente na fila => usar Pendencias.
-    if VendaBloqueadaPorFila(FFilaRepositorio, AVendaId) then
-      raise ERegraNegocio.Create(MSG_BLOQUEIO_FILA);
+    // RF13-06: EInfra da verificacao vira resultado tipado, sem chamar o Financeiro.
+    try
+      if VendaBloqueadaPorFila(FFilaRepositorio, AVendaId) then
+        raise ERegraNegocio.Create(MSG_BLOQUEIO_FILA);
+    except
+      on EInfra do
+      begin
+        Result := Default(TResultadoQuitacao);
+        Result.Desfecho := qdIndisponivel;
+        Result.Mensagem := MSG_FALHA_VERIFICAR_FILA;
+        Result.EmailStatus := eqNaoAplicavel;
+        Exit;
+      end;
+    end;
 
     // ADR-006: nenhuma transacao aberta durante o HTTP.
     Resp := FFinanceiro.ConfirmarQuitacao(Venda);
@@ -462,8 +495,13 @@ begin
   if StatusAtual = svCancelada then
     Exit(ResultadoCancelamento(dcNaoPermitida, 'Venda já está cancelada'));
   // T53 (UX 4.2): operacao pendente na fila bloqueia novo cancelamento.
-  if VendaBloqueadaPorFila(FFilaRepositorio, AVendaId) then
-    Exit(ResultadoCancelamento(dcNaoPermitida, MSG_BLOQUEIO_FILA));
+  try
+    if VendaBloqueadaPorFila(FFilaRepositorio, AVendaId) then
+      Exit(ResultadoCancelamento(dcNaoPermitida, MSG_BLOQUEIO_FILA));
+  except
+    on EInfra do // RF13-06
+      Exit(ResultadoCancelamento(dcNaoPermitida, MSG_FALHA_VERIFICAR_FILA));
+  end;
 
   // RF10-01: MOTIVO_CANCELAMENTO e VARCHAR(255) (UI ja limita); recorta.
   Motivo := Copy(Trim(AMotivo), 1, 255);

@@ -18,6 +18,9 @@ const
   MSG_BLOQUEIO_FILA = 'Há uma operação pendente de envio ao Financeiro para esta ' +
     'venda. Resolva em Pendências antes de continuar.';
 
+  MSG_FALHA_VERIFICAR_FILA = 'Não foi possível verificar operações pendentes. ' +
+    'Tente novamente.';
+
 /// <summary>True se ha QUITACAO ou CANCELAMENTO PENDENTE para a venda.</summary>
 function VendaBloqueadaPorFila(const AFila: IFilaRepository; AVendaId: Integer): Boolean;
 

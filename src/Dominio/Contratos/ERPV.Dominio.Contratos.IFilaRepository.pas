@@ -29,6 +29,11 @@ type
     /// <summary>DataSet somente leitura para a grade de Pendências (T52).</summary>
     function Listar(ASomentePendentes: Boolean): TDataSet;
 
+    /// <summary>Obtem o item por Id (RF13-01): devolve False se nao existir;
+    /// senao preenche a venda, o tipo e se o STATUS e PENDENTE.</summary>
+    function ObterItem(AId: Integer; out AVendaId: Integer; out ATipo: TTipoFila;
+      out APendente: Boolean): Boolean;
+
     /// <summary>Marca o item como CONCLUIDO e grava CONCLUIDO_EM.</summary>
     procedure MarcarConcluido(AId: Integer);
 

@@ -135,6 +135,7 @@ end;
 procedure TVendaService.ExigirPendente(AId: Integer; out AAtual: TVenda);
 var
   Msg: string;
+  Bloqueada: Boolean;
 begin
   // Status sempre lido do banco; o objeto do chamador nao e confiavel.
   AAtual := FVendaRepositorio.Obter(AId);
@@ -150,7 +151,17 @@ begin
     raise ERegraNegocio.Create(Msg);
   end;
   // T53 (UX 4.2): operacao pendente na fila bloqueia editar/excluir.
-  if TemPendenciaFila(AId) then
+  // RF13-06: EInfra da verificacao vira ERegraNegocio amigavel (UI trata local).
+  try
+    Bloqueada := TemPendenciaFila(AId);
+  except
+    on EInfra do
+    begin
+      FreeAndNil(AAtual);
+      raise ERegraNegocio.Create(MSG_FALHA_VERIFICAR_FILA);
+    end;
+  end;
+  if Bloqueada then
   begin
     FreeAndNil(AAtual);
     raise ERegraNegocio.Create(MSG_BLOQUEIO_FILA);

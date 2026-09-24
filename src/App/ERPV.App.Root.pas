@@ -232,7 +232,7 @@ begin
     FFilaRepository, FClienteRepository, FRelatorioPedido, FEmailSender, FLogger); // T43/T49, RF12-01
 
   FFilaService := TFilaService.Create(FVendaRepository, FFinanceiro,
-    FFilaRepository, FClienteRepository, FRelatorioPedido, FEmailSender); // T50/T51/T52
+    FFilaRepository, FClienteRepository, FRelatorioPedido, FEmailSender, FQuitacaoService, FLogger); // T50/T51/T52, RF13-02/05
 
   // Proximos incrementos entram aqui.
 end;
