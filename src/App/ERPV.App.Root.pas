@@ -109,7 +109,7 @@ uses
   ERPV.Core.Erros,
   ERPV.Dados.Conexao,
   ERPV.Dados.VendaRepository,
-  ERPV.Dominio.Contratos.IVendaRepository;
+  ERPV.Dominio.Contratos.IVendaRepository,
   ERPV.Dados.ClienteRepository,
   ERPV.Dominio.Contratos.IClienteRepository,
   ERPV.Dados.ProdutoRepository,
