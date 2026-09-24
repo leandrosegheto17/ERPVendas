@@ -689,3 +689,47 @@ Sem achados de: injeção via assunto/corpo, vazamento de senha, PII em log/fila
 **Aprovado com débito** (SG12-01 média com condição de produção; SG12-02..06 baixos). Sem achado alto/crítico e sem compliance obrigatório em aberto no escopo dev/sandbox: credenciais fora do log e do código, mensagens de erro fixas, `ULTIMO_ERRO` sem PII (fixo + mascarado + truncado), assunto/corpo sem entrada de usuário, destinatário validado na origem, PDF apagado em sucesso e falha. Não bloqueia o deploy de homologação/Mailtrap. **SG12-01 sobe para Alta e passa a bloquear deploy em produção com SMTP real** se o certificado não for verificado e o STARTTLS exigido.
 
 Escala para: nenhum bloqueio. Gestor: informativo, SG12-05 (dados reais em serviço externo) e SG11-05 (CPF completo no PDF). Coordenador: não. Executor: correção via `Refatoração Lote-12`, não imediata (SG12-01 antes de produção). DevOps: requisitos da seção 8.
+
+## Lote 13 — Reenvio e Pendências (T50-T53) — chapéu DevSecOps (2026-09-24)
+
+Método: leitura estática de `FilaService`, `FilaRepository`, `PendenciaFila`, `VendaService`, `QuitacaoService`, `FormPendencias`, `PendenciasApresentacao`, `TLogger.MascararSensiveis` e `FinanceiroClient.ExtrairMensagem`, mais o `QA-REPORT.md` do lote (A1-A6, R13-1..3). Nada compilado/executado (sem IDE). Notas do Executor não usadas como base.
+
+### 1. ULTIMO_ERRO na grade (RF9-05)
+`TruncarErro` (mascara e depois trunca a 500) é aplicada em `Enfileirar`, `RegistrarFalha` e no incremento; a grade lê só a coluna já gravada. A máscara cobre CPF/CNPJ (formatado ou só dígitos) e e-mail (`u***@dominio`), além de `senha/token/apikey=valor`. `Env.MensagemErro` do SMTP são constantes fixas, sem PII. `Resp.Mensagem` do Financeiro é texto de terceiro (até 200 caracteres, uma linha), mascarado só na persistência. Limite: a máscara não cobre nome, telefone, endereço nem CPF com espaços ou outro formato. Lacuna: a mensagem devolvida à UI por `Falha`/`TResultadoReenvio.Mensagem` (`'Ainda não foi possível: ' + Mensagem`) é o texto CRU, sem `MascararSensiveis`; só a cópia no banco é mascarada (SG13-01).
+
+### 2. PDF com PII na pasta temp no reenvio
+`ReenviarEmail`: o `Limpar(Pdf)` roda em sucesso, falha do `Enviar` e exceção (o `except` interno captura tudo antes). Handle liberado no `Enviar`. Falha parcial: se `GerarPdf` lança depois de criar o arquivo, `Pdf=''` e nada é limpo (SG13-03). Sem varredura na inicialização e ACL herdada: continuam SG11-01/02 e SG12-04, com prazo antes do smoke T54.
+
+### 3. Reenvio duplicado (A1) e implicação
+Com o filtro desmarcado, Reenviar em item EMAIL `CONCLUIDO` reenvia o PDF com CPF/CNPJ completo ao titular (SG11-05) e sobrescreve `CONCLUIDO_EM`. É repetição ao próprio titular, sem exposição a terceiro; o impacto é de integridade, trilha adulterada e minimização LGPD. Em QUITACAO/CANCELAMENTO concluído, o service checa status local e GET, então não repõe POST, mas `RegistrarFalha` (UPDATE sem `AND STATUS='PENDENTE'`) altera `TENTATIVAS`/`ULTIMO_ERRO` de item concluído. `Reenviar` confia em `AFilaId`, `AVendaId` e `ATipo` vindos separados da UI e não confere se o item existe, é PENDENTE e pertence à venda/tipo (SG13-02).
+
+### 4. Guarda de bloqueio no Service
+`VendaBloqueadaPorFila` é aplicada em `VendaService.ExigirPendente` (Salvar Id>0, Excluir) e `QuitacaoService.Confirmar/Cancelar` antes do POST, além da UI: defesa em profundidade correta e fail-safe (falha na consulta da fila impede a ação; A4 é de UX). Sem TOCTOU relevante (desktop monousuário). O pós-quitação ausente (A2) é funcional, não de segurança. Sem achado.
+
+### 5. Logging, EInfra e mensagens ao usuário
+`FilaService` e a UI nova não logam (nenhum dado pessoal em log). Contrapartida: sem trilha de quem reenviou/quando (SG13-04). `EInfra` traz mensagens fixas amigáveis, sem SQL; o log técnico do repositório passa pelo mascaramento. `E.Message` só é exposto para `EErpVendas`; demais exceções viram texto genérico. Exceção de `Obter`/`ConsultarStatus` sem proteção (A4) cai na UI com texto genérico: sem vazamento.
+
+### 6. Injeção/SQL
+Acessos novos (`SQL_BUSCAR_PENDENTE`, `SQL_INCREMENTAR`, `SQL_CONCLUIR`, `SQL_CONTAR`) parametrizados; `Listar` concatena só constantes conforme o booleano. Sem achado. Aderência a SDD Seção 7, GUARDRAILS e ADR-005/006/007 (POST fora de transação, commit curto, GET antes do repost, PDF sem persistência): OK.
+
+### 7. Compliance (LGPD)
+Finalidade e base contratual mantidas (reenvio ao próprio titular). Minimização: cancelamento reenvia sem motivo (positivo); PDF com CPF completo (SG11-05, já sinalizado). Sem compliance obrigatório em aberto.
+
+### 8. Requisitos ao chapéu DevOps
+Sem novos além dos Lotes 11 e 12 (ACL da `PastaPdfTemp`, TLS/`ERPV_SMTP_PASSWORD`, dados fictícios no Mailtrap). O smoke deve cobrir reenvio de EMAIL e confirmar pasta temp vazia depois.
+
+### Achados do lote
+
+| # | Achado | Severidade | Situação |
+|---|---|---|---|
+| SG13-01 | Mensagem de falha exibida ao operador (`Resp.Mensagem` do Financeiro, até 200 caracteres) sem `MascararSensiveis`; máscara não cobre nome/telefone/endereço nem CPF em formato atípico | Baixa | Débito: aplicar `TLogger.MascararSensiveis` em `Falha` antes de devolver à UI; ampliar teste de máscara; `Refatoração Lote-13` |
+| SG13-02 | Reenvio sem validar item (PENDENTE, existência, vínculo fila/venda/tipo); A1 reenvia e-mail com PII a item CONCLUIDO e altera `CONCLUIDO_EM`, `TENTATIVAS`, `ULTIMO_ERRO` | Baixa (integridade/minimização; sem exposição a terceiro) | Débito, junto de A1: service obtém o item e recusa se não PENDENTE; UPDATE com `AND STATUS='PENDENTE'`; botão só em PENDENTE |
+| SG13-03 | `GerarPdf` com falha parcial pode deixar PDF sem `Limpar`; `Limpar` engole erro sem registro | Baixa | Débito: limpeza por nome previsível/`finally`; varredura na inicialização (SG11-01/02, antes do smoke T54) |
+| SG13-04 | Sem trilha de auditoria do reenvio (quem/quando); nenhum log de desfecho, mesmo mascarado | Baixa | Débito: log mascarado só com Id da fila/venda e desfecho; junto de SG9-01/SG12-06 |
+
+Sem achados de: PII em log, injeção SQL, credencial, erro técnico exposto, bloqueio só na UI, exposição a terceiro.
+
+### Veredito do lote (chapéu DevSecOps)
+**Aprovado com débito (sem achado bloqueante).** Nenhum alto/crítico e nenhum compliance obrigatório em aberto; SG13-01..04 baixos, com prazo antes do smoke T54/Lote 16, junto dos débitos dos Lotes 11/12. SG12-01 (TLS) continua bloqueando produção com SMTP real.
+
+Escala para: nenhum bloqueio. Executor: correção via `Refatoração Lote-13` (SG13-02 junto de A1; SG13-01 e SG13-03 antes do smoke T54). Gestor: informativo (SG11-05, SG12-05 mantidos). Coordenador: não. DevOps: seção 8.
