@@ -401,6 +401,9 @@ begin
   FNivel.GridView := FView;
   ConfigurarGrade(FView);
   FView.OptionsData.Editing := True;
+  // ConfigurarGrade deixa CellSelect=False (lista de linha inteira); aqui a
+  // grade e editavel por celula, senao o editor de Produto/Qtd nunca abre.
+  FView.OptionsSelection.CellSelect := True;
   FView.OptionsData.Appending := False;
   FView.OptionsData.Deleting := False;
   FView.OptionsData.Inserting := False;
