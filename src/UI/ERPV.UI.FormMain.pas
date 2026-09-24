@@ -267,7 +267,7 @@ begin
   FRotuloMarca.Font.Name := ERPVFontePrincipal;
   FRotuloMarca.Font.Size := ERPVTamFaixaMarca;
   FRotuloMarca.Font.Style := [fsBold];
-  FRotuloMarca.Font.Color := clWhite;
+  FRotuloMarca.Font.Color := clERPVTextoSobreDestaque;
   FRotuloMarca.Caption := 'ERP Vendas';
 end;
 

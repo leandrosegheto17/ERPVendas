@@ -1,4 +1,4 @@
-unit ERPV.UI.FormBaseLista;
+﻿unit ERPV.UI.FormBaseLista;
 
 (*
   T15 (Lote 3) - TFormBaseLista (UX-SPEC 2.2, 3.3, 4.1; ADR-011).
