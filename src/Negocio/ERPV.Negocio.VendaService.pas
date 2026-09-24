@@ -22,7 +22,8 @@ uses
   ERPV.Dominio.VendaItem,
   ERPV.Dominio.Contratos.IVendaRepository,
   ERPV.Dominio.Contratos.IClienteRepository,
-  ERPV.Dominio.Contratos.IProdutoRepository;
+  ERPV.Dominio.Contratos.IProdutoRepository,
+  ERPV.Dominio.Contratos.IFilaRepository;
 
 type
   TVendaService = class
@@ -30,13 +31,19 @@ type
     FVendaRepositorio: IVendaRepository;
     FClienteRepositorio: IClienteRepository;
     FProdutoRepositorio: IProdutoRepository;
+    FFilaRepositorio: IFilaRepository;
     procedure Validar(const AVenda: TVenda);
     procedure ExigirPendente(AId: Integer; out AAtual: TVenda);
     procedure AplicarPrecosETotal(const AVenda: TVenda; const AAtual: TVenda);
   public
     constructor Create(const AVendaRepositorio: IVendaRepository;
       const AClienteRepositorio: IClienteRepository;
-      const AProdutoRepositorio: IProdutoRepository);
+      const AProdutoRepositorio: IProdutoRepository;
+      const AFilaRepositorio: IFilaRepository = nil);
+
+    /// <summary>T53 (UX 4.2): True se ha QUITACAO/CANCELAMENTO pendente na fila
+    /// para a venda (edicao/exclusao bloqueadas). False sem fila injetada.</summary>
+    function TemPendenciaFila(AId: Integer): Boolean;
 
     /// <summary>Valida e inclui (Id = 0, nasce Pendente) ou altera (Id > 0).
     /// Devolve o Id. A entidade continua sendo do chamador.</summary>
@@ -50,14 +57,24 @@ type
 
 implementation
 
+uses
+  ERPV.Negocio.PendenciaFila;
+
 constructor TVendaService.Create(const AVendaRepositorio: IVendaRepository;
   const AClienteRepositorio: IClienteRepository;
-  const AProdutoRepositorio: IProdutoRepository);
+  const AProdutoRepositorio: IProdutoRepository;
+  const AFilaRepositorio: IFilaRepository);
 begin
   inherited Create;
   FVendaRepositorio := AVendaRepositorio;
   FClienteRepositorio := AClienteRepositorio;
   FProdutoRepositorio := AProdutoRepositorio;
+  FFilaRepositorio := AFilaRepositorio;
+end;
+
+function TVendaService.TemPendenciaFila(AId: Integer): Boolean;
+begin
+  Result := VendaBloqueadaPorFila(FFilaRepositorio, AId);
 end;
 
 procedure TVendaService.Validar(const AVenda: TVenda);
@@ -116,6 +133,12 @@ begin
       Msg := 'Venda cancelada não pode ser alterada nem excluída';
     FreeAndNil(AAtual);
     raise ERegraNegocio.Create(Msg);
+  end;
+  // T53 (UX 4.2): operacao pendente na fila bloqueia editar/excluir.
+  if TemPendenciaFila(AId) then
+  begin
+    FreeAndNil(AAtual);
+    raise ERegraNegocio.Create(MSG_BLOQUEIO_FILA);
   end;
 end;
 

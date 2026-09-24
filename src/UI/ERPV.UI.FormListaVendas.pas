@@ -25,6 +25,7 @@ interface
 uses
   Winapi.Windows,
   System.SysUtils, System.Classes, System.UITypes, System.Variants, Data.DB,
+  System.Generics.Collections, ERPV.Dominio.Contratos.IFilaRepository,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Graphics, Vcl.Menus,
   cxControls, cxTextEdit, cxGraphics, cxClasses, cxCustomData, cxData, cxDBData, cxGridCustomView,
   cxGridCustomTableView, cxGridTableView, cxGridDBTableView, cxGridLevel, cxGrid,
@@ -42,6 +43,9 @@ type
     FDataSet: TDataSet;
     FDataSource: TDataSource;
     FOnFechada: TNotifyEvent;
+    FFilaRepository: IFilaRepository;
+    FOnFilaAlterada: TNotifyEvent;
+    FVendasComFila: TDictionary<Integer, Boolean>; // T53: vendas com QUITACAO/CANCELAMENTO pendente
     FClienteIds: TArray<Integer>; // paralelo a FCmbCliente.Items (indice 0 = Todos)
     FPnlFiltros: TPanel;
     FLblStatus: TLabel;
@@ -100,6 +104,11 @@ type
     procedure AoDesenharCelula(Sender: TcxCustomGridTableView; ACanvas: TcxCanvas;
       AViewInfo: TcxGridTableDataCellViewInfo; var ADone: Boolean);
     procedure LiberarDados;
+    procedure CarregarVendasComFila;
+    function TemFilaPendente(AVendaId: Integer): Boolean;
+    procedure NotificarFilaAlterada;
+    procedure AoTextoSinc(Sender: TcxCustomGridTableItem;
+      ARecord: TcxCustomGridRecord; var AText: string);
   protected
     procedure AoNovo; override;
     procedure AoEditar; override;
@@ -116,6 +125,12 @@ type
     /// desabilitado (T42). Servico e do chamador; a tela nao o libera.</summary>
     property QuitacaoService: TQuitacaoService read FQuitacaoService
       write SetQuitacaoService;
+    /// <summary>T53: fila para o indicador Sinc e o bloqueio de botoes (UX 4.2).
+    /// Definir logo apos criar; recarrega a lista.</summary>
+    procedure DefinirFilaRepository(const AFila: IFilaRepository);
+    /// <summary>T53: disparado apos Confirmar/Cancelar/Editar (a fila pode ter
+    /// mudado) para o shell atualizar o contador "Pendencias: N".</summary>
+    property OnFilaAlterada: TNotifyEvent read FOnFilaAlterada write FOnFilaAlterada;
   end;
 
 implementation
@@ -123,7 +138,8 @@ implementation
 uses
   System.DateUtils,
   ERPV.Core.Erros, ERPV.Dominio.Enums, ERPV.UI.FormEdicaoVenda,
-  ERPV.UI.ConfirmacaoVenda, ERPV.UI.FormCancelamentoVenda, ERPV.UI.Icones;
+  ERPV.UI.ConfirmacaoVenda, ERPV.UI.FormCancelamentoVenda, ERPV.UI.Icones,
+  ERPV.UI.PendenciasApresentacao;
 
 const
   MSG_ERRO_LISTA = 'Não foi possível carregar as vendas.';
@@ -137,6 +153,7 @@ constructor TFormListaVendas.Create(AOwner: TComponent; AVendaService: TVendaSer
   AClienteService: TClienteService; AProdutoService: TProdutoService);
 begin
   inherited Create(AOwner);
+  FVendasComFila := TDictionary<Integer, Boolean>.Create;
   FVendaService := AVendaService;
   FClienteService := AClienteService;
   FProdutoService := AProdutoService;
@@ -156,7 +173,66 @@ begin
   if FView <> nil then
     FView.DataController.DataSource := nil;
   LiberarDados;
+  FreeAndNil(FVendasComFila);
   inherited Destroy;
+end;
+
+procedure TFormListaVendas.DefinirFilaRepository(const AFila: IFilaRepository);
+begin
+  FFilaRepository := AFila;
+  Recarregar;
+end;
+
+procedure TFormListaVendas.NotificarFilaAlterada;
+begin
+  if Assigned(FOnFilaAlterada) then
+    FOnFilaAlterada(Self);
+end;
+
+procedure TFormListaVendas.CarregarVendasComFila;
+var
+  DS: TDataSet;
+  Tipo: string;
+begin
+  // Um SELECT (itens PENDENTE) por recarga, em vez de 1 consulta por linha.
+  // Falha aqui so esconde o indicador; o bloqueio real esta nos Services.
+  FVendasComFila.Clear;
+  if FFilaRepository = nil then
+    Exit;
+  try
+    DS := FFilaRepository.Listar(True);
+    try
+      while not DS.Eof do
+      begin
+        Tipo := DS.FieldByName('TIPO').AsString;
+        if SameText(Tipo, 'QUITACAO') or SameText(Tipo, 'CANCELAMENTO') then
+          FVendasComFila.AddOrSetValue(DS.FieldByName('VENDA_ID').AsInteger, True);
+        DS.Next;
+      end;
+    finally
+      DS.Free;
+    end;
+  except
+    FVendasComFila.Clear;
+  end;
+end;
+
+function TFormListaVendas.TemFilaPendente(AVendaId: Integer): Boolean;
+begin
+  Result := (AVendaId > 0) and FVendasComFila.ContainsKey(AVendaId);
+end;
+
+procedure TFormListaVendas.AoTextoSinc(Sender: TcxCustomGridTableItem;
+  ARecord: TcxCustomGridRecord; var AText: string);
+var
+  V: Variant;
+begin
+  AText := '';
+  if ARecord = nil then
+    Exit;
+  V := ARecord.Values[FColId.Index];
+  if not VarIsNull(V) then
+    AText := TextoSincVenda(TemFilaPendente(V));
 end;
 
 procedure TFormListaVendas.LiberarDados;
@@ -245,7 +321,7 @@ var
 begin
   Id := IdSelecionado;
   if (FQuitacaoService = nil) or (Id <= 0) or
-    not SameText(StatusSelecionado, ST_PENDENTE) then
+    not SameText(StatusSelecionado, ST_PENDENTE) or TemFilaPendente(Id) then
     Exit;
   Total := 0;
   Idx := FView.DataController.FocusedRecordIndex;
@@ -257,10 +333,13 @@ begin
   Espera.Rotulo := FLblEspera;
   // Excecoes (ERegraNegocio/EInfra/inesperada) sobem ao handler global; a UI ja
   // foi restaurada no finally do helper.
-  if ConfirmarVendaComFeedback(FQuitacaoService, Id, Total, Espera, PnlConteudo) then
-    Recarregar
-  else
-    AtualizarEstado;
+  try
+    ConfirmarVendaComFeedback(FQuitacaoService, Id, Total, Espera, PnlConteudo);
+  finally
+    // pode ter enfileirado QUITACAO (Financeiro indisponivel): atualiza contador/Sinc
+    Recarregar;
+    NotificarFilaAlterada;
+  end;
 end;
 
 procedure TFormListaVendas.CarregarClientesFiltro;
@@ -346,11 +425,14 @@ begin
   FColTotal.HeaderAlignmentHorz := taRightJustify;
   FColTotal.OnGetDisplayText := AoTextoTotal;
   FColStatus := AdicionarColuna('STATUS', 'Situação', 100);
-  // Coluna "Sinc" reservada (T53): sem campo; fica vazia.
+  // T53: coluna "Sinc" sem campo; "(!)" derivado da fila (INT-03), nao e status.
   FColSinc := FView.CreateColumn;
   FColSinc.Caption := 'Sinc';
   FColSinc.Width := 60;
   FColSinc.Options.Editing := False;
+  FColSinc.PropertiesClass := TcxTextEditProperties;
+  FColSinc.OnGetDisplayText := AoTextoSinc;
+  FColSinc.HeaderHint := HINT_SINC;
 
   FView.DataController.KeyFieldNames := 'ID';
   FView.DataController.DataSource := FDataSource;
@@ -443,6 +525,7 @@ begin
       Exit;
     end;
   end;
+  CarregarVendasComFila;
   Antigo := FDataSet;
   FView.DataController.DataSource := nil;
   FDataSource.DataSet := Novo;
@@ -454,22 +537,28 @@ end;
 
 procedure TFormListaVendas.AtualizarEstado;
 var
-  Vazio, Sel, Pend: Boolean;
+  Vazio, Sel: Boolean;
+  A: TAcoesVenda;
 begin
   Vazio := (FDataSet = nil) or FDataSet.IsEmpty;
   FPnlVazio.Visible := Vazio and not FPnlErro.Visible;
   Subtitulo := Format('%d venda(s)', [FView.DataController.RecordCount]);
   Sel := IdSelecionado > 0;
-  Pend := Sel and SameText(StatusSelecionado, ST_PENDENTE);
-  // UX 4.2: Pendente = Editar/Excluir; Quitada/Cancelada = Visualizar, sem Excluir.
-  if Sel and not Pend then
+  if Sel then
+    A := AcoesDaVenda(StatusSelecionado, TemFilaPendente(IdSelecionado),
+      FQuitacaoService <> nil)
+  else
+    A := AcoesDaVenda('', False, FQuitacaoService <> nil);
+  // UX 4.2: Pendente sem fila = Editar/Excluir/Confirmar/Cancelar; Quitada/
+  // Cancelada ou Pendente com QUITACAO/CANCELAMENTO na fila (T53) = so
+  // Visualizar (use Pendencias).
+  if Sel and not A.EditarExcluir then
     BtnEditar.Caption := 'Visualizar'
   else
     BtnEditar.Caption := 'Editar';
-  HabilitarAcoes(Sel, Pend);
-  // UX 4.2: Confirmar so para Pendente (fila pendente = T53)
-  FBtnConfirmar.Enabled := Pend and (FQuitacaoService <> nil);
-  FItemCancelar.Enabled := Pend and (FQuitacaoService <> nil);
+  HabilitarAcoes(Sel, A.EditarExcluir);
+  FBtnConfirmar.Enabled := A.Confirmar;
+  FItemCancelar.Enabled := A.Cancelar;
 end;
 
 function TFormListaVendas.IdSelecionado: Integer;
@@ -555,6 +644,12 @@ begin
     else
       ACanvas.Font.Color := clERPVInativoTexto;
     ACanvas.Font.Style := [fsBold];
+  end
+  else if AViewInfo.Item = FColSinc then
+  begin
+    // "(!)" em ambar (aviso); o simbolo e o portador do significado, nao a cor
+    ACanvas.Font.Color := clERPVAvisoTexto;
+    ACanvas.Font.Style := [fsBold];
   end;
   ADone := False;
 end;
@@ -594,11 +689,12 @@ var
 begin
   Id := IdSelecionado;
   if (FQuitacaoService = nil) or (Id <= 0) or
-    not SameText(StatusSelecionado, ST_PENDENTE) then
+    not SameText(StatusSelecionado, ST_PENDENTE) or TemFilaPendente(Id) then
     Exit;
   // Regra no TQuitacaoService (T43); a tela so exibe (dialogo T44).
   Cancelou := CancelarVendaComDialogo(Self, FQuitacaoService, Id);
   Recarregar; // o status pode ter mudado mesmo sem cancelar (ex.: nao permitida)
+  NotificarFilaAlterada; // pode ter enfileirado CANCELAMENTO
   if Cancelou then
     AvisarVendaCancelada(Id, PnlConteudo);
 end;
@@ -621,6 +717,9 @@ begin
   finally
     Tela.Free;
   end;
+  // Confirmar/Cancelar dentro da venda tambem podem ter enfileirado (T53)
+  Recarregar;
+  NotificarFilaAlterada;
   // T44: cancelada dentro da venda: a tela fechou; o banner Info fica aqui
   if Cancelada then
     AvisarVendaCancelada(AVendaId, PnlConteudo);
@@ -643,7 +742,7 @@ var
   Id: Integer;
 begin
   Id := IdSelecionado;
-  if (Id <= 0) or not SameText(StatusSelecionado, ST_PENDENTE) then
+  if (Id <= 0) or not SameText(StatusSelecionado, ST_PENDENTE) or TemFilaPendente(Id) then
     Exit;
   if not Notificar(utnPergunta, 'Excluir a venda Nº ' + IntToStr(Id) + '?') then
     Exit;

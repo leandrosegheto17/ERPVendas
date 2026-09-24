@@ -62,6 +62,7 @@ type
     FVendaId: Integer;
     FStatus: TStatusVenda;
     FSomenteLeitura: Boolean;
+    FBloqueadaFila: Boolean; // T53: Pendente com QUITACAO/CANCELAMENTO na fila (UX 4.2)
     FCarregando: Boolean;
     FCalculando: Boolean;
     FProximoTop: Integer;
@@ -176,7 +177,9 @@ begin
         raise ERegraNegocio.Create('Venda não encontrada');
       FStatus := Venda.Status;
     end;
-    FSomenteLeitura := FStatus <> svPendente;
+    FBloqueadaFila := (FVendaId > 0) and (FStatus = svPendente) and
+      FVendaService.TemPendenciaFila(FVendaId);
+    FSomenteLeitura := (FStatus <> svPendente) or FBloqueadaFila;
 
     // Somente leitura: inclui inativos para exibir o historico corretamente.
     FQryClientes := FClienteService.ListarDataSet('', FSomenteLeitura);
@@ -547,7 +550,10 @@ begin
 
   if FSomenteLeitura then
   begin
-    if FStatus = svQuitada then
+    if FBloqueadaFila then
+      FLblBanner.Caption := '  Operação pendente de envio ao Financeiro: somente leitura. ' +
+        'Use Pendências.'
+    else if FStatus = svQuitada then
       FLblBanner.Caption := '  Venda Quitada: somente leitura'
     else
       FLblBanner.Caption := '  Venda Cancelada: somente leitura';
@@ -567,7 +573,7 @@ procedure TFormEdicaoVenda.AtualizarCancelar;
 begin
   // Cancelar venda: so Pendente ja gravada e com servico injetado (UX 4.2).
   BtnExcluir.Enabled := (FQuitacaoService <> nil) and (FVendaId > 0) and
-    (FStatus = svPendente);
+    (FStatus = svPendente) and not FBloqueadaFila;
   if not BtnExcluir.Enabled then
   begin
     BtnExcluir.Hint := 'Somente venda Pendente já gravada pode ser cancelada.';
@@ -884,7 +890,8 @@ end;
 
 procedure TFormEdicaoVenda.AoExcluir;
 begin
-  if (FQuitacaoService = nil) or (FVendaId <= 0) or (FStatus <> svPendente) then
+  if (FQuitacaoService = nil) or (FVendaId <= 0) or (FStatus <> svPendente) or
+    FBloqueadaFila then
     Exit;
   // Regra no TQuitacaoService (T43); a tela so exibe (dialogo T44).
   if CancelarVendaComDialogo(Self, FQuitacaoService, FVendaId) then

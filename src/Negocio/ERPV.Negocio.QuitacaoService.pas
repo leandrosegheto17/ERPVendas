@@ -154,6 +154,9 @@ type
 
 implementation
 
+uses
+  ERPV.Negocio.PendenciaFila;
+
 const
   MsgCancelarLocalFalhou = 'O cancelamento foi confirmado no Financeiro, mas não ' +
     'foi possível gravá-lo localmente; a venda continua Pendente';
@@ -318,6 +321,9 @@ begin
       raise ERegraNegocio.Create(
         'Somente venda pendente pode ser quitada (status atual: ' +
         StatusVendaToStr(Venda.Status) + ')');
+    // T53 (UX 4.2): QUITACAO/CANCELAMENTO pendente na fila => usar Pendencias.
+    if VendaBloqueadaPorFila(FFilaRepositorio, AVendaId) then
+      raise ERegraNegocio.Create(MSG_BLOQUEIO_FILA);
 
     // ADR-006: nenhuma transacao aberta durante o HTTP.
     Resp := FFinanceiro.ConfirmarQuitacao(Venda);
@@ -424,6 +430,9 @@ begin
     Exit(ResultadoCancelamento(dcNaoPermitida, 'Venda já quitada não pode ser cancelada'));
   if StatusAtual = svCancelada then
     Exit(ResultadoCancelamento(dcNaoPermitida, 'Venda já está cancelada'));
+  // T53 (UX 4.2): operacao pendente na fila bloqueia novo cancelamento.
+  if VendaBloqueadaPorFila(FFilaRepositorio, AVendaId) then
+    Exit(ResultadoCancelamento(dcNaoPermitida, MSG_BLOQUEIO_FILA));
 
   // RF10-01: MOTIVO_CANCELAMENTO e VARCHAR(255) (UI ja limita); recorta.
   Motivo := Copy(Trim(AMotivo), 1, 255);

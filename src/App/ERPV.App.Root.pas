@@ -218,9 +218,9 @@ begin
   FClienteService := TClienteService.Create(FClienteRepository, FVendaRepository); // T18
   FProdutoRepository := TProdutoRepository.Create(FConexao, FLogger); // T21
   FProdutoService := TProdutoService.Create(FProdutoRepository, FVendaRepository); // T22
-  FVendaService := TVendaService.Create(FVendaRepository, FClienteRepository,
-    FProdutoRepository); // T27
   FFilaRepository := TFilaRepository.Create(FConexao, FLogger); // T37
+  FVendaService := TVendaService.Create(FVendaRepository, FClienteRepository,
+    FProdutoRepository, FFilaRepository); // T27 + T53 (bloqueio por fila)
 
   FFinanceiro := TFinanceiroClient.Create(FConfiguracao.Financeiro.BaseUrl,
     FConfiguracao.Financeiro.TimeoutMs, FConfiguracao.Financeiro.ApiKey, FLogger); // T34-T36
