@@ -728,3 +728,76 @@ T48 e T49 `Concluída`; dependências da Seção 4 do TASK.md (T48<-T02,T09; T49
 ### Veredito do lote (chapéu QA)
 
 **Aprovado com ressalvas.** Nenhuma reprovação crítica; código não compilado/executado por este agente. Liberado ao chapéu DevSecOps. Pontos para auditoria: verificação de certificado TLS, PDF com PII em pasta temp, logs/fila sem PII, sanitização do destinatário.
+
+## Lote 13 — Reenvio e Pendências (T50-T53) — chapéu QA (2026-09-24)
+
+Método: inspeção estática (leitura + `git diff 1975777..HEAD`) de `ERPV.Negocio.FilaService.pas`, `ERPV.Negocio.PendenciaFila.pas`, `ERPV.Negocio.VendaService.pas`, `ERPV.Negocio.QuitacaoService.pas`, `ERPV.Dados.FilaRepository.pas`, `ERPV.Dados.VendaRepository.pas` (`AtualizarStatus`), `ERPV.UI.FormPendencias.pas`, `ERPV.UI.PendenciasApresentacao.pas`, `ERPV.UI.FormMain.pas`, `ERPV.UI.FormListaVendas.pas`, `ERPV.UI.FormEdicaoVenda.pas`, `ERPV.UI.ConfirmacaoVenda.pas`, `ERPV.App.Root.pas`, `ERPVendas.dpr`/`.dproj`, testes em `tests/`. Nada compilado/executado por este agente (sem IDE Delphi; não existe projeto DUnitX no repositório). Notas de implementação do Executor não foram usadas como base de aprovação.
+
+### Critérios (acceptance-criteria-validation)
+
+**T50** (mock erro500 depois ok: item CONCLUIDO e venda muda de status; falha mantém PENDENTE com tentativas+1)
+- GET status antes do POST: venda local já no alvo => `MarcarConcluido` sem POST; GET no alvo => `ConcluirLocal` (commit curto `AtualizarStatus` + `MarcarConcluido`); GET ou local no estado oposto => `Falha` sem POST; demais => POST fora de transação (ADR-006). OK.
+- Sucesso => CONCLUIDO + status da venda muda; falha (4xx/5xx/timeout/resposta inválida/status inesperado) => `RegistrarFalha` (PENDENTE, tentativas+1, `ULTIMO_ERRO` mascarado e truncado a 500 no repositório, RF9-05). OK.
+- `EInfra` de `AtualizarStatus`/`MarcarConcluido`/`RegistrarFalha` vira `rrFalha` amigável; item segue PENDENTE e reconcilia pelo GET no próximo reenvio. OK. Exceção: `Obter` (l.245/294) não está protegido (ver A4; a UI captura).
+- RF10-02: CANCELAMENTO reenvia com motivo `''`; `AtualizarStatus(..., svCancelada, 0, '')` grava NULL (`DefinirTextoOuNulo`/`DefinirDataOuNulo`). Consistente com `QuitacaoService.Cancelar` (motivo não vai para a fila). OK.
+
+**T51** (SMTP corrigido => e-mail chega e CONCLUIDO; falha mantém PENDENTE com erro)
+- Regenera PDF do banco (`Obter` + `GerarPdf`), envia, `Limpar` sempre, status da venda intocado, exige `Quitada` e e-mail do cliente; sem e-mail/dado pessoal em mensagens de erro; exceções viram `rrFalha`. OK. Envio real (Mailtrap) pendente.
+
+**T52** (Reenviar conclui => "Item concluído." Info; falha => "Ainda não foi possível: <erro>"; concluído some do filtro; vazio/erro)
+- Grade ligada a `IFilaRepository.Listar`; "Somente pendentes" marcado por padrão; `MensagemDeReenvio` reproduz os textos; sucesso Info, falha Aviso; `Recarregar` antes do modal; vazio "Nenhuma pendência."; erro com banner + "Tentar novamente"; reentrância (`FOcupado`). `TFilaService` criado no Root (destruição antes do `QuitacaoService`/repositórios) e injetado em `Configurar`; units no `.dpr` e `.dproj`. OK.
+- Com o filtro desmarcado, item CONCLUIDO continua reenviável (A1).
+
+**T53** (chip N e ícone/texto na status bar; "(!)" na lista; botões bloqueados; após reenvio ok o contador desce e os botões liberam)
+- Regra única `VendaBloqueadaPorFila` (QUITACAO ou CANCELAMENTO PENDENTE; EMAIL não bloqueia; fila nil não bloqueia), aplicada em `VendaService.ExigirPendente` (Salvar Id>0 e Excluir), `QuitacaoService.Confirmar`/`Cancelar` (antes do POST) e na UI (`AcoesDaVenda`: Editar/Excluir/Confirmar/Cancelar desabilitados, botão vira "Visualizar"; tela de venda abre somente leitura com banner). Defesa em profundidade UI + Service. OK.
+- Contador: `ContarPendencias` em `Configurar`, após Confirmar/Cancelar/Editar na lista e após cada Reenviar; falha de banco mantém o último valor. Status bar "Pendências: N" sempre com texto; chip só com N>0 (99+); clicáveis abrem Pendências. Coluna Sinc "(!)" (texto + cor âmbar) via um único `Listar(True)` por recarga. OK.
+
+### Integração (cross-platform-integration-testing)
+
+- T52 <-> T50/T51: `Reenviar(ID, VENDA_ID, StrToTipoFila(TIPO))` com os três tipos; `rrNaoSuportado` só para tipo desconhecido. Consistente.
+- T53 <-> fila/T52: `TFilaService.Reenviar` NÃO usa `VendaBloqueadaPorFila` nem `TQuitacaoService`; grava por `IVendaRepository.AtualizarStatus`/`IFilaRepository` diretamente. Logo o Reenviar não é bloqueado pela própria regra de bloqueio e não há ciclo.
+- EMAIL (T49/T51): `PosQuitacao` enfileira `tfEmail`; a regra só consulta QUITACAO/CANCELAMENTO; EMAIL pendente não bloqueia (há teste `Email_NaoBloqueia`).
+- Regressão Lotes 9/10: `Confirmar`/`Cancelar` mantêm a ordem (status do banco => bloqueio => HTTP), desfechos e mensagens; único acréscimo é o bloqueio antes do POST. `FormListaVendas.AoConfirmar` agora recarrega/notifica em `finally` (cobre `qdIndisponivel` que enfileira). Reentrância do Lote 9 (SG9-04/A3) preservada. `ConfirmacaoVenda` só ganhou texto para falha de `Enfileirar` via marcador `' | Aviso:'` (ver R13-2).
+- Regressão Lote 10 (RF10-01/RF10-02): tratamento de `EInfra` em `Cancelar` intacto; RF10-02 coerente com T50 (motivo NULL no reenvio, documentado nos dois services).
+- Regressão Lote 12: `PosQuitacao` inalterado; ver A2 (reenvio de QUITACAO não chama pós-quitação).
+- Composition root: `VendaService` recebe `FFilaRepository` (criado antes, reordenado corretamente); `FormMain.Configurar` ganhou dois parâmetros opcionais e o `.dpr` os passa.
+
+### Requisitos não funcionais
+
+- Segurança/LGPD (para o DevSecOps): erro da fila mascarado no repositório e exibido na grade; sem log de dado pessoal nos novos units; mensagens de infra genéricas; reenvio de CANCELAMENTO sem motivo (minimização).
+- Desempenho/usabilidade: Reenviar é síncrono na thread da UI (GET + POST, ou PDF + SMTP até ~45 s) só com cursor de ampulheta (A6). `CarregarVendasComFila` faz 1 SELECT por recarga. Texto sempre junto de ícone/cor; TabOrder da barra definido; teclado/DPI em T60.
+
+### Achados (bug-documentation) — nenhum Crítico, 6 Simples
+
+| ID | Sev. | Local | Descrição |
+|---|---|---|---|
+| A1 | Simples | `FormPendencias.pas` `TemSelecao`/`AoReenviar`; `FilaService.Reenviar`/`ReenviarEmail`; `FilaRepository.RegistrarFalha` | Com "Somente pendentes" desmarcado, Reenviar fica habilitado em linha CONCLUIDO. Passos: concluir item EMAIL, desmarcar filtro, selecionar a linha, Reenviar. Esperado: bloqueado. Obtido: novo e-mail ao cliente e `CONCLUIDO_EM` sobrescrito; em falha, `TENTATIVAS`/`ULTIMO_ERRO` do item concluído mudam (UPDATE sem filtro de status). Sugestão: habilitar só se `STATUS='PENDENTE'`, recusar no service e/ou `AND STATUS='PENDENTE'` no UPDATE. |
+| A2 | Simples (prioridade alta) | `FilaService.Reenviar`/`ConcluirLocal` vs. `QuitacaoService.PosQuitacao` | QUITACAO concluída via Pendências (reenvio ou reconciliação por GET) nunca gera PDF/e-mail nem enfileira EMAIL, diferente do caminho síncrono T40/T41 (Lote 12). Cenário: Financeiro cai, venda vai à fila, Reenviar conclui => venda Quitada, cliente sem e-mail e sem item EMAIL. Sugestão: extrair a lógica pós-quitação para helper compartilhado e chamá-la quando `Alvo = svQuitada` e a conclusão local for nova. Tratar antes do smoke T54/Lote 16. |
+| A3 | Simples | `FormEdicaoVenda.pas` (`FBloqueadaFila`, `AtualizarCancelar`, `AoConfirmar`, `AoExcluir`) | `FBloqueadaFila`/`FSomenteLeitura` só são calculados ao abrir. Confirmar (`qdIndisponivel`) ou Cancelar (`dcEnfileirada`) de dentro da venda enfileira e a tela segue aberta e editável; novo clique cai no bloqueio do Service e a `ERegraNegocio` sobe ao handler global. Sugestão: reavaliar `TemPendenciaFila` após a ação e voltar a somente leitura/fechar com mrOk. |
+| A4 | Simples | `PendenciaFila.pas:29-34`, `FilaRepository.ExistePendenciaPorVenda`, `QuitacaoService.Confirmar/Cancelar`, `VendaService.ExigirPendente`, `FilaService.Reenviar` (l.245, 272) | `EInfra` da consulta de fila propaga: `Cancelar` deixa de cumprir "sem exceção para falha esperada" e `Confirmar` levanta antes do POST (fail-safe: nada é enviado). Em `Reenviar`, falha de `Obter`/`ConsultarStatus` não vira `rrFalha`/`RegistrarFalha` (a UI captura e mostra "Ainda não foi possível"). Sugestão: mapear para `dcNaoPermitida`/`rrFalha` amigável, como RF9-01/RF10-01. |
+| A5 | Simples | `tests/` | Sem teste de integração do bloqueio em `TVendaService` (Salvar/Excluir) e `TQuitacaoService` (Confirmar/Cancelar não chamam o Financeiro com pendência; EMAIL pendente libera; Reenviar não é bloqueado). Só a regra pura e o `FilaService` têm testes; projeto DUnitX inexistente (nada rodou). |
+| A6 | Simples | `FormPendencias.AoReenviar` (família de A12-03) | Reenviar bloqueia a UI por até GET+POST (ou PDF+SMTP) só com ampulheta; sem rótulo "Reenviando..." nem `DefinirEstado` do shell. |
+| R13-1 | Informativo | `FormListaVendas.CarregarVendasComFila` | Falha ao listar a fila esconde o Sinc sem aviso (documentado; bloqueio real está nos Services). |
+| R13-2 | Informativo | `ConfirmacaoVenda.MARCADOR_AVISO_FILA` | Falha de fila detectada por substring `' | Aviso:'` na mensagem; acoplamento frágil (preferir campo tipado, ver A12-01). |
+| R13-3 | Informativo | `FilaService` | GET status não devolve data: quitação concluída no reenvio usa `Now` (igual ao T41). |
+
+Reprovações críticas: nenhuma. Nenhum achado compromete o critério de aceite central de T50-T53.
+
+### Não verificável por falta de IDE (ressalva, não reprovação)
+
+Compilação de todas as units (uses, `TDictionary`, `cxGrid*`, `Configurar` com parâmetros opcionais, `Exit(Falha(...))` dentro de `try/except`); execução dos testes DUnitX (`FilaService`, `PendenciaFila`, `PendenciasApresentacao`; sem projeto de testes); roteiro real com o mock (erro500 => Confirmar => item QUITACAO PENDENTE, chip/status bar/"(!)" sobem, botões bloqueados, Reenviar com mock ok => contador desce, venda Quitada; cancelamento idem com `MOTIVO_CANCELAMENTO` NULL); reenvio EMAIL com Mailtrap; `OnGetDisplayText` em coluna sem campo (Sinc), foco após `Recarregar`, DPI 125%/teclado (T60).
+
+### Fechamento estrutural
+
+T50-T53 `Concluída`; dependências da Seção 4 do TASK.md satisfeitas, sem órfãs e sem tarefa `Bloqueada`; nenhuma inconsistência que exija redesenho. `TASK.md` não alterado por este agente; A1 a A6 aguardam criação em `Refatoração Lote-13` na consolidação pós-DevSecOps.
+
+### Veredito por tarefa
+
+- T50: **Aprovada com ressalvas** (A1, A2, A4; execução com mock pendente).
+- T51: **Aprovada com ressalvas** (A1; SMTP real pendente).
+- T52: **Aprovada com ressalvas** (A1, A5, A6; compilação/execução pendente).
+- T53: **Aprovada com ressalvas** (A3, A4, A5; compilação/execução pendente).
+
+### Veredito do lote (chapéu QA)
+
+**Aprovado com ressalvas.** Nenhuma reprovação crítica; código não compilado/executado por este agente. Liberado ao chapéu DevSecOps. Pontos para auditoria: `ULTIMO_ERRO` exibido na grade (mascaramento), reenvio de e-mail duplicado (A1), PDF com PII em pasta temp no reenvio, guarda de bloqueio no Service (não só na UI), ausência de log nos novos services.
