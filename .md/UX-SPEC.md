@@ -225,7 +225,12 @@ Status de venda (chip = fundo suave + texto colorido + texto do status): Pendent
 | Financeiro indisponível/timeout | Aviso | "Financeiro indisponível. A venda 10 continua Pendente e foi colocada na fila. Tente novamente em Pendências." |
 | Quitação recusada (4xx) | Erro | "Quitação recusada pelo Financeiro: <mensagem do Financeiro>. A venda continua Pendente." (sem fila) |
 | Cancelamento OK | Informação | "Venda 10 cancelada." |
-| Cancelamento recusado / indisponível | Erro / Aviso | análogos, mensagens acima com "cancelamento" |
+| Cancelamento recusado (dcRecusada) | Erro | "Cancelamento recusado pelo Financeiro: <mensagem do Financeiro>. A venda continua Pendente." (sem ": <mensagem>" se vazia; sem fila) — texto adotado em T44/RF10-03 |
+| Cancelamento com Financeiro indisponível (dcEnfileirada) | Aviso | "Financeiro indisponível. O cancelamento da venda 10 foi colocado na fila e a venda continua Pendente. Tente novamente em Pendências." — texto adotado em T44/RF10-03 |
+| Cancelamento, resposta inválida (dcRespostaInvalida) | Erro | "Resposta inesperada do Financeiro. Venda mantida como Pendente." — texto adotado em T44/RF10-03 |
+| Cancelamento não permitido (dcNaoPermitida) | Aviso | Exibe a Mensagem do service (abaixo); se vazia, "A venda não pode ser cancelada." — texto adotado em T44/RF10-03 |
+| Mensagens do service para dcNaoPermitida (sem texto próprio na UI, só a Mensagem) | Aviso | "Venda não encontrada"; "Venda já quitada não pode ser cancelada"; "Venda já está cancelada"; "Há uma operação pendente de envio ao Financeiro para esta venda. Resolva em Pendências antes de continuar."; "Não foi possível verificar operações pendentes. Tente novamente."; "Financeiro indisponível e não foi possível colocar o cancelamento na fila; a venda continua Pendente. Tente novamente mais tarde"; "O cancelamento foi confirmado no Financeiro, mas não foi possível gravá-lo localmente; a venda continua Pendente" + "; o cancelamento foi colocado na fila de pendências" ou " e não foi possível colocá-lo na fila; tente novamente mais tarde" — texto adotado em T44/RF10-03 |
+| Diálogo de cancelamento: apoio LGPD (sob "Motivo (opcional)") | Texto de apoio | "Não informe dados pessoais (CPF, telefone, e-mail) no motivo." — texto adotado em T44/RF10-03 |
 | Reenvio OK | Informação | "Item concluído." / falha: "Ainda não foi possível: <último erro>." |
 | Confirmação antes de quitar | Pergunta | "Confirmar a venda 10 (R$ 350,00)? Esta ação envia a quitação ao Financeiro." |
 | Erro inesperado | Erro | "Ocorreu um erro inesperado. Os detalhes foram gravados no log." |

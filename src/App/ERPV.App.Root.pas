@@ -5,8 +5,8 @@ unit ERPV.App.Root;
 
   Unica unit autorizada a instanciar diretamente classes concretas de
   Dados/Integracao/Core (TConfiguracao, TLogger, TTratadorDeExcecoes,
-  TConexao e, nos proximos incrementos, os repositorios/servicos
-  concretos). Nenhuma outra unit de Negocio/UI deve importar
+  TConexao, os repositorios, o cliente financeiro, o relatorio, o
+  EmailSender e os servicos concretos). Nenhuma outra unit de Negocio/UI deve importar
   ERPV.Dados.*/ERPV.Core.Config/etc. diretamente - elas devem receber essas
   dependencias ja prontas via injecao por construtor, a partir daqui
   (ADR-001, "DI manual por construtor").
@@ -43,13 +43,21 @@ unit ERPV.App.Root;
   logica extra de "limpeza parcial".
 
   ==========================================================================
-  PROXIMOS INCREMENTOS (fora do escopo desta tarefa)
+  MONTADO HOJE (apos a Conexao, nesta ordem)
   ==========================================================================
-  Hoje (T13) so existem Config/Log/Erros/Conexao - nenhum repositorio ou
-  servico de negocio foi implementado ainda (T17 ClienteRepository, T21
-  ProdutoRepository, T25 VendaRepository, T37 FilaRepository, servicos de
-  negocio etc. sao tarefas futuras do TASK.md). Quando essas classes
-  existirem, o padrao a seguir e:
+  Repositorios: Venda, Cliente, Produto, Fila (todos com Conexao + Logger).
+  Servicos: ClienteService (Cliente+Venda repos), ProdutoService
+  (Produto+Venda repos), VendaService (Venda/Cliente/Produto/Fila repos).
+  Integracao/Relatorio: Financeiro (TFinanceiroClient, config [Financeiro]
+  + Logger), RelatorioPedido (pasta PDF temp + VendaRepository + Logger),
+  EmailSender (config SMTP + Logger + Remetente).
+  QuitacaoService: Venda repo, Financeiro, Fila repo, Cliente repo,
+  Relatorio, EmailSender e Logger.
+  FilaService: mesmas dependencias da Quitacao + o proprio QuitacaoService
+  e Logger.
+  Destroy libera na ordem inversa, antes de FConexao.
+
+  Para novos repositorios/servicos, o padrao a seguir e:
     - Um novo campo privado (ex.: FClienteRepository: IClienteRepository)
       e a property publica correspondente.
     - Instanciado no construtor, logo apos FConexao, recebendo FConexao e
@@ -57,8 +65,7 @@ unit ERPV.App.Root;
       nunca instanciando Config/Logger/Conexao de novo.
     - Liberado no destructor, na ordem inversa da criacao, antes de
       FConexao.
-  Nao foram criados campos vazios/placeholder para essas classes nesta
-  tarefa, para nao inventar contrato de algo que ainda nao existe.
+  Nao criar campos vazios/placeholder para classes que ainda nao existem.
 
   ==========================================================================
   ROTEIRO DE VERIFICACAO MANUAL NA IDE (sem testes automatizados, DEC-14)

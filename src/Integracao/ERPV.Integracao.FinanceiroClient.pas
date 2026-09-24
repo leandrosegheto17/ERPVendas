@@ -19,21 +19,25 @@ unit ERPV.Integracao.FinanceiroClient;
    - Log (opcional, ALogger pode ser nil): so metodo, rota e codigo HTTP;
      nunca corpo nem cabecalhos.
    - Estrutura: Enviar(...) privado e generico (metodo, rota, corpo, parser);
-     T35/T36 so acrescentam metodos publicos chamando Enviar.
-   - ConfirmarCancelamento (T35) e ConsultarStatus (T36) reutilizam Enviar.
+     ConfirmarCancelamento (T35) e ConsultarStatus (T36), ja implementados,
+     reutilizam Enviar.
+   - RF8-01: TryIsoToDateTime (FinanceiroDTOs) captura qualquer Exception;
+     dataQuitacao malformada => RespostaInvalida. RF8-03: ExtrairMensagem
+     limpa controles e trunca a mensagem 4xx em 200 caracteres.
 
-  Composition root: ERPV.App.Root ainda nao expoe gateways (nenhum consumidor
-  ate T38); instanciar la sera feito em T38 com
+  Composition root: ERPV.App.Root instancia
   TFinanceiroClient.Create(Cfg.Financeiro.BaseUrl, Cfg.Financeiro.TimeoutMs,
-  Cfg.Financeiro.ApiKey, Logger). Units de Dominio/Integracao nao estao no
-  .dproj via DCCReference (padrao vigente; resolvidas por DCC_UnitSearchPath).
+  Cfg.Financeiro.ApiKey, Logger) e o expoe como IFinanceiroGateway; os
+  consumidores sao TQuitacaoService e TFilaService. FinanceiroClient e
+  FinanceiroDTOs nao estao no .dproj via DCCReference (resolvidas por
+  DCC_UnitSearchPath; em Integracao, so EmailSender consta como DCCReference).
 
   ROTEIRO MANUAL (Delphi Community nao compila via CLI; usar projeto de teste
   ou botao temporario; mock: python tools/mock-financeiro/mock_financeiro.py,
-  porta 8101; BaseUrl http://localhost:8101, TimeoutMs 10000; venda Id=1042
+  porta do mock (padrao 8080); BaseUrl http://localhost:8080, TimeoutMs 10000; venda Id=1042
   Pendente com 1 item):
    1. Compilar (Shift+F9): 0 erros.
-   2. GET http://localhost:8101/_modo?m=ok; ConfirmarQuitacao => Categoria
+   2. GET http://localhost:8080/_modo?m=ok; ConfirmarQuitacao => Categoria
       rfSucesso, Status svQuitada, DataQuitacao <> 0.
    3. m=recusa => rfRecusado, CodigoHttp 422, Mensagem preenchida (do corpo
       ou "... (codigo HTTP 422)").
