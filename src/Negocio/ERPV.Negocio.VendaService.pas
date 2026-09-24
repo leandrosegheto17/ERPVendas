@@ -170,6 +170,20 @@ begin
       ExigirPendente(AVenda.Id, Atual);
     Validar(AVenda);
     AplicarPrecosETotal(AVenda, Atual);
+    if Atual <> nil then
+    begin
+      // Edicao: status/quitacao/cancelamento vem sempre do banco (RF6-01).
+      AVenda.Status := Atual.Status;
+      AVenda.DataQuitacao := Atual.DataQuitacao;
+      AVenda.MotivoCancelamento := Atual.MotivoCancelamento;
+    end
+    else
+    begin
+      // Inclusao: sempre Pendente, sem quitacao/cancelamento (RF6-04).
+      AVenda.Status := svPendente;
+      AVenda.DataQuitacao := 0;
+      AVenda.MotivoCancelamento := '';
+    end;
   finally
     Atual.Free;
   end;
