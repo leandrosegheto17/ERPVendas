@@ -270,3 +270,37 @@ Todas as 5 tarefas `Concluída`. Dependências da Seção 4 (T16->T07; T17->T08,
 ### Veredito do lote (chapéu QA)
 
 **Aprovado com ressalvas.** Nenhuma reprovação crítica; 3 ajustes simples viraram tarefas em `Refatoração Lote-4`. Segue para auditoria de segurança.
+
+## Lote 5 — Cadastro de Produtos (D2)
+
+Base: critério de aceite de T21-T24 no `TASK.md`, código real lido (`ERPV.Dados.ProdutoRepository`, `ERPV.Negocio.ProdutoService`, `ERPV.UI.FormListaProdutos`, `ERPV.UI.FormEdicaoProduto`, integração em `ERPV.UI.FormMain`/`ERPV.App.Root`), sem usar a nota do Executor como base. Limitação declarada: sem CLI de compilação e sem testes automatizados; evidência de execução é a verificação real do usuário na IDE (2026-09-23), cruzada com a leitura do código. O Validador não recompilou. Aviso: os textos "Não compilado" nas células de T21/T23/T24 do `TASK.md` estão desatualizados (as mesmas células registram verificação real posterior).
+
+| Tarefa | Critério (resumo) | Verificação | Veredito |
+|---|---|---|---|
+| T21 | CRUD no banco; lista com filtro de ativos | Leitura: SQL 100% parametrizado (`ParamByName`), LIKE escapado, preço `Currency`, transação com `Iniciou`/rollback, FK na exclusão mapeada; execução real: incluir (RETURNING), obter, alterar, listar sem/com inativos, excluir | **Aprovado** (RF5-01, RF5-02) |
+| T22 | Preço -1 / descrição vazia recusados; válido persiste | Leitura de `Validar`: Trim, descrição, unidade, preço < 0 com `EValidacao.CreateCampo`; `uses` sem Vcl/FireDAC/Dados; execução real confirmou todos os casos (preço 0 válido) | **Aprovado** |
+| T23 | Lista igual à T19: cabeçalho, chips, vazio, erro + Tentar novamente, "Inativo" visível | Leitura: form só chama `TProdutoService` (sem SQL/FireDAC), Tentar novamente, Excluir com confirmação, "Inativo" texto+cor; execução real aprovada (seed, preço pt-BR, busca, inativos, shell) | **Aprovado** |
+| T24 | Preço pt-BR, gravado NUMERIC(15,2); erros do T22 no campo; layout/papéis de botão | Leitura: `cxCurrencyEdit` lido como Currency (sem Double), `EValidacao.Campo` mapeado para o campo; execução real aprovada (19,90, erros por campo, Salvar/Cancelar) | **Aprovado** |
+
+### Testes de integração (dentro do lote)
+
+Form -> Service -> Repository -> Firebird exercitado pelo usuário na IDE. Contrato `IProdutoRepository` consistente entre Service e Repository; `FormMain.Configurar(BaseUrl, ClienteService, ProdutoService)` e `AbrirDestino(dsProdutos)` integram a lista ao shell; `ERPV.App.Root` monta repositório e serviço. Teste temporário (`ERPV.Temp.TesteT22`, `RodarTesteT22`) confirmado ausente do repositório. Não aplicável: teste cross-platform (projeto Delphi VCL desktop) e API-CONTRACT (fora do escopo do lote).
+
+### Requisitos não funcionais
+
+Precisão monetária (Currency/NUMERIC(15,2)) ok; SQL parametrizado (sem injeção); erros logados e traduzidos para mensagem segura. Não verificados: DPI 125% e 1366x768 (T60), performance com volume.
+
+### Achados (bug-documentation) — todos Simples, nenhum Crítico
+
+- **RF5-01 (Simples):** mensagens fixas do repositório usam `EInfra` (handler global as trocaria pela genérica); `Excluir` sem verificar linhas afetadas (Id inexistente passa silencioso); busca com acento/caixa (`UPPER`) não verificada. Mesmo padrão de RF4-02/RF4-03. Sem impacto no critério de aceite.
+- **RF5-02 (Simples):** DELETE de produto com item de venda (FK) não provado; só exercitável no Lote 6, e a regra "excluir = inativar" é da T30.
+
+Padrão recorrente: RF5-01 repete RF4-02/RF4-03 (clones de Cliente). Sugere apenas corrigir o modelo antes de clonar de novo; não é problema de decomposição, sem escalação ao `coordenador`.
+
+### Fechamento estrutural
+
+T21-T24 `Concluída`. Dependências da Seção 4 (T21->T08,T12,T03; T22->T21,T11; T23->T14,T15,T22; T24->T14,T15,T22) resolvidas e não órfãs; T21 bloqueia T16/T17 e T25 (Lote 4 já validado, Lote 6 pendente), sem inconsistência. Nenhuma tarefa `Bloqueada`. Tarefas criadas em `Refatoração Lote-5` (Seção 3 do `TASK.md`): RF5-01, RF5-02.
+
+### Veredito do lote (chapéu QA)
+
+**Aprovado com ressalvas.** Nenhuma reprovação crítica; T21-T24 aprovadas; 2 ajustes simples em `Refatoração Lote-5`. Segue para auditoria de segurança (chapéu DevSecOps).

@@ -350,3 +350,28 @@ CPF/e-mail tratados como dado pessoal: mascarados em log, não expostos em mensa
 
 ### Veredito do lote (chapéu DevSecOps)
 **Aprovado com débito baixo** (achado 1, RF4-02). Sem achado alto/crítico nem compliance em aberto. Libera para `/deploy` quando o usuário decidir.
+
+## Lote 5 — Cadastro de Produtos (D2)
+
+Escopo: `ERPV.Dados.ProdutoRepository`, `ERPV.Negocio.ProdutoService`, `FormListaProdutos`, `FormEdicaoProduto` e a integração em `FormMain`/`ERPV.App.Root`. QA do lote: Aprovado com ressalvas. Análise por leitura de código (sem SAST automatizado disponível); sem recompilação.
+
+### 1. Segredo/credencial no repositório
+Nenhum segredo nas units do Lote 5. A unit temporária `ERPV.Temp.TesteT22` foi removida (não há arquivo `*Temp*` no repositório). Sem achado.
+
+### 2. SQL parametrizado (regra 11)
+`ProdutoRepository`: INSERT/UPDATE/DELETE/SELECT com `ParamByName` para todo valor; a listagem concatena só fragmentos constantes (`AND ATIVO = TRUE`, bloco de busca), e o texto do usuário entra como parâmetro `:BUSCA` com `%`, `_` e `\` escapados. Preço em `Currency`, nunca Double; `CK_PRODUTOS_PRECO` atua como 2ª barreira (regra 12). Sem SQL em Form, Service ou Dominio. Sem achado.
+
+### 3. Log e dados sensíveis (regra 17)
+O repositório só loga operação e exceção FireDAC via `TLogger.Erro` (mascaramento verificado no Lote 2); nenhum valor de parâmetro é logado. Produto não contém dado pessoal. Forms e Service não logam. Sem achado.
+
+### 4. Mensagens ao usuário
+Mensagens fixas e amigáveis. A lista usa `E.Message` só para `EErpVendas` e texto genérico para o resto. A edição trata `EValidacao` e deixa o restante subir para `Application.OnException` (mensagem genérica, lado seguro). **Achado 1 (baixa):** o repositório levanta `EInfra` em vez de `EInfraMensagemSegura` (mesmo padrão de RF4-02); já coberto por RF5-01. **Observação (informativa):** `Excluir` com 0 linhas afetadas não avisa; é integridade, não segurança; também em RF5-01.
+
+### 5. Camadas ADR-001/010 e integração
+`ProdutoService` usa só Core/Dominio/`Data.DB`; `Negocio` não referencia `Dados`. Forms dependem só de `TProdutoService`. `App.Root` monta repositório e serviço e libera na ordem correta (serviço, repositório, conexão). `FormMain` embute a lista sem lógica de dados. Sem achado.
+
+### 6. Compliance (LGPD básica) e operacional
+Sem dado pessoal em Produto; nada novo para LGPD. Nenhum requisito operacional novo para o chapéu DevOps. Nada de relevância estratégica para o Gestor.
+
+### Veredito do lote (chapéu DevSecOps)
+**Aprovado com débito baixo** (achado 1, já coberto por RF5-01; nenhuma tarefa nova). Sem achado alto/crítico nem compliance em aberto. Libera para `/deploy` quando o usuário decidir.
