@@ -59,5 +59,6 @@ Tarefas NAO verificadas (dispensadas/marcadas por decisao do usuario em 2026-09-
 
 - T59: roteiro completo nao executado; sem `docs/evidencias/`.
 - T60: checklist UX 5, contraste AA e DPI 100%/125% nao evidenciados (RF16-01 tambem nao executado).
-- T62: `db/ERPVENDAS.FBK` nao gerado; restore `gbak` nao validado.
 - T64: teste de instalacao em pasta/maquina limpa nao executado.
+
+Atualizacao: a T62 foi concluida depois desta varredura — `db/ERPVENDAS.FBK` gerado e versionado, restore `gbak` validado (commit 343a274).
