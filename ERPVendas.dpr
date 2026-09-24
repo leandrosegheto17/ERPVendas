@@ -28,6 +28,7 @@ uses
   ERPV.UI.FormCancelamentoVenda in 'src\UI\ERPV.UI.FormCancelamentoVenda.pas',
   ERPV.UI.FormEdicaoCliente in 'src\UI\ERPV.UI.FormEdicaoCliente.pas',
   ERPV.UI.FormEdicaoProduto in 'src\UI\ERPV.UI.FormEdicaoProduto.pas',
+  ERPV.UI.ConfirmacaoVenda in 'src\UI\ERPV.UI.ConfirmacaoVenda.pas',
   ERPV.UI.FormEdicaoVenda in 'src\UI\ERPV.UI.FormEdicaoVenda.pas',
   ERPV.UI.FormListaClientes in 'src\UI\ERPV.UI.FormListaClientes.pas',
   ERPV.UI.FormListaProdutos in 'src\UI\ERPV.UI.FormListaProdutos.pas',

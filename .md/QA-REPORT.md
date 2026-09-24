@@ -304,3 +304,52 @@ T21-T24 `Concluída`. Dependências da Seção 4 (T21->T08,T12,T03; T22->T21,T11
 ### Veredito do lote (chapéu QA)
 
 **Aprovado com ressalvas.** Nenhuma reprovação crítica; T21-T24 aprovadas; 2 ajustes simples em `Refatoração Lote-5`. Segue para auditoria de segurança (chapéu DevSecOps).
+
+## Lote 6 — Vendas: dados e regras (D3)
+
+Base: critério de aceite de T25-T30 no `TASK.md`, código real lido (`ERPV.Dados.VendaRepository`, `ERPV.Negocio.VendaService`, `ERPV.Negocio.ClienteService`, `ERPV.Negocio.ProdutoService`, `ERPV.App.Root`, uso de `TResultadoExclusao` em `FormListaClientes`/`FormListaProdutos`/`FormListaVendas`), sem usar a nota do Executor como base. Limitação declarada: sem CLI de compilação (Delphi Community) e sem testes automatizados; a evidência de execução é a verificação real do usuário na IDE (2026-09-23), registrada nas linhas de T25-T30 do `TASK.md` (testes temporários já removidos, então o Validador não os reexecutou nem os releu). O Validador não recompilou. Na coluna de verificação, "execução real" = relatado pelo usuário; "leitura" = conferido pelo Validador no código-fonte.
+
+| Tarefa | Critério (resumo) | Verificação | Veredito |
+|---|---|---|---|
+| T25 | Venda com 2 itens atômica; erro no 2º item faz rollback do mestre; excluir apaga itens | Leitura: `Incluir`/`Alterar`/`Excluir`/`AtualizarStatus` usam uma única transação (`Iniciou := not EmTransacao`, `Confirmar` só se iniciou, `Desfazer` no except), `Incluir` restaura `AVenda.Id` no rollback; SQL 100% `ParamByName`; `Currency` em total e preço; nulos via `Clear`; falha vira `EInfra` amigável + log. Execução real: 2 itens (total 26,10), 2º item com quantidade 0 levanta `EInfra` e `VENDAS` antes = depois, `AtualizarStatus` Quitada com dataQuitacao relido, `Excluir` apaga mestre e itens | **Aprovado** (RF6-02) |
+| T26 | Lista traz seed com nome e total; filtro por status; existência verdadeiro/falso | Leitura: `ListarDataSet` = TFDQuery somente leitura, filtros anexam cláusulas fixas com parâmetros (sem concatenar valor), `JOIN CLIENTES`, `VALOR_TOTAL`; `Existe*` = `SELECT FIRST 1` parametrizado (produto via `VENDA_ITENS`). Execução real: CLIENTE_NOME/VALOR_TOTAL, filtro Quitada exclui Pendente, Pendente+cliente traz, `ExisteVendaPorCliente/Produto` True/False | **Aprovado** (RF6-02) |
+| T27 | Cada violação recusada com motivo; venda válida grava Pendente | Leitura de `Validar`: cliente informado, existente e ativo; >= 1 item; qtd > 0; produto existente e ativo, tudo com `EValidacao.CreateCampo` em português; `Id=0` força `svPendente` (RN-01); `uses` sem Vcl/FireDAC/Dados. Execução real: sem itens, qtd 0, cliente inativo/inexistente e produto inativo recusados; válida grava Pendente e relê | **Aprovado** |
+| T28 | Total recalculado não aceita valor digitado; mudar preço do produto não altera itens gravados | Leitura de `AplicarPrecosETotal`: `Total` recalculado em `Currency` e sobrescreve `ValorTotal`; preço do item sempre vem do produto (item novo) ou do snapshot gravado (item já existente, casado por ProdutoId sem reutilizar o mesmo item antigo). Execução real: total e preço digitados ignorados, snapshot preservado após mudar preço, edição mantém snapshot e item novo pega preço atual | **Aprovado** (ver observação de regra) |
+| T29 | Editar/excluir Quitada/Cancelada recusado; CHECK como 2ª barreira | Leitura: `ExigirPendente` lê o status do banco (não confia no objeto do chamador), levanta `ERegraNegocio` com mensagem por status; usado em `Salvar` (Id > 0) e `Excluir`. Execução real: editar e excluir Quitada e Cancelada recusados; excluir Pendente funciona. Ressalva de leitura: `Salvar` em edição não força `Status/DataQuitacao/Motivo` a partir do registro lido (RF6-01) | **Aprovado com ressalva** (RF6-01) |
+| T30 | Cliente/produto com venda => inativa e informa; sem venda => exclui fisicamente | Leitura: `TClienteService.Excluir`/`TProdutoService.Excluir` chamam `ExisteVendaPorCliente/Produto` do `IVendaRepository` injetado; com venda: `Ativo := False` + `Alterar` e `reInativado`; sem: `Excluir` e `reExcluido`; `FormListaClientes`/`FormListaProdutos` já consomem o resultado (`Notificar` "foi inativado"). Execução real: sem venda excluídos fisicamente, com venda inativados e continuam com Ativo=False. Cobre RF5-02 | **Aprovado** |
+
+### Testes de integração (dentro do lote)
+
+- Contrato `IVendaRepository`: `TVendaRepository` cumpre a interface sem stubs restantes (os stubs de T26 foram substituídos; `IVendaRepository` inalterada). Consumidores conferidos por leitura: `TVendaService` (Obter/Incluir/Alterar/Excluir/ListarDataSet), `TClienteService`/`TProdutoService` (`ExisteVenda*`) e `TQuitacaoService` (`AtualizarStatus`, Lote 9).
+- `TVendaService` -> `IClienteRepository`/`IProdutoRepository` (T17/T21): validação de cliente/produto ativo e snapshot de preço exercitados em execução real pelo usuário (T27/T28).
+- `ERPV.App.Root`: `FVendaRepository` criado antes de `FClienteService`/`FProdutoService`, que o recebem por construtor; `FVendaService` recebe os três repositórios; liberação em ordem inversa antes de `FConexao`. A instanciação concreta fica só no Root (ADR-001).
+- Consumo pela UI (Lote 7, `FormListaVendas`/`FormEdicaoVenda`) já usa `TVendaService` sem SQL no form; validação desse lote é separada.
+- Não aplicável: teste cross-platform e `API-CONTRACT.yaml` (projeto Delphi VCL desktop; contrato fora do escopo do lote).
+- Higiene: nenhum resquício de `ERPV.Temp.*` ou `RodarTeste*` em `ERPVendas.dpr`, `ERPVendas.dproj` ou `src/` (busca por texto, 0 ocorrências; `src/App` só tem `ERPV.App.Root.pas`).
+
+### Requisitos não funcionais
+
+- SQL parametrizado: todo valor entra por `ParamByName`; a única montagem dinâmica de SQL (`ListarDataSet`) concatena cláusulas fixas (constantes), nunca valores do usuário. Sem risco de injeção.
+- Precisão monetária: `Currency` ponta a ponta (entidade, repositório, `Total` do service); sem `Double`. Coluna NUMERIC(15,2).
+- Camada de Negócio sem Vcl/FireDAC: `uses` de `VendaService`, `ClienteService` e `ProdutoService` só têm `System.*`, `Data.DB` (para `TDataSet`, exceção já aceita nos contratos), Core e Domínio.
+- Integridade transacional: mestre+itens atômicos (rollback comprovado em execução real).
+- UTF-8: `VendaRepository`, `VendaService`, `ProdutoService` e `IVendaRepository` com BOM. `ClienteService` e `Root` sem BOM, mas 100% ASCII (0 bytes não ASCII), sem risco hoje; se receberem acento, precisam de BOM (relacionado a RF4-01, textos sem acento).
+- Não verificados: performance com volume de vendas; concorrência (dois usuários editando a mesma venda); DPI/resolução (escopo de UI).
+
+### Achados (bug-documentation) — todos Simples, nenhum Crítico
+
+- **RF6-01 (Simples):** `TVendaService.Salvar` em edição (Id > 0) confirma que o registro do banco é Pendente, mas grava com `Alterar` o `Status`, `DataQuitacao` e `MotivoCancelamento` do objeto do chamador (`SQL_ALTERAR` atualiza esses campos). Um chamador que envie o objeto com `Status = svQuitada` transitaria a venda por fora de `AtualizarStatus`/`QuitacaoService` (o CHECK do banco não impede essa transição). Passos: obter venda Pendente, mudar `Status` para Quitada, chamar `Salvar`. Esperado: status inalterado (só `AtualizarStatus` muda). Obtido (por leitura, não exercitado): grava Quitada. Não afeta o critério de aceite de T29 (editar/excluir venda não Pendente é recusado, verificado em execução) e a UI atual não expõe o cenário; correção de uma linha: copiar `Status/DataQuitacao/MotivoCancelamento` de `Atual` antes de `Alterar`.
+- **RF6-02 (Simples):** mesmo padrão de RF4-02/RF5-01: mensagens fixas do repositório levantadas como `EInfra` (`MSG_NAO_ENCONTRADA` em `Alterar`/`AtualizarStatus`) podem ser trocadas pela mensagem genérica no handler global; `ExisteVenda*` falha com a mensagem "consultar a venda" (operação 'obter'), imprecisa para cliente/produto; `Excluir` de venda com Id inexistente é silencioso (não verifica linhas afetadas). Sem impacto no critério de aceite.
+- **RF6-03 (Simples, documentação/higiene):** `TASK.md` tem células de T28/T29/T30 terminando em "Detalhes:" sem conteúdo; T27 ainda cita "Teste temporário: `ERPV.Temp.TesteT27.pas` (remover)" e T25 cita conflito de merge de `Root.pas` com T17/T21, ambos já superados; o cabeçalho do `ERPV.App.Root` ainda diz que nenhum repositório/serviço foi implementado. Sem impacto funcional.
+
+Observação de regra (não é reprovação; decisão de negócio, sinalizar ao usuário/Gestor): `Validar` recusa editar uma venda Pendente cujo item aponta para produto (ou cliente) inativado depois da criação, mesmo sem alterar aquele item. Coerente com RN-03 lida literalmente, mas impede corrigir a venda sem trocar o produto; decidir se a validação de "ativo" deve valer só para itens novos.
+
+Padrão recorrente: RF6-02 repete RF4-02/RF5-01 (mensagem `EInfra` fixa e `Excluir` sem linhas afetadas); é padrão de modelo clonado, não de decomposição. Sem escalação ao `coordenador`. Este relatório não alterou o `TASK.md` (instrução do pedido); RF6-01..RF6-03 precisam entrar em `Refatoração Lote-6` (Seção 3) no fechamento estrutural.
+
+### Fechamento estrutural
+
+T25-T30 `Concluída`. Dependências da Seção 4 (T25->T08,T12; T26->T25; T27->T25,T17,T21; T28/T29->T27; T30->T18,T22,T26) resolvidas e não órfãs; T25 desbloqueia T31/T32 (Lote 7, já implementado) e T38-T43 (Lote 9) sem inconsistência; RF5-02 coberta pela T30. Nenhuma tarefa `Bloqueada`. Nenhuma escalação ao `coordenador`. Pendente, fora do escopo desta execução: registrar RF6-01..RF6-03 em `Refatoração Lote-6` (Seção 3 do `TASK.md`) e marcar o lote `Validado`.
+
+### Veredito do lote (chapéu QA)
+
+**Aprovado com ressalvas.** Nenhuma reprovação crítica; T25-T28 e T30 aprovadas, T29 aprovada com ressalva (RF6-01); 3 ajustes simples. Segue para auditoria de segurança (chapéu DevSecOps), que deve olhar em especial RF6-01 (transição de status por fora do fluxo de quitação).

@@ -12,9 +12,10 @@
   - UX 4.2: Editar/Excluir so habilitam se a venda esta Pendente. Quitada/
     Cancelada: o botao Editar vira "Visualizar" (abre a mesma tela) e Excluir
     fica desabilitado.
-  - "Cancelar venda" (T44): menu de contexto (e dentro da venda). Habilitado so
-    para venda Pendente selecionada (UX 4.2); abre o dialogo de cancelamento
-    (ERPV.UI.FormCancelamentoVenda) e recarrega a lista. Sucesso = banner Info.
+  - "Cancelar venda" (T44): SOMENTE no menu de contexto (e dentro da venda).
+    Habilitado so para venda Pendente selecionada com QuitacaoService injetado
+    (UX 4.2); abre o dialogo ERPV.UI.FormCancelamentoVenda e recarrega a lista.
+    Sucesso = banner Info "Venda N cancelada.".
   - Novo/Editar/Visualizar: TFormEdicaoVenda (T32), ShowModal = mrOk se gravou.
   - O TDataSet devolvido pelo servico e de posse desta tela.
 }
@@ -38,7 +39,6 @@ type
     FVendaService: TVendaService;
     FClienteService: TClienteService;
     FProdutoService: TProdutoService;
-    FQuitacaoService: TQuitacaoService;
     FDataSet: TDataSet;
     FDataSource: TDataSource;
     FOnFechada: TNotifyEvent;
@@ -48,6 +48,9 @@ type
     FCmbStatus: TComboBox;
     FLblCliente: TLabel;
     FCmbCliente: TComboBox;
+    FQuitacaoService: TQuitacaoService;
+    FBtnConfirmar: TcxButton;
+    FLblEspera: TLabel;
     FMenu: TPopupMenu;
     FItemCancelar: TMenuItem;
     FGrade: TcxGrid;
@@ -82,6 +85,8 @@ type
     procedure AoMudarFiltro(Sender: TObject);
     procedure AoTentarNovamente(Sender: TObject);
     procedure AoCancelarVenda(Sender: TObject);
+    procedure AoConfirmarVenda(Sender: TObject);
+    procedure SetQuitacaoService(AValor: TQuitacaoService);
     procedure AoMudarFoco(Sender: TcxCustomGridTableView;
       APrevFocusedRecord, AFocusedRecord: TcxCustomGridRecord;
       ANewItemRecordFocusingChanged: Boolean);
@@ -102,12 +107,15 @@ type
     procedure AoFechar; override;
   public
     constructor Create(AOwner: TComponent; AVendaService: TVendaService;
-      AClienteService: TClienteService; AProdutoService: TProdutoService;
-      AQuitacaoService: TQuitacaoService); reintroduce;
+      AClienteService: TClienteService; AProdutoService: TProdutoService); reintroduce;
     destructor Destroy; override;
     /// <summary>Disparado quando o usuario pede Fechar/Esc estando embutida no shell;
     /// o dono decide liberar. Sem handler, fecha como form normal.</summary>
     property OnFechada: TNotifyEvent read FOnFechada write FOnFechada;
+    /// <summary>Injetado pelo root (via FormMain). Sem ele, Confirmar fica
+    /// desabilitado (T42). Servico e do chamador; a tela nao o libera.</summary>
+    property QuitacaoService: TQuitacaoService read FQuitacaoService
+      write SetQuitacaoService;
   end;
 
 implementation
@@ -115,7 +123,7 @@ implementation
 uses
   System.DateUtils,
   ERPV.Core.Erros, ERPV.Dominio.Enums, ERPV.UI.FormEdicaoVenda,
-  ERPV.UI.FormCancelamentoVenda;
+  ERPV.UI.ConfirmacaoVenda, ERPV.UI.FormCancelamentoVenda, ERPV.UI.Icones;
 
 const
   MSG_ERRO_LISTA = 'Não foi possível carregar as vendas.';
@@ -126,14 +134,12 @@ const
   ST_CANCELADA = 'Cancelada';
 
 constructor TFormListaVendas.Create(AOwner: TComponent; AVendaService: TVendaService;
-  AClienteService: TClienteService; AProdutoService: TProdutoService;
-  AQuitacaoService: TQuitacaoService);
+  AClienteService: TClienteService; AProdutoService: TProdutoService);
 begin
   inherited Create(AOwner);
   FVendaService := AVendaService;
   FClienteService := AClienteService;
   FProdutoService := AProdutoService;
-  FQuitacaoService := AQuitacaoService;
   Titulo := 'Vendas';
   MontarFiltros;
   MontarMenu;
@@ -201,6 +207,60 @@ begin
 
   FCmbStatus.TabOrder := 0;
   FCmbCliente.TabOrder := 1;
+
+  // T42: Confirmar (quitacao) a direita do painel + rotulo de espera
+  FBtnConfirmar := TcxButton.Create(Self);
+  FBtnConfirmar.Parent := FPnlFiltros;
+  FBtnConfirmar.Align := alRight;
+  FBtnConfirmar.Width := EscalarPx(120);
+  FBtnConfirmar.AlignWithMargins := True;
+  FBtnConfirmar.Caption := '&Confirmar';
+  FBtnConfirmar.Enabled := False;
+  FBtnConfirmar.TabOrder := 2;
+  FBtnConfirmar.OnClick := AoConfirmarVenda;
+  EstilizarBotao(FBtnConfirmar, upbPrimario);
+  AplicarIcone(FBtnConfirmar, ERPVIconeConfirmar);
+
+  FLblEspera := TLabel.Create(Self);
+  FLblEspera.Parent := FPnlFiltros;
+  FLblEspera.Align := alRight;
+  FLblEspera.AlignWithMargins := True;
+  FLblEspera.Layout := tlCenter;
+  FLblEspera.Font.Color := clERPVTextoSecundario;
+  FLblEspera.Visible := False;
+end;
+
+procedure TFormListaVendas.SetQuitacaoService(AValor: TQuitacaoService);
+begin
+  FQuitacaoService := AValor;
+  AtualizarEstado;
+end;
+
+procedure TFormListaVendas.AoConfirmarVenda(Sender: TObject);
+var
+  Espera: TControlesEspera;
+  Total: Currency;
+  Id, Idx: Integer;
+  V: Variant;
+begin
+  Id := IdSelecionado;
+  if (FQuitacaoService = nil) or (Id <= 0) or
+    not SameText(StatusSelecionado, ST_PENDENTE) then
+    Exit;
+  Total := 0;
+  Idx := FView.DataController.FocusedRecordIndex;
+  V := FView.DataController.Values[Idx, FColTotal.Index];
+  if not VarIsNull(V) then
+    Total := VarAsType(V, varCurrency);
+  Espera.Desabilitar := [FBtnConfirmar, BtnNovo, BtnEditar, BtnExcluir, BtnFechar,
+    FCmbStatus, FCmbCliente, FGrade];
+  Espera.Rotulo := FLblEspera;
+  // Excecoes (ERegraNegocio/EInfra/inesperada) sobem ao handler global; a UI ja
+  // foi restaurada no finally do helper.
+  if ConfirmarVendaComFeedback(FQuitacaoService, Id, Total, Espera, PnlConteudo) then
+    Recarregar
+  else
+    AtualizarEstado;
 end;
 
 procedure TFormListaVendas.CarregarClientesFiltro;
@@ -245,7 +305,7 @@ begin
   FMenu := TPopupMenu.Create(Self);
   FItemCancelar := TMenuItem.Create(FMenu);
   FItemCancelar.Caption := 'Cancelar venda';
-  // Habilitado so para venda Pendente selecionada (UX 4.2): ver AtualizarEstado.
+  // Habilitado so para Pendente com servico injetado (UX 4.2): ver AtualizarEstado.
   FItemCancelar.Enabled := False;
   FItemCancelar.OnClick := AoCancelarVenda;
   FMenu.Items.Add(FItemCancelar);
@@ -407,7 +467,9 @@ begin
   else
     BtnEditar.Caption := 'Editar';
   HabilitarAcoes(Sel, Pend);
-  FItemCancelar.Enabled := Pend;
+  // UX 4.2: Confirmar so para Pendente (fila pendente = T53)
+  FBtnConfirmar.Enabled := Pend and (FQuitacaoService <> nil);
+  FItemCancelar.Enabled := Pend and (FQuitacaoService <> nil);
 end;
 
 function TFormListaVendas.IdSelecionado: Integer;
@@ -531,31 +593,37 @@ var
   Cancelou: Boolean;
 begin
   Id := IdSelecionado;
-  if (Id <= 0) or not SameText(StatusSelecionado, ST_PENDENTE) then
+  if (FQuitacaoService = nil) or (Id <= 0) or
+    not SameText(StatusSelecionado, ST_PENDENTE) then
     Exit;
   // Regra no TQuitacaoService (T43); a tela so exibe (dialogo T44).
   Cancelou := CancelarVendaComDialogo(Self, FQuitacaoService, Id);
   Recarregar; // o status pode ter mudado mesmo sem cancelar (ex.: nao permitida)
   if Cancelou then
-    AvisarVendaCancelada(Id, Self);
+    AvisarVendaCancelada(Id, PnlConteudo);
 end;
 
 procedure TFormListaVendas.AbrirEdicao(AVendaId: Integer);
 var
   Tela: TFormEdicaoVenda;
+  Cancelada: Boolean;
 begin
+  Cancelada := False;
   Tela := TFormEdicaoVenda.Create(Self, FVendaService, FClienteService,
-    FProdutoService, FQuitacaoService, AVendaId);
+    FProdutoService, AVendaId);
   try
+    Tela.QuitacaoService := FQuitacaoService;
     if Tela.ShowModal = mrOk then
     begin
+      Cancelada := Tela.VendaCancelada;
       Recarregar;
-      if Tela.VendaCancelada then
-        AvisarVendaCancelada(AVendaId, Self);
     end;
   finally
     Tela.Free;
   end;
+  // T44: cancelada dentro da venda: a tela fechou; o banner Info fica aqui
+  if Cancelada then
+    AvisarVendaCancelada(AVendaId, PnlConteudo);
 end;
 
 procedure TFormListaVendas.AoNovo;
