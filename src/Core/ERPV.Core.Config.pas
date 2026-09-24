@@ -149,6 +149,9 @@ const
   MSG_REMETENTE_INVALIDO = 'Configuracao invalida: o campo "Remetente" da secao ' +
     '"[SMTP]" deve ser um endereco de e-mail (ex.: nao-responder@empresa.com.br), ' +
     'sem espacos, virgulas ou ponto e virgula.';
+  MSG_PASTA_PDF_TEMP_INVALIDA = 'Configuracao invalida: o campo "PastaPdfTemp" da ' +
+    'secao "[Relatorio]" deve ser uma pasta local com caminho absoluto (ex.: ' +
+    'C:\ERPVendas\temp\pdf), nao a raiz de uma unidade nem um caminho de rede (UNC).';
 
 implementation
 
@@ -251,6 +254,32 @@ begin
       Exit(False);
 end;
 
+function PastaPdfTempValida(const AValor: string): Boolean;
+var
+  i: Integer;
+  LResto: string;
+begin
+  // RF11-06 (SG11-04): so pasta local absoluta com unidade ("C:\dir" ou
+  // "C:/dir"); recusa relativo, raiz de unidade, UNC (\\servidor\...) e
+  // caracteres invalidos/de controle. Nao toca o disco (a pasta e criada
+  // depois, pelo Root/RelatorioPedido).
+  Result := False;
+  if Length(AValor) < 4 then
+    Exit;
+  if not CharInSet(AValor[1], ['A'..'Z', 'a'..'z']) then
+    Exit;
+  if (AValor[2] <> ':') or not CharInSet(AValor[3], ['\', '/']) then
+    Exit;
+  LResto := Copy(AValor, 3, MaxInt);
+  for i := 1 to Length(LResto) do
+    if (LResto[i] < ' ') or CharInSet(LResto[i], ['*', '?', '<', '>', '|', '"', ':']) then
+      Exit;
+  // Raiz de unidade: nada alem de separadores depois de "C:".
+  for i := 1 to Length(LResto) do
+    if not CharInSet(LResto[i], ['\', '/']) then
+      Exit(True);
+end;
+
 procedure TConfiguracao.Carregar(AIni: TIniFile);
 begin
   // [Banco] - conexao Firebird (ADR-002). Senha nunca obrigatoria no INI: se
@@ -289,6 +318,8 @@ begin
 
   // [Relatorio] - pasta de PDF temporario (T47).
   FRelatorio.PastaPdfTemp := LerObrigatoria(AIni, 'Relatorio', 'PastaPdfTemp');
+  if not PastaPdfTempValida(FRelatorio.PastaPdfTemp) then
+    raise EConfiguracao.Create(MSG_PASTA_PDF_TEMP_INVALIDA);
 
   // [Log] - pasta de log em arquivo (T10, ADR-008).
   FLog.Pasta := LerObrigatoria(AIni, 'Log', 'Pasta');

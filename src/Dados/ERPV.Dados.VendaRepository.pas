@@ -89,6 +89,7 @@ const
   MSG_NAO_ENCONTRADA = 'Venda não encontrada.';
   MSG_FALHA_VERIFICAR_CLIENTE = 'Não foi possível verificar as vendas do cliente. Tente novamente.';
   MSG_FALHA_VERIFICAR_PRODUTO = 'Não foi possível verificar as vendas do produto. Tente novamente.';
+  MSG_FALHA_RELATORIO = 'Não foi possível montar os dados do relatório. Tente novamente.';
 
   // T26: lista (JOIN p/ nome do cliente; VALOR_TOTAL ja e o total da venda)
   SQL_LISTAR_BASE =
@@ -193,6 +194,8 @@ begin
     Mensagem := MSG_FALHA_VERIFICAR_CLIENTE
   else if AOperacao = 'verificar-produto' then
     Mensagem := MSG_FALHA_VERIFICAR_PRODUTO
+  else if AOperacao = 'relatorio' then
+    Mensagem := MSG_FALHA_RELATORIO
   else if AOperacao = 'obter' then
     Mensagem := MSG_FALHA_CONSULTAR
   else
@@ -480,7 +483,7 @@ begin
       Q.Free;
       if E is EInfra then
         raise;
-      TratarFalha('obter', E);
+      TratarFalha('relatorio', E);
       Result := nil; // inalcancavel (TratarFalha sempre levanta)
     end;
   end;

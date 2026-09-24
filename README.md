@@ -86,6 +86,8 @@ Segredos preferencialmente por variável de ambiente (têm prioridade sobre o IN
 
 Crie as pastas de `PastaPdfTemp` e `Log` antes de abrir o app. Se o INI estiver ausente ou incompleto, o app exibe mensagem clara e encerra de forma controlada.
 
+**Segurança de `PastaPdfTemp`:** contém PDFs com dados pessoais por até 24 h (retenção; depois são apagados). Mantenha a pasta **fora** de OneDrive/Dropbox/pastas sincronizadas e de rotinas de backup, com ACL restrita ao usuário que executa o aplicativo (sem `Everyone`/`Users` com leitura), p.ex. `icacls "<pasta>" /inheritance:r /grant:r "%USERNAME%":(OI)(CI)F`. Os arquivos se chamam `Pedido_<Id>_<GUID>.pdf` (nome não previsível).
+
 ### 3.4 Executar
 
 Com banco, INI e DLLs no lugar e o Financeiro (real ou mock) no ar, abra `ERPVendas.exe`. Roteiro de conferência: `docs/roteiro-testes-manuais.md` (12 cenários, incluindo INI ausente e instalação limpa).
