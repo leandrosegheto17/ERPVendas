@@ -84,6 +84,7 @@ uses
 
 const
   MSG_AGUARDANDO = 'Aguardando Financeiro...';
+  MSG_ENVIANDO_EMAIL = 'Enviando e-mail...';
   MARCADOR_AVISO_FILA = ' | Aviso:'; // anexado por TQuitacaoService.EnfileirarIndisponivel
 
 function TextoDesfechoQuitacao(const AResultado: TResultadoQuitacao;
@@ -98,6 +99,10 @@ begin
         eqFalhou:
           Result := Format('Venda %d quitada, mas o e-mail não pôde ser enviado. ' +
             'Ele ficou na fila; reenvie em Pendências.', [AVendaId]);
+        eqFalhouSemFila:
+          Result := Format('Venda %d quitada. Não foi possível enviar o e-mail ' +
+            'nem registrá-lo na fila de pendências. Envie o comprovante ' +
+            'manualmente.', [AVendaId]);
       else
         Result := Format('Venda %d quitada.', [AVendaId]);
       end;
@@ -155,8 +160,18 @@ begin
   Screen.Cursor := crHourGlass;
   try
     Application.ProcessMessages; // pontual: pinta o estado de espera
+    // RF12-03: na fase pos-quitacao (PDF + SMTP) o rotulo muda.
+    AServico.OnFase := procedure(AFase: string)
+      begin
+        if (AFase = 'pos-quitacao') and (AEspera.Rotulo <> nil) then
+        begin
+          AEspera.Rotulo.Caption := MSG_ENVIANDO_EMAIL;
+          AEspera.Rotulo.Update;
+        end;
+      end;
     Resultado := AServico.Confirmar(AVendaId);
   finally
+    AServico.OnFase := nil;
     Screen.Cursor := CursorAnterior;
     for I := 0 to High(AEspera.Desabilitar) do
       AEspera.Desabilitar[I].Enabled := Estados[I];
@@ -169,7 +184,7 @@ begin
 
   case Resultado.Desfecho of
     qdSucesso:
-      if Resultado.EmailStatus = eqFalhou then
+      if Resultado.EmailStatus in [eqFalhou, eqFalhouSemFila] then
         Notificar(utnAviso, TextoDesfechoQuitacao(Resultado, AVendaId))
       else
         Notificar(utnInfo, TextoDesfechoQuitacao(Resultado, AVendaId), AOwnerBanner);

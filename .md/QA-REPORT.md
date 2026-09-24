@@ -877,3 +877,18 @@ Escopo: RF15-01..05 (só texto; validação estática contra `git diff HEAD~1` e
 - Sem perda de texto pré-existente; UTF-8 sem BOM, EOL igual ao original (índice LF, cópia de trabalho CRLF por autocrlf).
 
 **Veredito: Aprovado com ressalvas.** Nenhuma reprovação crítica; RF15-06 e RF15-07 criadas em `Refatoração Lote-15`.
+
+## Refatoração Lote-12 — validação (2026-09-24)
+
+Escopo: RF12-01..06 (9 arquivos; leitura de compilação e `git diff HEAD~1`, nada compilado nem executado).
+
+- RF12-01 Aprovada: `eqFalhouSemFila` no fim do enum; usos em src/ (`PosQuitacao`, `ConfirmacaoVenda` `case` e `in [eqFalhou, eqFalhouSemFila]`) cobrem o valor; tests/ não usa `TEmailQuitacao`. `ERPV.Core.Log` na interface; construtor com `ALogger = nil` só na interface; Root passa `FLogger`.
+- RF12-02 Aprovada: `Remetente` lido/validado em Config (padrão sem a chave; mensagem fixa), passado no Root; INI antigo sem a chave igual ao anterior.
+- RF12-03 Aprovada: `OnFase: TProc<string>` (`System.SysUtils` ok), chamada best-effort; handler anônimo captura `AEspera` (const) e é limpo no `finally`.
+- RF12-04 Aprovada: `EmailValido` (unit `Core.Validadores` no `uses`); construtor levanta `EInfra` com nil; nenhum chamador em src/tests passa nil.
+- RF12-05 Aprovada com ressalva: `IdSSLOpenSSL`/`IdExplicitTLSClientServerBase` no `uses`; `VerificarPeer` bate com `TIdSSLVerifyPeerEvent`, mas a confirmação depende da IDE (RF12-09); campos novos lidos e usados. REGRESSÃO CONSCIENTE: sem as novas chaves e com `UsaTLS=1` o envio agora falha por falta de `CaFile` (padrão estrito); o `.example` de dev não avisa (RF12-08).
+- RF12-06 Aprovada: §11.6 coerente; §11.5 ainda cita `utUseExplicitTLS` (RF12-08c).
+- Encoding: nenhum caractere não ASCII novo em EmailSender/Config; acentos só em `ConfirmacaoVenda` (com BOM). `.example`: `CaFile=C:ERPVendasconfigcacert.pem` perdeu as barras (RF12-08a).
+- Achados simples (sem retorno ao executor): RF12-07 (hostname, ver segurança), RF12-08, RF12-09.
+
+**Veredito: Aprovado com ressalvas.** Nenhuma reprovação crítica nem erro de compilação óbvio. Liberado ao DevSecOps.

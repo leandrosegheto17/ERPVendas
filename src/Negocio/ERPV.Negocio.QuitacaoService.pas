@@ -74,6 +74,7 @@ interface
 uses
   System.SysUtils,
   ERPV.Core.Erros,
+  ERPV.Core.Log,
   ERPV.Dominio.Enums,
   ERPV.Dominio.Venda,
   ERPV.Dominio.Resultados,
@@ -86,8 +87,10 @@ uses
   ERPV.Dominio.Cliente;
 
 type
-  /// <summary>T49: resultado do e-mail pos-quitacao (so relevante em qdSucesso).</summary>
-  TEmailQuitacao = (eqNaoAplicavel, eqEnviado, eqFalhou);
+  /// <summary>T49: resultado do e-mail pos-quitacao (so relevante em qdSucesso).
+  /// RF12-01: eqFalhouSemFila = e-mail falhou E o item EMAIL nao pode ser
+  /// enfileirado (nao ha pendencia para reenviar); tambem e falha de e-mail.</summary>
+  TEmailQuitacao = (eqNaoAplicavel, eqEnviado, eqFalhou, eqFalhouSemFila);
 
   TDesfechoQuitacao = (qdSucesso, qdRecusado, qdIndisponivel, qdRespostaInvalida);
 
@@ -128,6 +131,8 @@ type
     FClienteRepositorio: IClienteRepository;
     FRelatorio: IRelatorioPedido;
     FEmailSender: IEmailSender;
+    FLogger: TLogger; // RF12-01: nao e dono; pode ser nil
+    FOnFase: TProc<string>;
     procedure PosQuitacao(AVendaId: Integer; var AResultado: TResultadoQuitacao);
     procedure EnfileirarIndisponivel(AVendaId: Integer;
       var AResultado: TResultadoQuitacao);
@@ -139,13 +144,18 @@ type
     constructor Create(const AVendaRepositorio: IVendaRepository;
       const AFinanceiro: IFinanceiroGateway; const AFilaRepositorio: IFilaRepository;
       const AClienteRepositorio: IClienteRepository;
-      const ARelatorio: IRelatorioPedido; const AEmailSender: IEmailSender);
+      const ARelatorio: IRelatorioPedido; const AEmailSender: IEmailSender;
+      ALogger: TLogger = nil);
 
     /// <summary>Confirma a quitacao no Financeiro. Falha esperada de
     /// integracao vira resultado tipado, nunca excecao.</summary>
     /// <exception cref="ERegraNegocio">Venda inexistente ou nao Pendente
     /// (lancada antes do POST).</exception>
     function Confirmar(AVendaId: Integer): TResultadoQuitacao;
+
+    /// <summary>RF12-03: aviso opcional de fase (best-effort; default nil).
+    /// Recebe 'pos-quitacao' no inicio de PosQuitacao (PDF + SMTP).</summary>
+    property OnFase: TProc<string> read FOnFase write FOnFase;
 
     /// <summary>Cancela venda Pendente no Financeiro e localmente (T43).
     /// AMotivo opcional. Sem excecao para falha esperada de integracao.</summary>
@@ -176,9 +186,16 @@ end;
 constructor TQuitacaoService.Create(const AVendaRepositorio: IVendaRepository;
   const AFinanceiro: IFinanceiroGateway; const AFilaRepositorio: IFilaRepository;
   const AClienteRepositorio: IClienteRepository;
-  const ARelatorio: IRelatorioPedido; const AEmailSender: IEmailSender);
+  const ARelatorio: IRelatorioPedido; const AEmailSender: IEmailSender;
+  ALogger: TLogger);
 begin
   inherited Create;
+  // Erro de programacao/config: falha cedo, nao vira "falha de e-mail" depois.
+  if (AVendaRepositorio = nil) or (AFinanceiro = nil) or (AFilaRepositorio = nil) or
+    (AClienteRepositorio = nil) or (ARelatorio = nil) or (AEmailSender = nil) then
+    raise EInfra.Create('TQuitacaoService: dependencia obrigatoria ausente ' +
+      '(Venda/Financeiro/Fila/Cliente/Relatorio/EmailSender).');
+  FLogger := ALogger;
   FClienteRepositorio := AClienteRepositorio;
   FRelatorio := ARelatorio;
   FEmailSender := AEmailSender;
@@ -243,6 +260,11 @@ begin
   // Sem transacao aberta (PDF/SMTP). Nada aqui levanta excecao nem desfaz a
   // quitacao; falha => item EMAIL na fila (1 PENDENTE por venda+tipo, RN-08).
   // Nao loga e-mail/CPF; o erro gravado na fila nao inclui o destinatario.
+  if Assigned(FOnFase) then
+    try
+      FOnFase('pos-quitacao'); // RF12-03: best-effort
+    except
+    end;
   AResultado.EmailStatus := eqFalhou;
   AResultado.EmailDestino := '';
   Erro := '';
@@ -301,7 +323,16 @@ begin
     try
       FFilaRepositorio.Enfileirar(AVendaId, tfEmail, Erro);
     except
-      // Sem fila: a venda segue Quitada; a UI ainda avisa da falha.
+      // RF12-01: sem item na fila; venda segue Quitada. Sinaliza para a UI nao
+      // afirmar "ficou na fila" e loga so o Id (sem e-mail/CPF/msg tecnica).
+      AResultado.EmailStatus := eqFalhouSemFila;
+      if FLogger <> nil then
+        try
+          FLogger.Aviso(Format('Venda %d quitada; e-mail falhou e nao foi ' +
+            'possivel enfileirar o item EMAIL', [AVendaId]));
+        except
+          // log best-effort
+        end;
     end;
   end;
 end;

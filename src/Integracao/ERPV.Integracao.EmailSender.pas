@@ -10,14 +10,26 @@ unit ERPV.Integracao.EmailSender;
      Esta unit nao le INI nem ambiente: recebe o record pronto por construtor.
    - Parametros validados no spike T02 (docs/ambiente-licencas.md 11.5):
      DLLs OpenSSL 1.0.2 Win32 (libeay32.dll + ssleay32.dll) na pasta do .exe;
-     com TLS: UseTLS=utUseExplicitTLS, SSLOptions.Method=sslvTLSv1_2 (porta
-     587); sem TLS: IOHandler=nil, UseTLS=utNoTLSSupport (ex.: porta 2525).
+     com TLS: SSLOptions.Method=sslvTLSv1_2 (porta 587); sem TLS: IOHandler=nil, UseTLS=utNoTLSSupport (ex.: porta 2525).
+   - TLS (RF12-05, SG12-01): UsaTLS=1 => UseTLS=utUseRequireTLS (sem STARTTLS
+     o Indy recusa: nunca envia AUTH/PDF em texto claro). Verificacao do
+     certificado: VerifyMode=[sslvrfPeer], VerifyDepth=5, OnVerifyPeer rejeita
+     cadeia invalida (retorna AOk) e RootCertFile=[SMTP] CaFile (.pem de CAs).
+     O OpenSSL 1.0.2 do Indy NAO usa o repositorio de certificados do Windows:
+     por isso, com UsaTLS=1 e VerificarCertificado=1 (padrao), CaFile e
+     OBRIGATORIO (ausente/inexistente => Falha, sem conectar).
+     VerificarCertificado=0 (somente dev: Mailtrap/Ethereal) nao verifica e
+     registra aviso no log.
+     LIMITACAO/PENDENTE: hostname do certificado (CN/SAN) NAO e conferido:
+     nao ha como confirmar sem compilar a API de SAN do TIdX509; checar so o
+     CN reprovaria certificados validos que usam apenas SAN. Implementar e
+     testar com compilador.
    - Falha esperada (host indisponivel, credencial errada, anexo ausente,
      DLL SSL ausente, timeout, destinatario invalido) => TResultadoEnvioEmail.
      Falha(mensagem fixa e segura), nunca excecao.
    - Log (opcional, ALogger pode ser nil): apenas etapa e CLASSE da excecao;
      nunca senha, corpo do e-mail nem a mensagem crua da excecao.
-   - Remetente: parametro do construtor (INI [SMTP] nao tem campo From).
+   - Remetente: parametro do construtor (INI [SMTP] Remetente, RF12-02; vazio => padrao).
    - Sincrono; a chamada bloqueia ate o SMTP responder (timeouts abaixo).
 
   Composition root: ERPV.App.Root instancia TEmailSender.Create(
@@ -57,6 +69,7 @@ uses
   IdException,
   ERPV.Core.Config,
   ERPV.Core.Log,
+  ERPV.Core.Validadores,
   ERPV.Dominio.Resultados,
   ERPV.Dominio.Contratos.IEmailSender;
 
@@ -66,6 +79,8 @@ type
     FConfig: TConfiguracaoSMTP;
     FLogger: TLogger;
     FRemetente: string;
+    function VerificarPeer(Certificate: TIdX509; AOk: Boolean; ADepth,
+      AError: Integer): Boolean;
     procedure LogInfo(const AMsg: string);
     procedure LogErro(const AMsg: string; AExcecao: Exception);
   public
@@ -89,9 +104,12 @@ const
   MSG_CREDENCIAL = 'O servidor de e-mail recusou o usuario ou a senha configurados.';
   MSG_REJEITADO = 'O servidor de e-mail recusou o envio da mensagem.';
   MSG_SSL = 'Nao foi possivel estabelecer conexao segura (TLS) com o servidor de e-mail.';
+  MSG_CAFILE = 'Nao foi possivel estabelecer conexao segura com o servidor de e-mail: ' +
+    'CaFile obrigatorio (ou VerificarCertificado=0 apenas em desenvolvimento).';
+  VERIFY_DEPTH = 5;
   MSG_CONEXAO = 'Nao foi possivel conectar ao servidor de e-mail.';
   MSG_GENERICA = 'Nao foi possivel enviar o e-mail.';
-  MSG_DESTINATARIO = 'Destinatario do e-mail nao informado.';
+  MSG_DESTINATARIO = 'Destinatario do e-mail ausente ou invalido.';
 
 { TEmailSender }
 
@@ -105,6 +123,14 @@ begin
     FRemetente := Trim(ARemetente)
   else
     FRemetente := REMETENTE_PADRAO;
+end;
+
+function TEmailSender.VerificarPeer(Certificate: TIdX509; AOk: Boolean;
+  ADepth, AError: Integer): Boolean;
+begin
+  // Rejeita cadeia invalida (expirada, autoassinada, CA desconhecida...).
+  // Sem log do certificado (pode conter host/organizacao).
+  Result := AOk;
 end;
 
 procedure TEmailSender.LogInfo(const AMsg: string);
@@ -130,12 +156,22 @@ var
   LTexto: TIdText;
   LAnexo: TIdAttachmentFile;
 begin
-  if Trim(ADestinatario) = '' then
+  // Defesa em profundidade: EmailValido rejeita vazio, CR/LF/espacos, ',' e ';'
+  // (lista de destinatarios / injecao de cabecalho). Sem conectar.
+  if not EmailValido(ADestinatario) then
     Exit(TResultadoEnvioEmail.Falha(MSG_DESTINATARIO));
   if (ACaminhoAnexoPdf <> '') and not FileExists(ACaminhoAnexoPdf) then
   begin
     LogInfo('Envio de e-mail abortado: anexo PDF inexistente.');
     Exit(TResultadoEnvioEmail.Falha(MSG_ANEXO_AUSENTE));
+  end;
+
+  // Modo estrito exige o bundle de CAs (OpenSSL 1.0.2 nao le o repositorio do SO).
+  if FConfig.UsaTLS and FConfig.VerificarCertificado and
+    ((Trim(FConfig.CaFile) = '') or not FileExists(Trim(FConfig.CaFile))) then
+  begin
+    LogInfo('Envio de e-mail abortado: CaFile ausente ou inexistente (TLS estrito).');
+    Exit(TResultadoEnvioEmail.Falha(MSG_CAFILE));
   end;
 
   LSmtp := nil;
@@ -174,8 +210,18 @@ begin
         LSsl := TIdSSLIOHandlerSocketOpenSSL.Create(nil);
         LSsl.SSLOptions.Method := sslvTLSv1_2; // validado no spike T02
         LSsl.SSLOptions.Mode := sslmClient;
+        if FConfig.VerificarCertificado then
+        begin
+          LSsl.SSLOptions.VerifyMode := [sslvrfPeer];
+          LSsl.SSLOptions.VerifyDepth := VERIFY_DEPTH;
+          LSsl.SSLOptions.RootCertFile := Trim(FConfig.CaFile);
+          LSsl.OnVerifyPeer := VerificarPeer;
+        end
+        else
+          LogInfo('verificacao de certificado SMTP desativada (somente desenvolvimento)');
         LSmtp.IOHandler := LSsl;
-        LSmtp.UseTLS := utUseExplicitTLS;
+        // Exige STARTTLS: sem ele a conexao falha antes de AUTH/DATA.
+        LSmtp.UseTLS := utUseRequireTLS;
       end
       else
       begin
