@@ -1,4 +1,4 @@
-unit ERPV.Negocio.ClienteService;
+﻿unit ERPV.Negocio.ClienteService;
 
 (*
   T18 - Regras de negocio de Cliente (RF-01/02/03). Camada Negocio: so
@@ -62,17 +62,17 @@ begin
   if ACliente.CpfCnpj = '' then
     raise EValidacao.CreateCampo('CpfCnpj', 'Informe o CPF/CNPJ');
   if (ACliente.TipoPessoa = tpFisica) and not CpfValido(ACliente.CpfCnpj) then
-    raise EValidacao.CreateCampo('CpfCnpj', 'CPF invalido');
+    raise EValidacao.CreateCampo('CpfCnpj', 'CPF inválido');
   if (ACliente.TipoPessoa = tpJuridica) and not CnpjValido(ACliente.CpfCnpj) then
-    raise EValidacao.CreateCampo('CpfCnpj', 'CNPJ invalido');
+    raise EValidacao.CreateCampo('CpfCnpj', 'CNPJ inválido');
 
   if ACliente.Email = '' then
     raise EValidacao.CreateCampo('Email', 'Informe o e-mail');
   if not EmailValido(ACliente.Email) then
-    raise EValidacao.CreateCampo('Email', 'E-mail invalido');
+    raise EValidacao.CreateCampo('Email', 'E-mail inválido');
 
   if FRepositorio.ExistePorDocumento(ACliente.CpfCnpj, ACliente.Id) then
-    raise EValidacao.CreateCampo('CpfCnpj', 'Documento ja cadastrado');
+    raise EValidacao.CreateCampo('CpfCnpj', 'Documento já cadastrado');
 end;
 
 function TClienteService.Salvar(const ACliente: TCliente): Integer;
