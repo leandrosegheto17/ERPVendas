@@ -3,7 +3,7 @@
 {
   T69 (Lote 3) - Carga e aplicacao dos icones (UX-SPEC 3; ambiente-licencas 13).
 
-  Le assets\icones\{16,24,32}\<nome>.png (nomes = constantes ERPVIcone* de
+  Le assets\icones\{16,24,32\<nome>.png (nomes = constantes ERPVIcone* de
   ERPV.UI.Tokens) em uma TImageList por tamanho, com cache unico por processo.
   Tamanho escolhido pelo DPI atual: <=96 -> 16, <=144 -> 24, acima -> 32.
 
