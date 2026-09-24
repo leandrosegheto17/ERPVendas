@@ -17,6 +17,7 @@ uses
   ERPV.Core.Validadores in 'src\Core\ERPV.Core.Validadores.pas',
   ERPV.Dados.ClienteRepository in 'src\Dados\ERPV.Dados.ClienteRepository.pas',
   ERPV.Dados.ProdutoRepository in 'src\Dados\ERPV.Dados.ProdutoRepository.pas',
+  ERPV.Dados.FilaRepository in 'src\Dados\ERPV.Dados.FilaRepository.pas',
   ERPV.Negocio.ClienteService in 'src\Negocio\ERPV.Negocio.ClienteService.pas',
   ERPV.Negocio.ProdutoService in 'src\Negocio\ERPV.Negocio.ProdutoService.pas',
   ERPV.UI.FormBaseEdicao in 'src\UI\ERPV.UI.FormBaseEdicao.pas',
