@@ -865,3 +865,15 @@ T56-T58 `Concluída`; dependências da Seção 4 do TASK.md satisfeitas (T59, T6
 ### Veredito do lote (chapéu QA)
 
 **Aprovado com ressalvas.** Nenhuma reprovação crítica. Liberado ao chapéu DevSecOps. Pontos para auditoria: ausência de segredos/dados reais nos docs, mascaramento de log e retenção descritos no README §5 conforme o código, `/_modo` do mock sem autenticação (documentado como só-localhost).
+
+## Refatoração Lote-15 — validação (2026-09-24)
+
+Escopo: RF15-01..05 (só texto; validação estática contra `git diff HEAD~1` e `src/`, nada executado).
+
+- RF15-01 Aprovada: banner (`FormEdicaoVenda.pas`), `MSG_BLOQUEIO_FILA`, "Preço inválido" (0 aceito), campo/apoio LGPD do motivo e reenvio com MOTIVO NULL (RF10-02) batem com o código.
+- RF15-02 Aprovada com ressalva: C6 e C11 seguem Dado/Passos/Esperado; C6-A Esperado "(código HTTP 422)" não bate com a mensagem real com o mock `recusa` (simples, RF15-07). C6-B..E e F (aponta para C8/timeout-post) conferem.
+- RF15-03 Aprovada com ressalva: §3.3 (5000 x 8080) e §5 (campos de `FinanceiroDTOs.pas`, motivo até 255) corretos; o aviso de porta foi inserido no meio da tabela do INI, quebrando a renderização (simples, RF15-06).
+- RF15-04 e RF15-05 Aprovadas.
+- Sem perda de texto pré-existente; UTF-8 sem BOM, EOL igual ao original (índice LF, cópia de trabalho CRLF por autocrlf).
+
+**Veredito: Aprovado com ressalvas.** Nenhuma reprovação crítica; RF15-06 e RF15-07 criadas em `Refatoração Lote-15`.

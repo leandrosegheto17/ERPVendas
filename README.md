@@ -52,14 +52,16 @@ O pacote `bin/` (exe + DLLs + `erpvendas.ini.example`) e o `db/ERPVENDAS.FBK` **
 **Opção A: restaurar o backup (`gbak`)**, quando `ERPVENDAS.FBK` estiver no pacote:
 
 ```
-gbak -c -user SYSDBA -password <senha> ERPVENDAS.FBK localhost:C:\ERPVendas\dados\ERPVENDAS.FDB
+gbak -c -user SYSDBA ERPVENDAS.FBK localhost:C:\ERPVendas\dados\ERPVENDAS.FDB
 ```
+
+> **Aviso (senha):** não passe `-password <senha>` na linha de comando (fica no histórico do shell e na lista de processos). Defina antes `ISC_PASSWORD` (o `gbak`/`isql` do Firebird 3 também leem `ISC_USER`): no cmd `set ISC_PASSWORD=<senha>`; no PowerShell `$env:ISC_PASSWORD='<senha>'`; ao terminar, limpe (`set ISC_PASSWORD=` / `Remove-Item Env:ISC_PASSWORD`). Sem a variável, as ferramentas pedem a senha em prompt.
 
 **Opção B: criar pelos scripts** (a partir da raiz do repositório):
 
 1. Execute o `CREATE DATABASE` de `db/00_criar_banco.sql` (ajuste caminho e senha). O banco **precisa** ser `DEFAULT CHARACTER SET UTF8`, senão a busca sem acento falha. Use o prefixo `localhost:` e finalize a sessão `isql` com `QUIT;` antes de abrir o app (lock exclusivo).
-2. `isql -user SYSDBA -password <senha> localhost:C:\ERPVendas\dados\ERPVENDAS.FDB -i db\01_schema.sql`
-3. `isql -user SYSDBA -password <senha> localhost:C:\ERPVendas\dados\ERPVENDAS.FDB -i db\02_seed.sql` (dados fictícios: 2 clientes, 3 produtos).
+2. `isql -user SYSDBA localhost:C:\ERPVendas\dados\ERPVENDAS.FDB -i db\01_schema.sql`
+3. `isql -user SYSDBA localhost:C:\ERPVendas\dados\ERPVENDAS.FDB -i db\02_seed.sql` (dados fictícios: 2 clientes, 3 produtos).
 
 Verificação: `SELECT RDB$CHARACTER_SET_NAME FROM RDB$DATABASE;` deve retornar `UTF8`.
 
@@ -75,6 +77,8 @@ Verificação: `SELECT RDB$CHARACTER_SET_NAME FROM RDB$DATABASE;` deve retornar 
 | `[SMTP]` | `Host`, `Porta`, `Usuario`, `Senha`, `UsaTLS` | Use caixa de teste (Mailtrap/Ethereal) |
 | `[Relatorio]` | `PastaPdfTemp` | Deve existir e ter escrita |
 | `[Log]` | `Pasta` | Deve existir e ter escrita |
+
+> **Atenção (porta):** o `BaseUrl` do `config/erpvendas.ini.example` aponta para `http://localhost:5000`, mas o mock do Financeiro (seção 4) escuta por padrão na porta **8080** (`--port`). Ao usar o mock, ajuste `BaseUrl=http://127.0.0.1:8080` no seu `erpvendas.ini` (ou inicie o mock com `--port 5000`).
 
 Segredos preferencialmente por variável de ambiente (têm prioridade sobre o INI): `ERPV_BANCO_SENHA`, `ERPV_SMTP_PASSWORD`, `ERPV_FINANCEIRO_APIKEY`.
 
@@ -94,11 +98,14 @@ python tools/mock-financeiro/mock_financeiro.py --port 8080 --modo ok
 
 Aponte `[Financeiro] BaseUrl=http://127.0.0.1:8080`. O modo muda em tempo de execução por `curl "http://127.0.0.1:8080/_modo?m=<ok|recusa|erro500|timeout|timeout-post|offline-simulado>"`. Estado em memória; `/_modo` sem autenticação (usar só em localhost). Detalhes em `tools/mock-financeiro/README.md`.
 
+> **Aviso (rede):** o mock e a rota `/_modo` não têm autenticação; mantenha o padrão `--host 127.0.0.1` e não use `--host 0.0.0.0` fora do ambiente de desenvolvimento.
+
 ## 5. Nota LGPD (finalidade e retenção)
 
 - **Dados tratados:** nome, CPF/CNPJ, endereço, telefone e e-mail de clientes, apenas o necessário ao cadastro, à venda e ao envio do pedido.
 - **Finalidade:** registrar vendas, confirmar quitação e enviar o comprovante (PDF) ao e-mail do próprio cliente.
-- **Compartilhamento:** o Financeiro recebe somente IDs, valores e itens (sem dados pessoais). O PDF vai apenas ao e-mail do cliente.
+- **Compartilhamento:** na quitação o Financeiro recebe somente IDs, valores e itens (vendaId, clienteId, valorTotal, produtoId, quantidade, precoUnitario), sem dados pessoais; no cancelamento recebe o ID da venda e, se preenchido, o `motivo` (texto livre digitado pelo operador, opcional, até 255 caracteres). Oriente os operadores a **não digitar dado pessoal** no motivo, pois ele é enviado ao Financeiro (`docs/contrato-api-financeiro.md`). O PDF vai apenas ao e-mail do cliente.
+- **Limite da máscara de logs:** `TLogger.MascararSensiveis` (`src/Core/ERPV.Core.Log.pas`) mascara CPF, CNPJ (formatados ou só dígitos), e-mail e pares `chave=valor`/`chave: valor` de senha/apikey/token/secret. **Não** cobre nome, telefone, endereço, documentos em formatos atípicos nem o texto devolvido pelo Financeiro e exibido na UI (mascaramento na UI pendente: SG13-01/RF13-04). Não registre esses dados no log.
 - **Retenção:** cliente não é excluído fisicamente; é **inativado**, preservando o histórico de vendas (finalidade legítima). PDFs temporários ficam em `PastaPdfTemp` e são apagados após o envio (em falha, são regerados no reenvio). Não há expurgo automático do histórico de vendas no MVP; o prazo de guarda deve ser definido pelo responsável pelo tratamento.
 - **Logs:** CPF/CNPJ e e-mail são mascarados; corpo de mensagens não é gravado.
 - **Dados de demonstração:** fictícios (CPFs de teste válidos, e-mails de sandbox). Não use dados reais em demo.
