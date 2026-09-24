@@ -12,8 +12,10 @@
   - UX 4.2: Editar/Excluir so habilitam se a venda esta Pendente. Quitada/
     Cancelada: o botao Editar vira "Visualizar" (abre a mesma tela) e Excluir
     fica desabilitado.
-  - "Cancelar venda": SOMENTE no menu de contexto (e dentro da venda, T44). A acao
-    e de T43/T44 (ainda inexistente): o item existe, mas DESABILITADO ate la.
+  - "Cancelar venda" (T44): SOMENTE no menu de contexto (e dentro da venda).
+    Habilitado so para venda Pendente selecionada com QuitacaoService injetado
+    (UX 4.2); abre o dialogo ERPV.UI.FormCancelamentoVenda e recarrega a lista.
+    Sucesso = banner Info "Venda N cancelada.".
   - Novo/Editar/Visualizar: TFormEdicaoVenda (T32), ShowModal = mrOk se gravou.
   - O TDataSet devolvido pelo servico e de posse desta tela.
 }
@@ -121,7 +123,7 @@ implementation
 uses
   System.DateUtils,
   ERPV.Core.Erros, ERPV.Dominio.Enums, ERPV.UI.FormEdicaoVenda,
-  ERPV.UI.ConfirmacaoVenda, ERPV.UI.Icones;
+  ERPV.UI.ConfirmacaoVenda, ERPV.UI.FormCancelamentoVenda, ERPV.UI.Icones;
 
 const
   MSG_ERRO_LISTA = 'Não foi possível carregar as vendas.';
@@ -303,8 +305,7 @@ begin
   FMenu := TPopupMenu.Create(Self);
   FItemCancelar := TMenuItem.Create(FMenu);
   FItemCancelar.Caption := 'Cancelar venda';
-  // T43/T44 (cancelamento) ainda nao existem: item presente e desabilitado.
-  // Quando T44 chegar, habilitar somente para Pendente (UX 4.2) e ligar a acao.
+  // Habilitado so para Pendente com servico injetado (UX 4.2): ver AtualizarEstado.
   FItemCancelar.Enabled := False;
   FItemCancelar.OnClick := AoCancelarVenda;
   FMenu.Items.Add(FItemCancelar);
@@ -468,6 +469,7 @@ begin
   HabilitarAcoes(Sel, Pend);
   // UX 4.2: Confirmar so para Pendente (fila pendente = T53)
   FBtnConfirmar.Enabled := Pend and (FQuitacaoService <> nil);
+  FItemCancelar.Enabled := Pend and (FQuitacaoService <> nil);
 end;
 
 function TFormListaVendas.IdSelecionado: Integer;
@@ -586,24 +588,42 @@ begin
 end;
 
 procedure TFormListaVendas.AoCancelarVenda(Sender: TObject);
+var
+  Id: Integer;
+  Cancelou: Boolean;
 begin
-  // Defensivo: o item esta desabilitado ate T43/T44.
-  Notificar(utnInfo, 'Disponível em breve.');
+  Id := IdSelecionado;
+  if (FQuitacaoService = nil) or (Id <= 0) or
+    not SameText(StatusSelecionado, ST_PENDENTE) then
+    Exit;
+  // Regra no TQuitacaoService (T43); a tela so exibe (dialogo T44).
+  Cancelou := CancelarVendaComDialogo(Self, FQuitacaoService, Id);
+  Recarregar; // o status pode ter mudado mesmo sem cancelar (ex.: nao permitida)
+  if Cancelou then
+    AvisarVendaCancelada(Id, PnlConteudo);
 end;
 
 procedure TFormListaVendas.AbrirEdicao(AVendaId: Integer);
 var
   Tela: TFormEdicaoVenda;
+  Cancelada: Boolean;
 begin
+  Cancelada := False;
   Tela := TFormEdicaoVenda.Create(Self, FVendaService, FClienteService,
     FProdutoService, AVendaId);
   try
     Tela.QuitacaoService := FQuitacaoService;
     if Tela.ShowModal = mrOk then
+    begin
+      Cancelada := Tela.VendaCancelada;
       Recarregar;
+    end;
   finally
     Tela.Free;
   end;
+  // T44: cancelada dentro da venda: a tela fechou; o banner Info fica aqui
+  if Cancelada then
+    AvisarVendaCancelada(AVendaId, PnlConteudo);
 end;
 
 procedure TFormListaVendas.AoNovo;
