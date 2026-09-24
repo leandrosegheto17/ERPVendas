@@ -5,12 +5,12 @@ uses ERPV.App.Root;
 procedure RodarTesteT27(Root: TRootAplicacao);
 implementation
 uses
-  System.SysUtils, Vcl.Dialogs, ERPV.Core.Erros, ERPV.Dominio.Enums,
+  System.SysUtils, Data.DB, Vcl.Dialogs, ERPV.Core.Erros, ERPV.Dominio.Enums,
   ERPV.Dominio.Cliente, ERPV.Dominio.Produto, ERPV.Dominio.Venda, ERPV.Dominio.VendaItem;
 
 procedure Rel(const ACaso: string; AOk: Boolean);
 begin
-  if AOk then ShowMessage('OK: ' + ACaso) else ShowMessage('FALHA: ' + ACaso);
+  if AOk then ShowMessage('T26/T27 TESTE - OK: ' + ACaso) else ShowMessage('T26/T27 TESTE - FALHA: ' + ACaso);
 end;
 
 function Recusa(Root: TRootAplicacao; AVenda: TVenda): Boolean;
@@ -21,7 +21,7 @@ begin
   except
     on E: EValidacao do
     begin
-      ShowMessage('Motivo: ' + E.Message);
+      ShowMessage('T26/T27 TESTE - Motivo: ' + E.Message);
       Result := True;
     end;
   end;
@@ -41,6 +41,7 @@ var
   ProA, ProI: TProduto;
   V, V2: TVenda;
   IdVenda: Integer;
+  DS: TDataSet;
 begin
   CliA := TCliente.Create; CliI := TCliente.Create;
   ProA := TProduto.Create; ProI := TProduto.Create;
@@ -82,9 +83,34 @@ begin
       finally
         V2.Free;
       end;
+      // --- T26 ---
+      DS := Root.VendaService.ListarDataSet('', 0);
+      try
+        Rel('T26 lista traz venda com CLIENTE_NOME e VALOR_TOTAL',
+          DS.Locate('ID', IdVenda, []) and (DS.FieldByName('CLIENTE_NOME').AsString = 'T27 Ativo')
+          and (DS.FindField('VALOR_TOTAL') <> nil) and not DS.FieldByName('VALOR_TOTAL').IsNull);
+      finally
+        DS.Free;
+      end;
+      DS := Root.VendaService.ListarDataSet('Quitada', 0);
+      try
+        Rel('T26 filtro Quitada nao traz a Pendente', not DS.Locate('ID', IdVenda, []));
+      finally
+        DS.Free;
+      end;
+      DS := Root.VendaService.ListarDataSet('Pendente', CliA.Id);
+      try
+        Rel('T26 filtro Pendente+cliente traz a venda', DS.Locate('ID', IdVenda, []));
+      finally
+        DS.Free;
+      end;
+      Rel('T26 ExisteVendaPorCliente(com venda)=True', Root.VendaRepository.ExisteVendaPorCliente(CliA.Id));
+      Rel('T26 ExisteVendaPorCliente(sem venda)=False', not Root.VendaRepository.ExisteVendaPorCliente(CliI.Id));
+      Rel('T26 ExisteVendaPorProduto(vendido)=True', Root.VendaRepository.ExisteVendaPorProduto(ProA.Id));
+      Rel('T26 ExisteVendaPorProduto(sem item)=False', not Root.VendaRepository.ExisteVendaPorProduto(ProI.Id));
       Root.VendaService.Excluir(IdVenda);
     except
-      on E: Exception do ShowMessage('FALHA inesperada: ' + E.Message);
+      on E: Exception do ShowMessage('T26/T27 TESTE - FALHA inesperada: ' + E.Message);
     end;
     try Root.ProdutoService.Excluir(ProA.Id); except end;
     try Root.ProdutoService.Excluir(ProI.Id); except end;
