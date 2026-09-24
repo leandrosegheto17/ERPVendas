@@ -13,7 +13,7 @@ Rotas de negocio (contrato v1.0):
   GET  /api/vendas/{id}/status
 
 Rota administrativa (fora do contrato v1.0, so para teste):
-  GET|POST /_modo?m=ok|recusa|erro500|timeout|offline-simulado
+  GET|POST /_modo?m=ok|recusa|erro500|timeout|timeout-post|offline-simulado
 
 O modo afeta as 3 rotas de negocio (todas), ate ser trocado de novo. Estado
 das vendas (status/dataQuitacao) fica em memoria, perdido ao reiniciar.
@@ -35,7 +35,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-MODOS_VALIDOS = ("ok", "recusa", "erro500", "timeout", "offline-simulado")
+MODOS_VALIDOS = ("ok", "recusa", "erro500", "timeout", "timeout-post", "offline-simulado")
 
 # Atraso (em segundos) usado no modo "timeout". O cliente Delphi (ADR-004) usa
 # timeout padrao de 10 s lido do INI; por isso o mock espera mais que isso
@@ -108,6 +108,14 @@ class MockFinanceiroHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
+    def _atraso_timeout_post(self) -> None:
+        """Modo timeout-post: o efeito do POST ja foi registrado no estado;
+        so a RESPOSTA atrasa (> timeout do cliente), para o GET /status de
+        reconciliacao (T41) devolver o estado novo sem atraso. O POST e
+        processado uma unica vez (o log do mock mostra 1 POST)."""
+        if _get_modo() == "timeout-post":
+            time.sleep(TIMEOUT_DELAY_SEGUNDOS)
+
     def _derrubar_conexao_sem_resposta(self) -> None:
         """Simula 'offline-simulado': fecha o socket sem escrever nenhuma
         resposta HTTP, reproduzindo uma conexao recusada/derrubada do lado do
@@ -136,6 +144,11 @@ class MockFinanceiroHandler(BaseHTTPRequestHandler):
             time.sleep(TIMEOUT_DELAY_SEGUNDOS)
             # Depois do atraso, responde normalmente (o cliente real ja deve
             # ter estourado o timeout de 10 s e classificado como Indisponivel).
+            return None
+
+        if modo == "timeout-post":
+            # Atraso so nos POSTs e feito dentro das rotas (efeito registrado
+            # ANTES do atraso); GET /status segue normal, sem atraso.
             return None
 
         if modo == "recusa":
@@ -236,6 +249,7 @@ class MockFinanceiroHandler(BaseHTTPRequestHandler):
 
         data_quitacao = _agora_iso()
         _atualizar_venda(venda_id, "Quitada", data_quitacao)
+        self._atraso_timeout_post()
         self._responder_json(
             200,
             {"vendaId": venda_id, "status": "Quitada", "dataQuitacao": data_quitacao},
@@ -257,6 +271,7 @@ class MockFinanceiroHandler(BaseHTTPRequestHandler):
 
         motivo = corpo.get("motivo")
         _atualizar_venda(venda_id, "Cancelada")
+        self._atraso_timeout_post()
         resposta = {"vendaId": venda_id, "status": "Cancelada"}
         if motivo:
             resposta["motivo"] = motivo
