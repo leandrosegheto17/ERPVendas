@@ -472,7 +472,11 @@ begin
     DropDownListStyle := lsFixedList;
     ListColumns.Clear;
     ListColumns.Add.FieldName := 'NOME';
-    ListColumns.Add.FieldName := 'CPF_CNPJ';
+    // RF7-04 (minimizacao de dado pessoal): a coluna CPF_CNPJ foi removida do
+    // dropdown. Mascarar exigiria campo calculado no dataset ja aberto do
+    // service; criar um campo persistente faz o TDataSet expor SOMENTE os
+    // campos persistentes (perderia ID/NOME), e mudar a camada Dados esta fora
+    // do escopo. Falha segura: nao exibir o documento.
     OnChange := ClienteChange;
   end;
 
