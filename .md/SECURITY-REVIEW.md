@@ -835,3 +835,15 @@ Chapéu DevSecOps, por leitura. Commit 17dbc05.
 - Severidade: nenhum achado novo. Nenhum compliance em aberto. Bloqueio 006 não afeta o lote.
 
 **Veredito: Aprovado** (sem débito novo). Deploy não afetado por este lote.
+
+## Refatoração Lotes 6, 8, 9 e 10 (documentação) — validação (2026-09-24)
+
+Chapéu DevSecOps, por leitura (commit 484fe9c; só comentário/texto, QA Aprovado com ressalvas).
+
+- Segredos/host/credencial: nenhum introduzido; o único endereço é `http://localhost:8080` do mock local (fictício, já documentado), sem ApiKey/senha/connection string.
+- Dado pessoal real: nenhum; exemplos usam ids fictícios (venda 10, Id=1042, "Cliente desistiu").
+- UX 4.3 (cancelamento): mensagens exibem só id da venda e a mensagem do Financeiro já tratada por RF8-03 (controles removidos, 200 caracteres); a linha de apoio LGPD orienta a não digitar CPF/telefone/e-mail no motivo; nenhum dado sensível exposto. Documentação de `dcNaoPermitida` não revela SQL, caminho ou stack (mensagens fixas do service).
+- Nenhum código executável alterado: sem nova superfície de ataque, sem impacto em SAST/dependências/compliance.
+- Severidade: nenhum achado novo. Nenhum compliance em aberto. Bloqueio 006 não afeta os lotes.
+
+**Veredito: Aprovado** (sem débito novo). Deploy não afetado.

@@ -7,10 +7,12 @@
   => venda segue Quitada + item EMAIL na fila; EmailStatus/EmailDestino no
   resultado (UI mostra UX 4.3 via Notificar). Roteiro manual T49: 1. mock ok +
   SMTP ok: e-mail com PDF, EmailStatus=eqEnviado, PDF some da pasta temp. 2. SMTP
-  senha errada: STATUS=QUITADA, 1 linha EMAIL PENDENTE, aviso modal UX 4.3, sem
+  senha errada: STATUS='Quitada', 1 linha EMAIL PENDENTE, aviso modal UX 4.3, sem
   excecao. 3. mock recusa/erro500: nenhum e-mail (EmailStatus=eqNaoAplicavel).
   4. Repetir falha: continua 1 item PENDENTE (tentativas+1). Nao compilado.
-  T43 (Lote 10) acrescenta Cancelar nesta mesma classe (ver abaixo).
+  Estado atual da classe: Confirmar (T38-T42), Cancelar (T43), PosQuitacao
+  (T49), ExecutarPosQuitacao (RF13-02, reenvio de e-mail), OnFase (RF12-03,
+  fase 'pos-quitacao') e logger opcional (RF12-01, pode ser nil).
 
   T43 - QuitacaoService.Cancelar (RF-16/17, RN-02/08, ADR-005/006).
   Cancelar(AVendaId, AMotivo): le a venda do banco; nao encontrada, Quitada ou
@@ -20,7 +22,9 @@
   nada na fila => dcRecusada (RN-08). Indisponivel => Pendente e enfileira
   CANCELAMENTO => dcEnfileirada. Resposta invalida => Pendente, nao enfileira
   (reconciliacao por GET e T50) => dcRespostaInvalida. Motivo opcional, aparado;
-  '' = nao enviar. Falha esperada vira resultado tipado, nunca excecao.
+  '' = nao enviar; limitado a 255 (RF10-01) e NAO persistido na fila (RF10-02:
+  CANCELAMENTO enfileirado reenvia sem motivo). Falha esperada vira resultado
+  tipado, nunca excecao.
   Roteiro manual T43: 1. mock ok + venda Pendente: Cancelar(Id,'Cliente
   desistiu') => dcCancelada, STATUS='Cancelada' e motivo gravado. 2. mock
   recusa: Pendente, fila sem linha, Mensagem preenchida => dcRecusada. 3. mock
@@ -31,14 +35,14 @@
   Fluxo: (1) le a venda do banco e exige Pendente (senao ERegraNegocio, ANTES
   do POST); (2) POST via IFinanceiroGateway SEM transacao aberta; (3) 200
   Quitada => commit curto AtualizarStatus(Quitada, dataQuitacao).
-  Demais desfechos so sao MAPEADOS, sem efeito colateral: T39 (recusa), T40
-  (indisponivel + fila), T49 (PDF/e-mail) acrescentam comportamento.
+  Demais desfechos de Confirmar (recusa T39, indisponivel + fila T40,
+  reconciliacao T41, PDF/e-mail T49) ja estao implementados; ver roteiros.
 
   ==========================================================================
   ROTEIRO MANUAL NA IDE (sem compilacao via CLI; pendente de confirmacao)
   ==========================================================================
   Pre: mock do Financeiro no ar, INI apontando para ele, venda Pendente.
-  1. Mock ok: Confirmar(Id) => Desfecho = qdSucesso; no banco STATUS=QUITADA e
+  1. Mock ok: Confirmar(Id) => Desfecho = qdSucesso; no banco STATUS='Quitada' e
      DATA_QUITACAO preenchida.
   2. Chamar Confirmar de novo na mesma venda => ERegraNegocio, sem POST
      (conferir que o mock nao registrou nova requisicao).
@@ -47,22 +51,22 @@
      com Mensagem; venda continua Pendente no banco, nada gravado.
   T40 (manual): mock erro500 ou timeout ou parado => Confirmar devolve
      qdIndisponivel (retorna em ate o timeout, UI nao trava); venda Pendente;
-     SELECT na FILA_SINCRONIZACAO: 1 linha TIPO=QUITACAO, STATUS=PENDENTE,
+     SELECT na FILA_INTEGRACAO: 1 linha TIPO=QUITACAO, STATUS=PENDENTE,
      ULTIMO_ERRO preenchido. Repetir Confirmar: continua 1 item PENDENTE (sem
      duplicar). Com a fila forcada a falhar: qdIndisponivel com "Aviso: nao
      foi possivel enfileirar" na Mensagem, sem excecao.
-  T41 (reconciliacao): LIMITACAO do mock: o modo global "timeout" atrasa 11 s
-     tambem o GET status, entao o GET da reconciliacao tambem estoura e o fluxo
-     cai na fila (T40). Roteiro possivel: (a) mock ok, quitar via POST manual
-     (curl) SEM a venda local saber; (b) mock timeout; (c) Confirmar => POST
-     estoura, GET estoura => enfileira (comportamento T40, esperado). Para
-     validar o caminho T41 de ponta a ponta na IDE e preciso GET respondendo
-     ok com POST em timeout. Alteracao minima sugerida no mock (nao feita):
-     modo "timeout-post" que atrasa so POST e deixa GET /status normal; entao:
-     quitar via curl, "_modo?m=timeout-post", Confirmar => venda QUITADA,
-     DATA_QUITACAO = Now, FILA_SINCRONIZACAO vazia, log do mock com 1 POST
-     (o da confirmacao) e nenhum reenvio. Alternativa: teste unitario com
-     IFinanceiroGateway falso (POST=Indisponivel, GET=Quitada).
+  T41 (reconciliacao): o modo global "timeout" do mock atrasa 11 s tambem o
+     GET status, entao POST e GET estouram e o fluxo cai na fila (T40,
+     esperado). Para o caminho T41 de ponta a ponta use o modo "timeout-post"
+     do mock (RF9-03; tools/mock-financeiro/README.md): atrasa so a resposta
+     do POST, registra o efeito antes do atraso e deixa GET /status normal.
+     Roteiro: NAO quitar via curl antes (o proprio timeout-post registra o
+     efeito; quitacao previa acrescentaria um 2o POST ao log);
+     "_modo?m=timeout-post"; Confirmar => POST estoura, GET responde Quitada
+     => venda Quitada, DATA_QUITACAO = Now, FILA_INTEGRACAO sem item QUITACAO
+     PENDENTE, log do mock com exatamente 1 POST (o da confirmacao) e nenhum
+     reenvio. Alternativa: teste unitario com IFinanceiroGateway falso
+     (POST=Indisponivel, GET=Quitada).
   T39 (recusa 4xx): mock modo recusa => Desfecho = qdRecusado, Mensagem igual a
      do Financeiro (se vazia: "Quitação recusada pelo Financeiro (código HTTP
      xxx)"), CodigoHttp preenchido; venda segue Pendente e a fila de pendencias
