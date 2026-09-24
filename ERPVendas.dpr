@@ -41,7 +41,6 @@ uses
   ERPV.Relatorios.PedidoLayout in 'src\Relatorios\ERPV.Relatorios.PedidoLayout.pas' {DMPedidoLayout: TDataModule},
   ERPV.Relatorios.RelatorioPedido in 'src\Relatorios\ERPV.Relatorios.RelatorioPedido.pas',
   ERPV.UI.FormMain in'src\UI\ERPV.UI.FormMain.pas' {FormMain},
-  ERPV.UI.FormTesteTema in 'src\UI\ERPV.UI.FormTesteTema.pas',
   ERPV.UI.Icones in 'src\UI\ERPV.UI.Icones.pas',
   ERPV.UI.Tema in 'src\UI\ERPV.UI.Tema.pas',
   ERPV.UI.Tokens in 'src\UI\ERPV.UI.Tokens.pas';

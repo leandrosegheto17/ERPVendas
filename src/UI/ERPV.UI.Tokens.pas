@@ -70,6 +70,7 @@ const
   clERPVTextoPrincipal      = TColor($33291F); // #1F2933 - corpo (~14:1 sobre branco)
   clERPVTextoSecundario     = TColor($6D6052); // #52606D - subtitulos/cabecalho de coluna/inativo (~6,5:1)
   clERPVDestaque            = TColor($B26F1F); // #1F6FB2 - faixa de marca, botao primario, foco, item ativo (~5,3:1 c/ branco)
+  clERPVTextoSobreDestaque  = TColor($FFFFFF); // #FFFFFF - texto sobre fundo de destaque (faixa de marca, botao Primario)
   clERPVDestaqueHover       = TColor($925A18); // #185A92 - hover/pressionado do primario (> 7:1 c/ branco)
   clERPVSelecaoLinha        = TColor($FAEBDC); // #DCEBFA - linha selecionada (texto principal mantido, > 10:1)
   clERPVZebra               = TColor($FCFAF8); // #F8FAFC - linhas alternadas (sutil)

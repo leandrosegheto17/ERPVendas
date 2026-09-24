@@ -444,12 +444,12 @@ begin
         ABotao.Colors.AssignedColors := [cxbcNormal, cxbcNormalText, cxbcHot,
           cxbcHotText, cxbcPressed, cxbcPressedText];
         ABotao.Colors.Normal := clERPVDestaque;
-        ABotao.Colors.NormalText := clWhite;
+        ABotao.Colors.NormalText := clERPVTextoSobreDestaque;
         ABotao.Colors.Hot := clERPVDestaqueHover;
-        ABotao.Colors.HotText := clWhite;
+        ABotao.Colors.HotText := clERPVTextoSobreDestaque;
         ABotao.Colors.Pressed := clERPVDestaqueHover;
-        ABotao.Colors.PressedText := clWhite;
-        ABotao.Font.Color := clWhite;
+        ABotao.Colors.PressedText := clERPVTextoSobreDestaque;
+        ABotao.Font.Color := clERPVTextoSobreDestaque;
         ABotao.Font.Style := [fsBold];
       end;
     upbSecundario:
