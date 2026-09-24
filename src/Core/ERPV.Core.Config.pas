@@ -127,6 +127,10 @@ type
     /// <summary>Caminho padrao: erpvendas.ini na mesma pasta do executavel.</summary>
     class function CaminhoPadrao: string;
 
+    /// <summary>RF14-03: '' se ApiKey configurada; senao MSG_AVISO_APIKEY_VAZIA
+    /// (texto fixo, sem o valor da chave). Quem inicia o app loga como Aviso.</summary>
+    class function AvisoApiKeyVazia(const AApiKey: string): string; static;
+
     property CaminhoArquivo: string read FCaminhoArquivo;
     property Banco: TConfiguracaoBanco read FBanco;
     property Financeiro: TConfiguracaoFinanceiro read FFinanceiro;
@@ -142,6 +146,11 @@ const
   ENV_BANCO_SENHA = 'ERPV_BANCO_SENHA';
   ENV_SMTP_SENHA = 'ERPV_SMTP_PASSWORD';
   ENV_FINANCEIRO_APIKEY = 'ERPV_FINANCEIRO_APIKEY';
+
+  // RF14-03: aviso de inicializacao quando ApiKey vazia (fixo; nunca inclui o valor).
+  MSG_AVISO_APIKEY_VAZIA = 'ApiKey do Financeiro nao configurada: o servico Financeiro ' +
+    'exige X-Api-Key (D3) e as chamadas serao rejeitadas com 401. ' +
+    'Informe ApiKey em [Financeiro] do INI ou em ERPV_FINANCEIRO_APIKEY.';
 
   TIMEOUT_FINANCEIRO_PADRAO_SEGUNDOS = 10;
   SMTP_PORTA_PADRAO = 587;
@@ -295,6 +304,14 @@ begin
       Exit(True);
 end;
 
+class function TConfiguracao.AvisoApiKeyVazia(const AApiKey: string): string;
+begin
+  if Trim(AApiKey) = '' then
+    Result := MSG_AVISO_APIKEY_VAZIA
+  else
+    Result := '';
+end;
+
 procedure TConfiguracao.Carregar(AIni: TIniFile);
 begin
   // [Banco] - conexao Firebird (ADR-002). Senha nunca obrigatoria no INI: se
@@ -310,7 +327,10 @@ begin
     TIMEOUT_FINANCEIRO_PADRAO_SEGUNDOS);
   if FFinanceiro.TimeoutSegundos <= 0 then
     FFinanceiro.TimeoutSegundos := TIMEOUT_FINANCEIRO_PADRAO_SEGUNDOS;
-  // ApiKey e opcional por definicao (DEC-07): vazio = nao envia X-Api-Key.
+  // ApiKey e OBRIGATORIA na pratica (D3, contrato-api-financeiro.md): o C# real
+  // exige X-Api-Key e responde 401 sem ela. Vazio nao impede a inicializacao
+  // (ambiente com mock sem chave): so nao envia o header e o Root loga aviso
+  // (AvisoApiKeyVazia, RF14-03).
   FFinanceiro.ApiKey := LerComVariavelDeAmbiente(AIni, 'Financeiro', 'ApiKey',
     ENV_FINANCEIRO_APIKEY, '');
 

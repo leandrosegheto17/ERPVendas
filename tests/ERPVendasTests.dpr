@@ -9,7 +9,8 @@ uses
   ERPV.Testes.FinanceiroClientErros in 'ERPV.Testes.FinanceiroClientErros.pas',
   ERPV.Testes.PendenciaFila in 'ERPV.Testes.PendenciaFila.pas',
   ERPV.Testes.PendenciasApresentacao in 'ERPV.Testes.PendenciasApresentacao.pas',
-  ERPV.Testes.Formatacao in 'ERPV.Testes.Formatacao.pas';
+  ERPV.Testes.Formatacao in 'ERPV.Testes.Formatacao.pas',
+  ERPV.Testes.ConfigApiKey in 'ERPV.Testes.ConfigApiKey.pas';
 
 var
   LRunner: ITestRunner;
