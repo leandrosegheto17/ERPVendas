@@ -205,10 +205,20 @@ begin
       Break;
     end;
   // Uma linha, sem controles; teste de vazio (fallback "codigo HTTP") fica depois da limpeza
+  // RF14-04: controles C0, DEL, C1, separadores U+2028/2029 e caracteres bidi
+  // (U+061C, U+200E/200F, U+202A-202E, U+2066-2069) viram espaco.
   for LI := 1 to Length(AMensagem) do
-    if AMensagem[LI] < ' ' then
+    if (AMensagem[LI] < ' ') or
+       ((AMensagem[LI] >= #$007F) and (AMensagem[LI] <= #$009F)) or
+       (AMensagem[LI] = #$061C) or
+       (AMensagem[LI] = #$200E) or (AMensagem[LI] = #$200F) or
+       (AMensagem[LI] = #$2028) or (AMensagem[LI] = #$2029) or
+       ((AMensagem[LI] >= #$202A) and (AMensagem[LI] <= #$202E)) or
+       ((AMensagem[LI] >= #$2066) and (AMensagem[LI] <= #$2069)) then
       AMensagem[LI] := ' ';
-  AMensagem := Trim(AMensagem);
+  // RF14-04: mascara dado sensivel (CPF/CNPJ/e-mail/segredos) antes de exibir;
+  // feito antes do truncamento para nao cortar um dado no meio.
+  AMensagem := Trim(TLogger.MascararSensiveis(AMensagem));
   if Length(AMensagem) > CMaxMensagem then
   begin
     LTam := CMaxMensagem;
