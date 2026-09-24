@@ -46,7 +46,8 @@ uses
   ERPV.UI.Tokens, ERPV.UI.Tema, ERPV.UI.Icones,
   ERPV.Negocio.ClienteService, ERPV.UI.FormListaClientes,
   ERPV.Negocio.ProdutoService, ERPV.UI.FormListaProdutos,
-  ERPV.Negocio.VendaService, ERPV.UI.FormListaVendas;
+  ERPV.Negocio.VendaService, ERPV.Negocio.QuitacaoService,
+  ERPV.UI.FormListaVendas;
 
 const
   WM_ERPV_FECHAR_LISTA = WM_USER + 101;
@@ -63,6 +64,7 @@ type
     FProdutoService: TProdutoService;
     FListaProdutos: TFormListaProdutos;
     FVendaService: TVendaService;
+    FQuitacaoService: TQuitacaoService;
     FListaVendas: TFormListaVendas;
     FPainelMarca: TPanel;
     FRotuloMarca: TLabel;
@@ -113,7 +115,7 @@ type
     /// </summary>
     procedure Configurar(const ABaseUrlFinanceiro: string;
       AClienteService: TClienteService; AProdutoService: TProdutoService;
-      AVendaService: TVendaService);
+      AVendaService: TVendaService; AQuitacaoService: TQuitacaoService);
 
     /// <summary>
     ///   Ponto de entrada de navegacao. T14 ainda nao tem as telas (T19/T23/
@@ -173,9 +175,10 @@ end;
 
 procedure TFormMain.Configurar(const ABaseUrlFinanceiro: string;
   AClienteService: TClienteService; AProdutoService: TProdutoService;
-  AVendaService: TVendaService);
+  AVendaService: TVendaService; AQuitacaoService: TQuitacaoService);
 begin
   FVendaService := AVendaService;
+  FQuitacaoService := AQuitacaoService;
   FBaseUrlFinanceiro := ABaseUrlFinanceiro;
   FClienteService := AClienteService;
   FProdutoService := AProdutoService;
@@ -481,7 +484,7 @@ begin
     FRotuloBemVindo.Visible := False;
     FRotuloBemVindoSub.Visible := False;
     FListaVendas := TFormListaVendas.Create(Self, FVendaService, FClienteService,
-      FProdutoService);
+      FProdutoService, FQuitacaoService);
     FListaVendas.BorderStyle := bsNone;
     FListaVendas.Parent := FAreaConteudo;
     FListaVendas.Align := alClient;

@@ -12,8 +12,9 @@
   - UX 4.2: Editar/Excluir so habilitam se a venda esta Pendente. Quitada/
     Cancelada: o botao Editar vira "Visualizar" (abre a mesma tela) e Excluir
     fica desabilitado.
-  - "Cancelar venda": SOMENTE no menu de contexto (e dentro da venda, T44). A acao
-    e de T43/T44 (ainda inexistente): o item existe, mas DESABILITADO ate la.
+  - "Cancelar venda" (T44): menu de contexto (e dentro da venda). Habilitado so
+    para venda Pendente selecionada (UX 4.2); abre o dialogo de cancelamento
+    (ERPV.UI.FormCancelamentoVenda) e recarrega a lista. Sucesso = banner Info.
   - Novo/Editar/Visualizar: TFormEdicaoVenda (T32), ShowModal = mrOk se gravou.
   - O TDataSet devolvido pelo servico e de posse desta tela.
 }
@@ -29,7 +30,7 @@ uses
   cxButtons,
   ERPV.UI.Tokens, ERPV.UI.Tema, ERPV.UI.FormBaseLista,
   ERPV.Negocio.VendaService, ERPV.Negocio.ClienteService,
-  ERPV.Negocio.ProdutoService;
+  ERPV.Negocio.ProdutoService, ERPV.Negocio.QuitacaoService;
 
 type
   TFormListaVendas = class(TFormBaseLista)
@@ -37,6 +38,7 @@ type
     FVendaService: TVendaService;
     FClienteService: TClienteService;
     FProdutoService: TProdutoService;
+    FQuitacaoService: TQuitacaoService;
     FDataSet: TDataSet;
     FDataSource: TDataSource;
     FOnFechada: TNotifyEvent;
@@ -100,7 +102,8 @@ type
     procedure AoFechar; override;
   public
     constructor Create(AOwner: TComponent; AVendaService: TVendaService;
-      AClienteService: TClienteService; AProdutoService: TProdutoService); reintroduce;
+      AClienteService: TClienteService; AProdutoService: TProdutoService;
+      AQuitacaoService: TQuitacaoService); reintroduce;
     destructor Destroy; override;
     /// <summary>Disparado quando o usuario pede Fechar/Esc estando embutida no shell;
     /// o dono decide liberar. Sem handler, fecha como form normal.</summary>
@@ -111,7 +114,8 @@ implementation
 
 uses
   System.DateUtils,
-  ERPV.Core.Erros, ERPV.Dominio.Enums, ERPV.UI.FormEdicaoVenda;
+  ERPV.Core.Erros, ERPV.Dominio.Enums, ERPV.UI.FormEdicaoVenda,
+  ERPV.UI.FormCancelamentoVenda;
 
 const
   MSG_ERRO_LISTA = 'Não foi possível carregar as vendas.';
@@ -122,12 +126,14 @@ const
   ST_CANCELADA = 'Cancelada';
 
 constructor TFormListaVendas.Create(AOwner: TComponent; AVendaService: TVendaService;
-  AClienteService: TClienteService; AProdutoService: TProdutoService);
+  AClienteService: TClienteService; AProdutoService: TProdutoService;
+  AQuitacaoService: TQuitacaoService);
 begin
   inherited Create(AOwner);
   FVendaService := AVendaService;
   FClienteService := AClienteService;
   FProdutoService := AProdutoService;
+  FQuitacaoService := AQuitacaoService;
   Titulo := 'Vendas';
   MontarFiltros;
   MontarMenu;
@@ -239,8 +245,7 @@ begin
   FMenu := TPopupMenu.Create(Self);
   FItemCancelar := TMenuItem.Create(FMenu);
   FItemCancelar.Caption := 'Cancelar venda';
-  // T43/T44 (cancelamento) ainda nao existem: item presente e desabilitado.
-  // Quando T44 chegar, habilitar somente para Pendente (UX 4.2) e ligar a acao.
+  // Habilitado so para venda Pendente selecionada (UX 4.2): ver AtualizarEstado.
   FItemCancelar.Enabled := False;
   FItemCancelar.OnClick := AoCancelarVenda;
   FMenu.Items.Add(FItemCancelar);
@@ -402,6 +407,7 @@ begin
   else
     BtnEditar.Caption := 'Editar';
   HabilitarAcoes(Sel, Pend);
+  FItemCancelar.Enabled := Pend;
 end;
 
 function TFormListaVendas.IdSelecionado: Integer;
@@ -520,9 +526,18 @@ begin
 end;
 
 procedure TFormListaVendas.AoCancelarVenda(Sender: TObject);
+var
+  Id: Integer;
+  Cancelou: Boolean;
 begin
-  // Defensivo: o item esta desabilitado ate T43/T44.
-  Notificar(utnInfo, 'Disponível em breve.');
+  Id := IdSelecionado;
+  if (Id <= 0) or not SameText(StatusSelecionado, ST_PENDENTE) then
+    Exit;
+  // Regra no TQuitacaoService (T43); a tela so exibe (dialogo T44).
+  Cancelou := CancelarVendaComDialogo(Self, FQuitacaoService, Id);
+  Recarregar; // o status pode ter mudado mesmo sem cancelar (ex.: nao permitida)
+  if Cancelou then
+    AvisarVendaCancelada(Id, Self);
 end;
 
 procedure TFormListaVendas.AbrirEdicao(AVendaId: Integer);
@@ -530,10 +545,14 @@ var
   Tela: TFormEdicaoVenda;
 begin
   Tela := TFormEdicaoVenda.Create(Self, FVendaService, FClienteService,
-    FProdutoService, AVendaId);
+    FProdutoService, FQuitacaoService, AVendaId);
   try
     if Tela.ShowModal = mrOk then
+    begin
       Recarregar;
+      if Tela.VendaCancelada then
+        AvisarVendaCancelada(AVendaId, Self);
+    end;
   finally
     Tela.Free;
   end;
