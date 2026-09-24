@@ -110,3 +110,268 @@ fechamento estrutural e, quando decidido pelo usuário, para `/deploy`
 (quando aplicável — este lote não contém código executável a publicar; a
 preparação de infraestrutura/CI-CD segue o timing padrão de `validador.md`,
 assim que o `SDD.md`/próximos lotes com código estiverem prontos).
+
+## Lote 2 — Núcleo Delphi (D1)
+
+Auditoria feita depois da aprovação funcional do chapéu QA (`QA-REPORT.md`,
+Lote 2: Aprovado, T07-T13). Escopo: primeiro lote com código Delphi
+executável — composition root, config, log, exceções, conexão de banco,
+domínio e esqueleto de projeto/UI. Base: `SDD.md` Seção 7, `GUARDRAILS.md`
+regras 11, 16-19, 21, 26, ADR-002, ADR-007, ADR-008. Verificação por leitura
+linha a linha do `git diff`/código-fonte das 15 units do lote — não a nota
+de implementação do Executor.
+
+### 1. Segredo/credencial commitado (GUARDRAILS regra 16)
+
+| Artefato | Resultado |
+|---|---|
+| `config/erpvendas.ini.example` | Todos os valores são claramente fictícios (`senha_ficticia_dev`, `senha_ficticia_smtp`, `usuario_ficticio_mailtrap`, `sandbox.smtp.mailtrap.io`, caminhos locais de exemplo). `ApiKey` vazio (DEC-07). Comentário no topo do arquivo já documenta as 3 variáveis de ambiente preferenciais. Nenhuma credencial real. |
+| `.gitignore` (raiz) | `erpvendas.ini` (arquivo real) e `config/*.ini` (com exceção explícita `!config/erpvendas.ini.example`) estão listados; também cobre `*.dcu/*.dcp`, `logs/`, `*.pdf`, `*.exe/*.res`, `*.lic/*.key/*.license/*.slip` (licenças DevExpress/ReportBuilder). Cumpre a lacuna já antecipada no `SECURITY-REVIEW.md` do Lote 1 (Seção 5). |
+| `git ls-files \| grep -iE ".ini$\|.fdb$\|logs/"` | Vazio — nenhum INI real, `.FDB` ou pasta de log versionado. |
+| `git log --stat` de todo o lote (`f291f91..6070679`) | Só arquivos `.pas`/`.dpr`/`.dproj`/`.md` alterados; nenhum `.FDB`/log/PDF de teste commitado por engano. |
+| `src/Core/ERPV.Core.Config.pas` | Segredos (`Banco.Senha`, `SMTP.Senha`, `Financeiro.ApiKey`) resolvidos por `LerComVariavelDeAmbiente`: variável de ambiente (`ERPV_BANCO_SENHA`, `ERPV_SMTP_PASSWORD`, `ERPV_FINANCEIRO_APIKEY`) checada e usada **antes** do INI (`GetEnvironmentVariable` primeiro, só cai no `AIni.ReadString` se vazia) — prioridade de ambiente sobre INI confirmada linha a linha, conforme ADR-007/008 e a instrução do prompt. |
+| `src/Dados/ERPV.Dados.Conexao.pas` | Senha do banco só passa por `FConnection.Params.Add('Password=' + FConfiguracao.Banco.Senha)` (propriedade de conexão do FireDAC, nunca concatenada em SQL) e nunca é passada a `FLogger`/`MessageDlg`. |
+
+**Achado**: nenhum.
+
+### 2. SQL sempre parametrizado (GUARDRAILS regra 11)
+
+`ERPV.Dados.Conexao.pas` (T12) é a única unit do lote que toca banco, e seu
+escopo é só conexão/transação (`IniciarTransacao`/`Confirmar`/`Desfazer`) —
+sem nenhuma query de negócio. Confirmado: nenhuma concatenação de string
+formando SQL em nenhuma unit do lote; a única ocorrência de `ExecSQL`
+(`'SELECT 1 FROM RDB\$DATABASE'`) está dentro do roteiro de verificação
+manual em comentário de cabeçalho (não é código de produção), usa uma
+constante literal sem interpolação de dado externo, e nem chegaria a
+constituir injeção mesmo se fosse código real. Os `Params.Add('Database=' +
+...)`/`'User_Name=' + ...`/`'Password=' + ...` são propriedades de conexão
+do FireDAC (`TFDConnection.Params`), não comandos SQL. `src/Dominio/*`
+(T08) não referencia `FireDAC.*`/`Data.DB` além dos 4 Contratos que usam
+`TDataSet` só como tipo de retorno de interface (ADR-010), sem SQL embutido.
+
+**Achado**: nenhum.
+
+### 3. Exposição de dado sensível em log (GUARDRAILS regra 17, `sensitive-data-exposure-check`)
+
+`ERPV.Core.Log.pas` (T10): `GravarLinha` força **toda** mensagem (inclusive
+o `AExcecao.Message` concatenado em `Erro`) a passar por
+`MascararSensiveis` antes de tocar o arquivo — não existe caminho de escrita
+que pule essa função (nenhum método público grava string crua). Mascaramento
+revisado regex a regex:
+- CNPJ formatado e só-dígitos, CPF formatado e só-dígitos: cobertos, com
+  `\b` de fronteira de palavra e ordem CNPJ→CPF (evita CNPJ de 14 dígitos
+  ser parcialmente capturado pela regra de CPF de 11).
+- E-mail: preserva 1 caractere + domínio inteiro.
+- Rede de segurança extra: `(?i)\b(senha|password|apikey|api_key|token|secret)\b\s*[:=]\s*\S+` → substitui o valor por `******`, mesmo se o chamador
+  cometer o erro de logar a chave/valor bruto na mensagem — reduz (não
+  elimina) o risco de erro humano em chamadas futuras (T14+).
+- Falha ao gravar log é engolida (best effort) — não derruba a aplicação,
+  conforme ADR-008, e não é um caminho por onde dado sensível vazaria de
+  outra forma (é só ausência de log, não exposição).
+
+Verificado também: `ERPV.Dados.Conexao.pas` e `ERPV.Core.Erros.pas`
+(`TTratadorDeExcecoes.AoTratarExcecao`) sempre chamam `FLogger.Erro`/
+`FLogger.Aviso`/`FLogger.Info` (nunca escrevem em arquivo por conta própria),
+então toda mensagem técnica que chega ao log passa pelo mascaramento acima,
+inclusive a mensagem original do FireDAC (que pode conter usuário/host do
+banco) capturada em `Conectar`/`IniciarTransacao`/`Confirmar`.
+
+**Achado**: nenhum.
+
+### 4. Mensagem ao usuário livre de SQL/caminho sensível/stack/credencial (GUARDRAILS regra 17, ADR-008)
+
+- `EIntegracao`/`EInfra` (caso geral): `MensagemAmigavel` devolve a
+  constante fixa `MSG_INTEGRACAO_INFRA`/`MSG_ERRO_INESPERADO`, nunca
+  `E.Message` — confirmado no código (`ERPV.Core.Erros.pas`, função
+  `MensagemAmigavel`).
+- `ERPV.Dados.Conexao.pas`: toda falha do FireDAC (`Conectar`,
+  `IniciarTransacao`, `Confirmar`) captura a exceção original, grava o
+  detalhe técnico completo (que pode ter Database/host/usuário) só no log,
+  e relança `EInfra.Create(MSG_FALHA_CONEXAO)`/`EInfra.Create(MSG_FALHA_TRANSACAO)`
+  — mensagens fixas, sem interpolar nada do erro original. Confirmado que a
+  mensagem exibida é **idêntica** para "banco offline" e "senha errada"
+  (mesma constante `MSG_FALHA_CONEXAO` nos dois casos) — não permite ao
+  usuário/atacante distinguir os dois cenários pela mensagem de erro, um
+  cuidado adicional correto (evita enumeração de credencial válida por
+  diferença de mensagem).
+- **Achado específico do prompt — `EInfraMensagemSegura`/`EConfiguracao`**
+  (commit `966a508`, revisão de segurança independente da revisão funcional
+  já feita pelo chapéu QA):
+  1. Conferidas as 3 mensagens que `EConfiguracao` pode lançar
+     (`ValidarArquivo`, `ValidarSecoesObrigatorias`, `LerObrigatoria`,
+     `ERPV.Core.Config.pas` linhas 187-219): as três usam `CreateFmt` com
+     apenas `FCaminhoArquivo`/`ACaminho` (caminho do próprio
+     `erpvendas.ini`) e nome de seção/chave (`'Banco'`, `'Financeiro'`,
+     `'SMTP'`, `'Relatorio'`, `'Log'`, ou o nome da chave lida) — nenhuma
+     interpola valor de segredo (`Senha`/`ApiKey` nunca são lidos antes da
+     validação de presença, e mesmo que fossem, a mensagem de
+     `LerObrigatoria` só usa `AChave`, o nome da chave, nunca `Result`/o
+     valor). Nenhuma menção a SQL, stack ou host de rede. Confirmado.
+  2. Disciplina de uso: hoje `EInfraMensagemSegura` só é herdada por
+     `EConfiguracao` (`grep -rn "EInfraMensagemSegura"` retorna só
+     declaração/uso em `ERPV.Core.Erros.pas` e `ERPV.Core.Config.pas`) — sem
+     uso incorreto atual. Achado de **severidade baixa**: o mecanismo é uma
+     subclasse "opt-in" (precisa herdar dela explicitamente, não é o
+     comportamento padrão de `EInfra`), e o comentário de cabeçalho da
+     classe (`ERPV.Core.Erros.pas` linhas 200-212) já deixa o contrato
+     explícito ("quem lançar uma exceção dessa subclasse está afirmando essa
+     garantia"), o que mitiga bem o risco de reuso descuidado. Ainda assim,
+     não há nenhuma trava estrutural (revisão de código é a única barreira)
+     que impeça uma tarefa futura (T17+) de criar `EInfra` derivada dessa
+     subclasse com uma mensagem que acidentalmente inclua dado sensível —
+     o nome da classe e o comentário são fortes, mas dependem de quem
+     escreve a próxima subclasse ler e respeitar o contrato. **Recomendação
+     (não bloqueante, sem ação corretiva obrigatória agora)**: quando uma
+     próxima tarefa (ex.: futura mensagem de infraestrutura "segura")
+     precisar herdar de `EInfraMensagemSegura`, o Validador (chapéu
+     DevSecOps) deve auditar a mensagem daquela nova subclasse com o mesmo
+     rigor do item 1 acima antes de aprovar o lote — já é o comportamento
+     padrão desta skill (`static-security-analysis` roda em todo lote), não
+     precisa de tarefa nova em `Refatoração Lote-X` agora; registrado aqui
+     como nota de atenção para a próxima auditoria que tocar
+     `ERPV.Core.Erros.pas`.
+  3. Caminho do INI exposto (`ACaminho`/`FCaminhoArquivo`, valor padrão
+     `ExtractFilePath(ParamStr(0)) + 'erpvendas.ini'`): é um caminho de
+     disco local (pasta do próprio executável), não expõe host de banco,
+     usuário do SO, nome de máquina de rede interna nem qualquer segredo —
+     é exatamente a informação que o usuário final precisa para localizar e
+     corrigir o arquivo. Quando `ACaminhoIni` é passado explicitamente pelo
+     chamador (parâmetro opcional do construtor, hoje sem nenhum chamador no
+     lote além do padrão), o valor também é só um caminho de arquivo, sob
+     controle de quem constrói `TConfiguracao` — não há cenário no código
+     atual em que esse caminho viria de entrada não confiável do usuário
+     final em tempo de execução. Confirmado: não constitui vazamento de
+     informação sensível de infraestrutura.
+
+**Achado**: 1 achado de severidade **baixa** (item 2 acima) — observação de
+processo (auditar a próxima subclasse de `EInfraMensagemSegura` quando
+surgir), já coberta pelo próprio ritual de auditoria contínua deste agente;
+não bloqueia o lote, não gera débito com prazo nem tarefa em
+`Refatoração Lote-X` (mitigação já suficiente via nome de classe + comentário
+de contrato, sem custo de manutenção adicional a impor agora).
+
+### 5. Compliance (LGPD básica, SDD §7)
+
+Nenhuma tarefa deste lote trata dado pessoal real em runtime além do
+mascaramento de log (Seção 3 acima) e da configuração de conexão (sem PII).
+Nenhum compliance obrigatório em aberto.
+
+### 6. Requisitos de segurança operacional para o próprio chapéu DevOps
+
+- Confirma-se a partir deste lote (T07) que `.gitignore` cobre `erpvendas.ini`,
+  `logs/`, `*.pdf`, `*.lic/*.key/*.license/*.slip` — pipeline de CI/CD
+  (`cicd-pipeline-configuration`) deve continuar usando variável de
+  ambiente/secret manager para `ERPV_BANCO_SENHA`/`ERPV_SMTP_PASSWORD`/
+  `ERPV_FINANCEIRO_APIKEY` em vez de gerar um `erpvendas.ini` real versionado
+  em qualquer etapa do build.
+  - Observabilidade: `ERPV.Core.Log.pas` já mascara CPF/CNPJ/e-mail/segredo
+  antes de gravar — qualquer coleta futura desses logs por ferramenta de
+  observabilidade (DevOps) herda essa proteção automaticamente, sem exigir
+  filtro adicional na ingestão.
+- Firebird embedded/servidor: a string de conexão (`Database=`) vem de
+  `TConfiguracaoBanco.Caminho`, lido do INI — DevOps deve garantir que o
+  ambiente de produção não exponha esse INI/variável de ambiente fora do
+  processo da aplicação (ex.: não logar variáveis de ambiente do processo em
+  ferramenta de CI/CD).
+
+### 7. Achados de relevância estratégica (sinalização ao Gestor)
+
+Nenhum. O achado de severidade baixa da Seção 4 é uma nota de processo para
+a próxima auditoria, não uma decisão de negócio/compliance.
+
+### Veredito do lote (chapéu DevSecOps)
+
+**Aprovado**, sem achado de severidade alta/crítica nem compliance
+obrigatório em aberto. Há 1 achado de severidade baixa (Seção 4, item 2 —
+disciplina de uso futuro de `EInfraMensagemSegura`), já com mitigação
+suficiente registrada (nome de classe + comentário de contrato) e sem
+necessidade de tarefa em `Refatoração Lote-X` nem prazo — vira apenas nota
+de atenção para a próxima auditoria de `ERPV.Core.Erros.pas`. Libera o lote
+para o fechamento estrutural (checagem do Validador) e, com a dupla
+aprovação QA+DevSecOps deste lote, para `/deploy` quando o usuário decidir
+(preparação de infraestrutura/CI-CD segue em paralelo desde o início,
+conforme timing padrão).
+
+## Lote 3 — Casca de UI, tokens e tema (D2)
+
+Escopo: `ERPV.UI.Tokens`, `ERPV.UI.Tema`, `ERPV.UI.Icones`, `ERPV.UI.FormMain`, `ERPV.UI.FormBaseLista`, `ERPV.UI.FormBaseEdicao`, `scripts/gerar-icones.js`, `assets/icones`. QA do lote: Aprovado com ressalvas. Análise por leitura de código (sem SAST automatizado disponível); sem recompilação.
+
+### 1. Segredo/credencial no repositório
+`scripts/gerar-icones.js` só importa `fs`, `path`, `zlib` (gera PNG localmente, sem rede, sem `eval`/`child_process`, sem credencial). `assets/` contém apenas 48 PNGs (nenhum outro tipo de arquivo). Nenhuma senha/token/chave nas units do lote. Sem achado.
+
+### 2. Forms sem SQL/regra/HTTP (GUARDRAILS)
+`FormMain`, `FormBaseLista`, `FormBaseEdicao` não referenciam FireDAC, Dados nem cliente HTTP; `FormMain` depende só de Tokens/Tema/Icones e dos Services de Cliente/Produto. A URL do Financeiro chega por parâmetro (`Configurar`) e é só exibida. Sem achado.
+
+### 3. Mensagens ao usuário
+Nenhum `MessageDlg`/`ShowMessage`/`MessageBox` nos forms do lote; tudo passa por `Notificar` (o único `Vcl.Dialogs` em `Tema` é a implementação de `Notificar`). Mensagens do shell são fixas e sem dado sensível. Sem achado.
+
+### 4. Camadas ADR-001/010
+UI -> Negocio (Services) apenas; sem referência a `Dados`. Sem achado.
+
+### 5. Tokens (cores/fontes)
+Todas as cores e fontes vêm de `ERPV.UI.Tokens`, exceto `clWhite` (texto da faixa de marca em `FormMain` e texto/hover/pressed do botão Primário em `Tema.EstilizarBotao`). **Achado 1 (baixa, qualidade/consistência, não segurança):** vira RF3-01 (já declarado em parte pelo Executor).
+
+### 6. `ERPV.UI.Icones`
+Degrada sem exceção (pasta ausente, arquivo ausente ou corrompido, tamanho divergente: ignorado; todas as rotinas públicas com try/except). Só lê `assets\icones\{16,24,32}\<nome>.png`, onde `<nome>` vem de constantes fixas (`ERPVIcone*`), nunca de entrada do usuário: sem path traversal. A busca da pasta sobe no máximo 7 níveis a partir do `.exe` procurando `assets\icones` (leitura apenas); risco residual desprezível. Sem achado.
+
+### 7. BOM/encoding
+`FormMain`, `FormBaseEdicao`, `Icones`, `Tema`, `Tokens` com BOM UTF-8. **Achado 2 (baixa):** `FormBaseLista.pas` sem BOM (hoje só ASCII, sem mojibake; risco se entrar acento). Vira RF3-02.
+
+### 8. Superfície de release
+**Achado 3 (baixa):** `ERPV.UI.FormTesteTema` (form de teste do tema) continua no `.dpr`/`.dproj`; fora do fluxo, mas seria compilado no build final. Vira RF3-03.
+
+### 9. Compliance e operacional
+Sem dado pessoal manipulado neste lote. Nenhum requisito operacional novo para o chapéu DevOps (nota herdada: perfil Debug com `DCC_UsePackages=true` a revisar antes do build de T61, já registrado em T68). Nada de relevância estratégica para o Gestor.
+
+### Veredito do lote (chapéu DevSecOps)
+**Aprovado com débito baixo** (achados 1-3, RF3-01 a RF3-03). Sem achado alto/crítico nem compliance em aberto. Libera para `/deploy` quando o usuário decidir.
+
+## Lote 4 — Cadastro de Clientes (D2)
+
+Escopo: `ERPV.Dados.ClienteRepository`, `ERPV.Negocio.ClienteService`, `ERPV.Core.Validadores`, `FormListaClientes`, `FormEdicaoCliente`. QA do lote: Aprovado com ressalvas. Análise por leitura de código (sem SAST automatizado disponível); sem recompilação.
+
+### 1. Segredo/credencial no repositório
+Varredura por `password/senha/apikey` em `.pas/.dpr/.ini/.sql/.js`: só `config/erpvendas.ini.example` com valores fictícios, leitura por variável de ambiente e a montagem de `Password=` em `Conexao.pas` (já auditada no Lote 2). Nenhum segredo nas units do Lote 4. Sem achado.
+
+### 2. SQL parametrizado (regra 11)
+`ClienteRepository`: INSERT/UPDATE/DELETE/SELECT/existe-por-documento usam `ParamByName` para todo valor. A listagem concatena apenas fragmentos de SQL constantes (`AND ATIVO = TRUE`, bloco de busca); o texto do usuário entra só como parâmetro, com `%`, `_` e `\` escapados. Sem SQL em form, Service ou Dominio. Sem achado.
+
+### 3. Log e dados sensíveis (regra 17)
+O repositório loga só a operação e a exceção do FireDAC via `TLogger.Erro` (que mascara CPF/CNPJ/e-mail e redige senha, verificado na T10); nenhum valor de parâmetro é passado ao log. Forms e Service não logam. Sem achado.
+
+### 4. Mensagens ao usuário e achados
+Mensagens do repositório são fixas e amigáveis (sem SQL/caminho/credencial); a UI mostra `E.Message` apenas de `EErpVendas` e cai em texto genérico para qualquer outra exceção. **Achado 1 (baixa):** o repositório levanta `EInfra` (não `EInfraMensagemSegura`) para duplicidade/em uso/não encontrado; hoje funciona porque a UI usa `E.Message`, mas via `Application.OnException` sairia a mensagem genérica. É a nota de disciplina já prevista no Lote 2. Falha para o lado seguro (não vaza). Vira RF4-02, prazo antes do Lote 16.
+
+### 5. Camadas ADR-001/010
+Grep em `Negocio`, `Dominio` e `Core`: `Vcl`/`FireDAC` só aparecem em comentários, exceto `Vcl.Dialogs` em `ERPV.Core.Erros` (tratador de exceções, exceção documentada e aceita no Lote 2). `Negocio` não referencia `Dados`. Forms dependem só de `TClienteService`, sem SQL/regra de negócio. Sem achado.
+
+### 6. Compliance (LGPD básica) e operacional
+CPF/e-mail tratados como dado pessoal: mascarados em log, não expostos em mensagem. Nenhum requisito operacional novo para o chapéu DevOps. Nada de relevância estratégica para o Gestor.
+
+### Veredito do lote (chapéu DevSecOps)
+**Aprovado com débito baixo** (achado 1, RF4-02). Sem achado alto/crítico nem compliance em aberto. Libera para `/deploy` quando o usuário decidir.
+
+## Lote 5 — Cadastro de Produtos (D2)
+
+Escopo: `ERPV.Dados.ProdutoRepository`, `ERPV.Negocio.ProdutoService`, `FormListaProdutos`, `FormEdicaoProduto` e a integração em `FormMain`/`ERPV.App.Root`. QA do lote: Aprovado com ressalvas. Análise por leitura de código (sem SAST automatizado disponível); sem recompilação.
+
+### 1. Segredo/credencial no repositório
+Nenhum segredo nas units do Lote 5. A unit temporária `ERPV.Temp.TesteT22` foi removida (não há arquivo `*Temp*` no repositório). Sem achado.
+
+### 2. SQL parametrizado (regra 11)
+`ProdutoRepository`: INSERT/UPDATE/DELETE/SELECT com `ParamByName` para todo valor; a listagem concatena só fragmentos constantes (`AND ATIVO = TRUE`, bloco de busca), e o texto do usuário entra como parâmetro `:BUSCA` com `%`, `_` e `\` escapados. Preço em `Currency`, nunca Double; `CK_PRODUTOS_PRECO` atua como 2ª barreira (regra 12). Sem SQL em Form, Service ou Dominio. Sem achado.
+
+### 3. Log e dados sensíveis (regra 17)
+O repositório só loga operação e exceção FireDAC via `TLogger.Erro` (mascaramento verificado no Lote 2); nenhum valor de parâmetro é logado. Produto não contém dado pessoal. Forms e Service não logam. Sem achado.
+
+### 4. Mensagens ao usuário
+Mensagens fixas e amigáveis. A lista usa `E.Message` só para `EErpVendas` e texto genérico para o resto. A edição trata `EValidacao` e deixa o restante subir para `Application.OnException` (mensagem genérica, lado seguro). **Achado 1 (baixa):** o repositório levanta `EInfra` em vez de `EInfraMensagemSegura` (mesmo padrão de RF4-02); já coberto por RF5-01. **Observação (informativa):** `Excluir` com 0 linhas afetadas não avisa; é integridade, não segurança; também em RF5-01.
+
+### 5. Camadas ADR-001/010 e integração
+`ProdutoService` usa só Core/Dominio/`Data.DB`; `Negocio` não referencia `Dados`. Forms dependem só de `TProdutoService`. `App.Root` monta repositório e serviço e libera na ordem correta (serviço, repositório, conexão). `FormMain` embute a lista sem lógica de dados. Sem achado.
+
+### 6. Compliance (LGPD básica) e operacional
+Sem dado pessoal em Produto; nada novo para LGPD. Nenhum requisito operacional novo para o chapéu DevOps. Nada de relevância estratégica para o Gestor.
+
+### Veredito do lote (chapéu DevSecOps)
+**Aprovado com débito baixo** (achado 1, já coberto por RF5-01; nenhuma tarefa nova). Sem achado alto/crítico nem compliance em aberto. Libera para `/deploy` quando o usuário decidir.

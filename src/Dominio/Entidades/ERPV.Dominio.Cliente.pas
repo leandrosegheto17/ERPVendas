@@ -1,4 +1,4 @@
-unit ERPV.Dominio.Cliente;
+﻿unit ERPV.Dominio.Cliente;
 
 {
   Entidade de Domínio TCliente (T08, Lote 2). Campos batendo com

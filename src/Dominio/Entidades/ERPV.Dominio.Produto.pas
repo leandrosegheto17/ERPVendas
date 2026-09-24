@@ -1,4 +1,4 @@
-unit ERPV.Dominio.Produto;
+﻿unit ERPV.Dominio.Produto;
 
 {
   Entidade de Domínio TProduto (T08, Lote 2). Campos batendo com

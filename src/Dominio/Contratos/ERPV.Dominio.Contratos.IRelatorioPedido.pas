@@ -1,4 +1,4 @@
-unit ERPV.Dominio.Contratos.IRelatorioPedido;
+﻿unit ERPV.Dominio.Contratos.IRelatorioPedido;
 
 {
   Interface de fronteira do Domínio (ADR-001/010) — só assinaturas; a

@@ -1,4 +1,4 @@
-unit ERPV.Core.Log;
+﻿unit ERPV.Core.Log;
 
 {
   T10 (Lote 2) — Log em arquivo por dia, com níveis e mascaramento

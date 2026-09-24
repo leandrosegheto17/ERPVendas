@@ -200,6 +200,16 @@ o 2º da lista, nem usar o fallback nativo do ADR-011.
 o esqueleto em T07/T68): `dxSkinOffice2019Colorful` + `dxSkinsCore` (núcleo,
 sempre necessário).
 
+**Confirmação em T68 (Lote 3):** `ERPV.UI.Tema.AplicarTema`
+(`src/UI/ERPV.UI.Tema.pas`) usa exatamente esse mesmo skin — `Office2019Colorful`
+— e o mesmo par de units (`dxSkinsCore` + `dxSkinOffice2019Colorful`), sem
+reabrir a escolha feita acima em T01. A decisão não muda; T68 só implementa a
+aplicação do skin (com fallback para `TcxLookAndFeelController`/
+`lfUltraFlat` se o skin não carregar em runtime) e o helper de estilo de
+grade/botão/notificação em cima dele. Detalhe de verificação (compilação e
+conferência visual do skin realmente pintando a UI) ainda pendente de
+confirmação do usuário na IDE — ver roteiro na nota de T68 em `TASK.md`.
+
 ## 6. Decisão de arquitetura (fecha DEC-02 e alinhamento entre componentes)
 
 **Plataforma-alvo do projeto: Win32.** Coerente entre:
@@ -300,6 +310,34 @@ máquina vai estar checando um resultado falso.
 - Isso reforça o risco RP-1 já registrado no `TASK.md` Seção 5 (capacidade x
   prazo): o gargalo de "revisão/compilação manual pelo dev" é ainda mais
   literal do que o esperado — é a única forma de compilar, não só de revisar.
+
+## 13. Icones (T69, Lote 3)
+
+**Origem/licenca: autoria propria do projeto.** Sem acesso confiavel a um
+conjunto MIT/ISC (Lucide/Feather) na execucao, nenhum icone de terceiros foi
+copiado e nenhuma licenca foi presumida. Os 16 glifos (traco arredondado, grade
+24x24, cores da paleta semantica) sao gerados por `scripts/gerar-icones.js`
+(Node, sem dependencias; reproduzivel com `node scripts/gerar-icones.js`).
+Uso livre dentro do projeto; se o cliente preferir um conjunto MIT/ISC, basta
+substituir os PNGs mantendo os nomes (a licenca do substituto entra aqui).
+
+Arquivos: `assets/icones/{16,24,32}/<nome>.png`, 16 nomes = constantes
+`ERPVIcone*` de `src/UI/ERPV.UI.Tokens.pas`: novo, editar, excluir, salvar,
+fechar, confirmar, cancelar, buscar, atualizar, reenviar, alerta, erro, info,
+sucesso, pasta_vazia, sinc.
+
+**Como carregar (Delphi/DevExpress):** criar uma `cxImageList` central (Height/
+Width 16; uma segunda de 24/32 se preciso para DPI alto), e para cada nome
+`cxImageList.Add` de um `TPngImage` carregado via `LoadFromFile(pasta +
+'\16\' + ERPVIconeNovo + '.png')` (uses `Vcl.Imaging.pngimage`; a pasta
+`assets\icones` fica ao lado do .exe no pacote de instalacao, T61). Escolher o
+tamanho por DPI: <=96 -> 16, ate 144 -> 24, acima -> 32.
+- Botoes: `cxButton.OptionsImage.Images := ImgList; .ImageIndex := i`; o
+  `Caption` permanece (regra: nenhum botao so com icone).
+- Navegacao: `ImageIndex` do item do menu/nav ao lado do texto.
+- Status bar: `Pendencias` = icone `sinc`/`alerta` + texto; banners = `erro`/
+  `alerta`/`info`/`sucesso`; grade vazia = `pasta_vazia`.
+Integracao nas bases de form/FormMain fica com T14/T15.
 
 ## 11. Spike S1 (T02) — Indy `TIdSMTP` + OpenSSL — status: **Bloqueada**
 

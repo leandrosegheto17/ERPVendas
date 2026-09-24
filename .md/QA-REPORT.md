@@ -74,3 +74,233 @@ documentado para quando T34/T61 forem executadas).
 **Aprovado.** Todas as 7 tarefas do Lote 1 atendem ao critério de aceite
 específico, sem reprovação crítica ou simples. Segue para auditoria de
 segurança (chapéu DevSecOps).
+
+## Lote 2 — Núcleo Delphi (D1)
+
+Particularidade deste lote (DEC-14, sem testes automatizados): T07-T11 têm
+evidência de compilação/execução real na IDE registrada em rodadas
+anteriores (confirmada pelo usuário); T12 e T13 foram verificadas de fato
+nesta rodada, também na IDE, contra o banco real de T03/T04 — não estático.
+A verificação abaixo não repetiu a compilação (fora do alcance deste
+agente, mesma limitação documentada em T07 — Delphi Community não compila
+via CLI): revalidou por leitura completa do código-fonte de todas as 15
+units do lote contra cada critério de aceite específico, e conferiu que a
+nota de Status de cada tarefa não foi usada como substituto dessa leitura.
+
+| Tarefa | Critério de aceite (resumo) | Verificação feita | Veredito |
+|---|---|---|---|
+| T07 | Projeto vazio compila e abre janela; `git status` não lista INI/logs/binários; estrutura idêntica à de VISAO §2 | `ERPVendas.dpr/.dproj` (Win32, `TargetedPlatforms=1`, `DCC_UsePackages=false`) com as 8 pastas de camada em `DCC_UnitSearchPath`; `.gitignore` cobre `erpvendas.ini`, `config/*.ini` (com exceção do `.example`), `*.dcu/*.dcp/*.map`, `logs/`, `*.pdf`, `*.exe/*.res`, licenças (`*.lic/*.key`); `git status --porcelain` na worktree não lista nenhum artefato desses (working tree limpa). `ERPV.UI.FormMain.pas` é form fino real (só `Vcl.Forms/Controls/Dialogs` no `uses`, comentário explícito "nenhuma regra de negócio, SQL ou chamada HTTP aqui"). Compilação em si: evidência é a nota de Status (confirmação do usuário na IDE em rodada anterior), não repetida por este agente — sem motivo para desconfiar, consistente com o restante do código lido. | **Aprovado** |
+| T08 | Compila sem `uses` de Vcl/FireDAC/System.Net/Id* nas units de Domínio; status literais = 'Pendente'/'Quitada'/'Cancelada' | Grep dedicado nas 13 units de `src/Dominio` (Entidades + Contratos): nenhuma referencia `Vcl.*`, `FireDAC.*`, `System.Net.*` ou `Id*` — só `System.SysUtils`, `System.Generics.Collections`, `Data.DB` (4 Contratos, para `TDataSet`, exceção explícita do ADR-010) e units internas `ERPV.Dominio.*`. `ERPV.Dominio.Enums.pas`: `STATUS_VENDA_STR = ('Pendente', 'Quitada', 'Cancelada')` e `TIPO_FILA_STR = ('QUITACAO', 'CANCELAMENTO', 'EMAIL')` — literais exatos exigidos, com conversão nos dois sentidos (`StrToStatusVenda` lança `EArgumentException` para desconhecido; `TryStrToStatusVenda` para uso tolerante). Compilação: nota de Status registra confirmação real do usuário na IDE. | **Aprovado** |
+| T09 | Valores lidos do INI de teste; `.ini.example` só com dados fictícios; INI ausente ⇒ mensagem clara e saída controlada | `ERPV.Core.Config.pas`: `ValidarArquivo` lança `EConfiguracao` com mensagem clara orientando copiar o `.example` quando o arquivo não existe; `ValidarSecoesObrigatorias`/`LerObrigatoria` cobrem seção/chave ausente com a mesma orientação; segredos (`Banco.Senha`, `SMTP.Senha`, `Financeiro.ApiKey`) resolvidos com precedência de variável de ambiente sobre o INI. `config/erpvendas.ini.example`: todos os valores claramente fictícios (`senha_ficticia_dev`, `senha_ficticia_smtp`, Mailtrap sandbox, caminhos locais de exemplo) — nenhuma credencial real. Execução real confirmada pelo usuário na nota de Status (`BaseUrl` lido, `TimeoutMs` convertido corretamente). | **Aprovado** |
+| T10 | Log criado na pasta configurada; CPF `12345678909` mascarado; senha em texto não é gravada | `ERPV.Core.Log.pas`: `MascararSensiveis` mascara CNPJ formatado/só-dígitos, CPF formatado/só-dígitos (regex com `\b` de fronteira de palavra, ordem CNPJ→CPF correta já que os dígitos têm tamanhos diferentes), e-mail (mantém 1º caractere + domínio), e redige `senha=/password=/apikey=/api_key=/token=/secret=` (case-insensitive) para `******` como rede de segurança extra. Toda gravação passa obrigatoriamente por essa função — não existe método público que grave string crua. Falha de gravação é engolida (best effort, `except` vazio comentado), nunca lança. Arquivo `<pasta>\erpvendas-AAAAMMDD.log`, `ForceDirectories` garante a pasta. Execução real confirmada pelo usuário na nota de Status (CPF/e-mail mascarados, senha redigida, arquivo criado). | **Aprovado** |
+| T11 | Exceção não tratada mostra "Ocorreu um erro inesperado..." e stack/SQL só no log; `EValidacao` mostra o texto original | `ERPV.Core.Erros.pas`: `MensagemAmigavel` devolve `E.Message` literal para `EValidacao`/`ERegraNegocio`/`EInfraMensagemSegura`; mensagem genérica fixa para `EIntegracao`/`EInfra` (demais casos); texto literal exigido pelo critério ("Ocorreu um erro inesperado. Os detalhes foram gravados no log.") para qualquer outra exceção não mapeada. `TTratadorDeExcecoes.AoTratarExcecao` sempre grava o detalhe técnico completo via `FLogger.Erro` antes de mostrar a mensagem amigável via `MessageDlg(mtError)` — ordem correta (loga sempre, mostra só o amigável). Única classe do Core com `uses Vcl.Dialogs`, com justificativa documentada no cabeçalho (handler de `Application.OnException` não tem como evitar). Execução real dos 3 cenários (EValidacao/EInfra/Exception genérica) confirmada pelo usuário na nota de Status, incluindo o log com SQL/host presentes só no arquivo. | **Aprovado** |
+| T12 | App conecta ao banco de T03; banco offline/senha errada ⇒ mensagem amigável sem SQL/caminho e detalhe no log | `ERPV.Dados.Conexao.pas`: `TConexao.Create` recebe `TConfiguracao`/`TLogger` prontos (DI por construtor, nunca instancia sozinha) e chama `Conectar` internamente. `Conectar` captura qualquer exceção do FireDAC, grava classe+mensagem original (pode ter Database/host/usuário) só no log via `FLogger.Erro`, e relança `EInfra.Create(MSG_FALHA_CONEXAO)` com mensagem fixa sem SQL/caminho/credencial — mesma mensagem para offline e senha errada (não distingue os dois cenários ao usuário, conforme exigido). `IniciarTransacao/Confirmar` seguem o mesmo padrão (mensagem fixa `MSG_FALHA_TRANSACAO`); `Desfazer` nunca relança (best effort, evita mascarar a exceção original). Nenhum SQL concatenado na unit (só conexão/transação). **Esta tarefa foi verificada de fato pelo usuário na IDE** (não é revisão estática): conectou ao banco real de T03/T04, log confirmou `EIBNativeException` completo em cenário de senha errada sem vazar a senha, tela mostrou só a mensagem genérica. | **Aprovado** |
+| T13 | App inicia via root; nenhuma unit de Negócio/UI referencia classe concreta de Dados/Integração | `ERPV.App.Root.pas`: `TRootAplicacao.Create` monta a sequência exata Config→Log→Tratador (conectado a `Application.OnException`)→Conexão, todas por construtor. `TentarIniciarAplicacao` (única função de entrada usada pelo `.dpr`) captura `EInfra` (cobre `EConfiguracao`, que herda dela) na cadeia inteira, mostra `MensagemAmigavel` e devolve `False` sem criar form algum. `Destroy` libera na ordem inversa e zera `Application.OnException` antes de liberar o Tratador — evita handler apontando para objeto destruído. `ERPVendas.dpr` só cria `FormMain` se `TentarIniciarAplicacao` retornar `True`. Checagem de `uses`: nenhuma unit de Negócio/UI existe ainda além de `ERPV.UI.FormMain` (que não importa nada de `ERPV.Dados.*`/`ERPV.Core.Config` — só `Vcl.*`/`System.*` padrão) — critério cumprido para o que existe hoje; fica sujeito a nova checagem quando T14+ (Lote 3) forem criadas. **Esta tarefa foi verificada de fato pelo usuário na IDE**: cenário feliz (app abriu via root, sem erro), INI ausente (mensagem específica de `EConfiguracao`, sem crash), senha errada (mensagem genérica de `EInfra`, log com detalhe completo). | **Aprovado** |
+
+### Achado durante a verificação manual de T12/T13 (revisado nesta rodada)
+
+Registrado no `TASK.md` como achado real encontrado pelo usuário durante a
+verificação em IDE de T12/T13 (não estático): `MensagemAmigavel` (T11)
+tratava toda `EInfra` com o texto genérico fixo, o que descartava a
+mensagem específica e útil de `EConfiguracao` (T09) — o usuário nunca via a
+orientação "copie `config\erpvendas.ini.example`...". Corrigido no commit
+`966a508`, antes do merge deste lote na `main`.
+
+Revisão do Validador sobre a correção (`ERPV.Core.Erros.pas` +
+`ERPV.Core.Config.pas`, lidos linha a linha acima): a solução criou
+`EInfraMensagemSegura` como subclasse dedicada de `EInfra`, para o caso
+específico de uma mensagem de infraestrutura que **o próprio construtor já
+escreveu pensando no usuário final** e que é comprovadamente livre de dado
+sensível; `MensagemAmigavel` checa essa subclasse antes da checagem mais
+genérica de `EInfra` (`is EInfraMensagemSegura` antes de `is EInfra`, ordem
+correta já que é mais específica). `EConfiguracao` passou a herdar dela em
+vez de `EInfra` puro. Conferido de fato o conteúdo das 3 mensagens que
+`EConfiguracao` pode lançar (`ValidarArquivo`/`ValidarSecoesObrigatorias`/
+`LerObrigatoria`): todas contêm apenas o caminho do próprio `erpvendas.ini`
+(informado pelo próprio usuário/ambiente, não um segredo) e uma instrução
+de setup — nenhuma contém SQL, senha, ApiKey, host de banco/API ou stack.
+
+**Concordância do Validador com o julgamento do Executor**: o caminho do
+`erpvendas.ini` em si não é dado sensível sob ADR-008/GUARDRAILS — a regra
+existe para não vazar SQL/host de banco/credencial/stack, não para esconder
+onde fica o próprio arquivo de configuração que o usuário precisa editar
+para corrigir o problema. A correção foi tratada corretamente como ajuste
+direto de baixo risco durante T12/T13, não como reprovação: não altera o
+comportamento de segurança de `EInfra`/`EIntegracao` em geral (a mensagem
+genérica continua valendo para falha de banco/HTTP, que são os casos que
+podem carregar SQL/host/credencial), é uma subclasse nova e explícita
+(opt-in, não abre uma brecha geral), e a mudança foi limitada a exatamente
+o caso já identificado como seguro. Não há motivo para reabrir como
+reprovação — o mecanismo (`EInfraMensagemSegura`) inclusive melhora a
+extensibilidade futura para outros casos similares (ex.: outras mensagens
+de infraestrutura escritas para o usuário final), sem enfraquecer a regra
+geral. Sem achado a registrar em `Refatoração Lote-2` sobre este ponto.
+
+### `cross-platform-integration-testing`: N/A
+
+Não se aplica a este lote (nem ao projeto): ERP Vendas é uma aplicação
+desktop Windows única (Delphi VCL, Win32, sem app mobile/web paralelo
+consumindo a mesma API neste projeto). Não há múltiplas plataformas
+cliente para testar integração cruzada de UI — a única integração externa
+real (Financeiro via REST) é tratada nos Lotes 6/8/9 (T33-T48), fora do
+escopo do Lote 2 (que é infraestrutura interna: Config/Log/Erros/Conexão/
+composition root, sem chamada HTTP ainda).
+
+### Testes de integração cruzada (dependência entre chapéus deste lote)
+
+- **T07 ↔ T08 ↔ T09 ↔ T10**: `ERPVendas.dproj` tem `src\Dominio\Entidades`
+  e as demais 7 pastas de camada em `DCC_UnitSearchPath` desde T07 — T08/T09/
+  T10 não precisaram tocar o `.dproj` para serem encontradas pelo compilador,
+  consistente com a nota de cada tarefa.
+- **T09 ↔ T11 ↔ T12**: `TConfiguracaoBanco` (T09, `Caminho/Usuario/Senha`)
+  usada literalmente por `ERPV.Dados.Conexao.ConfigurarConnection` (T12) via
+  `FConfiguracao.Banco.Caminho/Usuario/Senha` — assinatura bate campo a
+  campo, sem campo inventado.
+- **T10 ↔ T11 ↔ T12 ↔ T13**: `TLogger` (T10) injetado em `TTratadorDeExcecoes`
+  (T11) e em `TConexao` (T12), ambos por construtor a partir de `TRootAplicacao`
+  (T13) — nenhuma das duas classes instancia `TLogger` sozinha; conferido
+  nos 3 arquivos.
+- **T11 ↔ T09 (EConfiguracao)**: ver seção de achado acima — consistência
+  confirmada após a correção.
+- **T12 ↔ T13**: `TConexao.Create(Config, Logger)` chamado por
+  `TRootAplicacao.Create` com a mesma assinatura documentada no cabeçalho de
+  T12 (usado como "exemplo de referência, não implementado ali") — bate
+  exatamente com a implementação real em T13.
+
+### Requisitos não funcionais relevantes ao lote
+
+- **Segurança de mensagem ao usuário (ADR-008)**: confirmado por leitura
+  completa de `MensagemAmigavel`/`TConexao.Conectar`/`ConfigurarConnection`
+  que nenhuma mensagem exibida via `MessageDlg` neste lote contém SQL,
+  caminho de arquivo de dados, stack ou credencial — a única exceção
+  deliberada (`EInfraMensagemSegura`/`EConfiguracao`) foi revisada acima e
+  está correta.
+- **Segredo fora do Git (ADR-007/008, GUARDRAILS)**: `erpvendas.ini` real
+  ignorado pelo `.gitignore`; `.ini.example` só com dados fictícios;
+  variável de ambiente com prioridade sobre o INI para os 3 segredos
+  (`ERPV_BANCO_SENHA`, `ERPV_SMTP_PASSWORD`, `ERPV_FINANCEIRO_APIKEY`).
+- **Mascaramento de log (SDD §7)**: confirmado na leitura de
+  `MascararSensiveis` (T10) e na verificação manual real do usuário.
+- **DI manual por construtor / composition root único (ADR-001)**: `TConexao`
+  e `TTratadorDeExcecoes` nunca instanciam suas próprias dependências;
+  `TRootAplicacao` (T13) é a única unit hoje que instancia classes
+  concretas de Core/Dados — consistente com a regra "só o composition root
+  instancia classes concretas".
+
+### Fechamento estrutural do lote
+
+Todas as 7 tarefas (T07-T13) estão `Concluída` no `TASK.md`. Nenhuma
+dependência da Seção 4 relativa a este lote ficou órfã/inconsistente
+(T08→T07; T09→T07; T10→T07,T09; T11→T10; T12→T03,T09,T11; T13→T08,T09,T10,
+T11,T12 — todas as tarefas referenciadas já estão `Concluída`). Nenhuma
+tarefa `Bloqueada` sem resolução no lote. Não há achado simples/débito
+baixo-médio a registrar neste lote (o único achado real, tratado acima, foi
+corrigido de forma completa e consistente pelo próprio Executor antes desta
+validação, sem deixar débito residual) — **nenhuma tarefa criada em
+`Refatoração Lote-2`**. Nenhuma inconsistência que exija redesenho de
+dependência/decomposição — não há motivo para escalar ao `coordenador`.
+
+### Achados
+
+Nenhuma reprovação (crítica ou simples) neste lote — todas as 7 tarefas
+passaram no critério de aceite verificado contra o artefato real (leitura
+completa de código para T07-T11; verificação manual real na IDE,
+confirmada e revisada pelo Validador, para T12/T13).
+
+### Veredito do lote (chapéu QA)
+
+**Aprovado.** Todas as 7 tarefas do Lote 2 atendem ao critério de aceite
+específico, sem reprovação crítica ou simples, e sem achado pendente em
+`Refatoração Lote-2`. Segue para auditoria de segurança (chapéu DevSecOps).
+
+## Lote 3 — Casca de UI, tokens e tema (D2)
+
+Base: critério de aceite de T14, T15, T68 e T69 no `TASK.md`, código real lido (`ERPV.UI.Tokens`, `ERPV.UI.Tema`, `ERPV.UI.Icones`, `ERPV.UI.FormMain`, `ERPV.UI.FormBaseLista`, `ERPV.UI.FormBaseEdicao`, `ERPVendas.dpr`, `assets/icones`), sem usar a nota do Executor como base. Limitação declarada: sem CLI de compilação (Delphi Community) e sem testes automatizados; a evidência de execução é a verificação real do usuário na IDE (2026-09-23), cruzada com a leitura do código. O Validador não recompilou. Nota: este lote foi validado depois de os Lotes 4 e 5 já consumirem suas bases (listas de Clientes/Produtos embutidas no `FormMain`, herdando de `TFormBaseLista`/`TFormBaseEdicao`), o que é evidência adicional de que as bases funcionam.
+
+| Tarefa | Critério (resumo) | Verificação | Veredito |
+|---|---|---|---|
+| T68 | Skin aplicado; fallback sem skin; form de teste com grade zebra, 3 papéis de botão e `Notificar`; contraste AA; nenhuma cor fora dos tokens | Leitura: `AplicarTema`/`ConfigurarGrade`/`EstilizarBotao`/`Notificar` só usam `clERPV*`/`ERPVFontePrincipal`/`ERPVTam*`; estilos próprios (sem mutar valor lido, correção do AV). Execução real: skin Office2019Colorful, 3 papéis (T15), Notificar Info e Pergunta, zebra (T19/T23) | **Aprovado com ressalva** (itens já movidos para T60: fallback sem skin, Notificar Aviso/Erro, contraste AA medido; `clWhite` fora de token, RF3-01) |
+| T15 | Filho herda base e abre; Esc fecha, Enter aciona OK; 3 papéis via `EstilizarBotao` | Leitura: só `Notificar` (sem `MessageDlg`), cores/fontes por token. Execução real com form filho temporário (removido): Esc, Enter, Tab, papéis, pergunta de descarte; e uso real por T19/T20/T23/T24 (Lotes 4/5) | **Aprovado** |
+| T14 | Shell com faixa, navegação, 3 áreas da status bar; fallback de menu; URL do INI; Alt+letra; só tokens | Leitura: `FormMain` só depende de Tokens/Tema/Icones e Services (sem SQL/FireDAC/HTTP); item ativo em negrito (não só cor); destinos sem tela usam `Notificar(utnInfo)`. Execução real: faixa, nav lateral, status bar ("Financeiro: http://localhost:5000" do INI, "Pronto", "Pendências: 0"), Alt+letra | **Aprovado com ressalva** (fallback `ERPV_NAV_LATERAL` e DPI 125%/1366x768 não testados, já em T60; `clWhite`, RF3-01) |
+| T69 | Ícones carregam em botões/navegação/status bar; licença registrada; nenhum botão só com ícone | Leitura: `AplicarIcone` nunca altera `Caption`; 48 PNGs (16 x 3 tamanhos) presentes em `assets/icones`; nomes = constantes `ERPVIcone*`; degrada sem exceção (try/except em todas as rotinas públicas). Execução real: ícones com texto na navegação e botões, transparência correta | **Aprovado** (ícones em menu de barra, erro/alerta/sucesso e pasta_vazia não plugados: declarado no TASK, observação) |
+
+### Testes de integração (dentro do lote)
+
+`FormMain` -> Tema/Icones -> bases -> listas de Clientes e Produtos exercitado pelo usuário na IDE (Lotes 4 e 5). `.dpr` chama `AplicarTema` antes de criar qualquer form e `FormMain.Configurar(BaseUrl, ...)`. Dependências T13 (INI/BaseUrl) e T07 satisfeitas.
+
+### Observações (não são reprovação)
+
+- Já declarados como pendentes/movidos: fallback de menu (`ERPV_NAV_LATERAL`) e DPI 125%/1366x768 não testados (T14); fallback sem skin, `Notificar` Aviso/Erro e contraste AA medido movidos para T60; ícones no menu de barra, erro/alerta/sucesso e `pasta_vazia` não plugados (T69); contorno pesado dos `TcxButton` na navegação = dívida visual.
+- `clWhite` aparece também em `ERPV.UI.Tema.EstilizarBotao` (texto do botão Primário), não só no `FormMain`; `ERPV.UI.FormBaseLista.pas` está sem BOM (hoje só ASCII); `FormTesteTema` segue no `.dpr`. Tudo isso virou tarefa (abaixo).
+
+### Fechamento estrutural
+
+Todas as 4 tarefas `Concluída`. Dependências da Seção 4 (T14->T13,T68; T15->T07,T68; T68->T01,T07; T69->T68) resolvidas e não órfãs; os Lotes 4 e 5 já usaram as bases sem inconsistência. Nenhuma tarefa `Bloqueada`. Tarefas criadas em `Refatoração Lote-3` (fim da Seção 3 do `TASK.md`): RF3-01, RF3-02, RF3-03. Nenhuma escalação ao `coordenador`.
+
+### Veredito do lote (chapéu QA)
+
+**Aprovado com ressalvas.** Nenhuma reprovação crítica; ajustes simples viraram tarefas em `Refatoração Lote-3`. Segue para auditoria de segurança.
+
+## Lote 4 — Cadastro de Clientes (D2)
+
+Base: critério de aceite de T16-T20 no `TASK.md`, código real lido (`ERPV.Core.Validadores`, `ERPV.Dados.ClienteRepository`, `ERPV.Negocio.ClienteService`, `ERPV.UI.FormListaClientes`, `ERPV.UI.FormEdicaoCliente`), sem usar a nota do Executor como base. Limitação declarada: sem CLI de compilação (Delphi Community) e sem testes automatizados; a evidência de execução é a verificação real do usuário na IDE (2026-09-23), cruzada com a leitura do código. O Validador não recompilou.
+
+| Tarefa | Critério (resumo) | Verificação | Veredito |
+|---|---|---|---|
+| T16 | CPF/CNPJ/e-mail válidos e inválidos da tabela | 5 casos executados pelo usuário (True/False/True/True/False); dígitos verificadores conferidos contra implementação independente (25.000 entradas, 0 divergências) | **Aprovado** |
+| T17 | Operações refletidas no banco; lista filtra inativos; SQL parametrizado | Leitura: todo SQL usa `ParamByName`, sem concatenação de valor (só monta cláusulas fixas); busca com LIKE escapado; execução real de incluir/obter/alterar/existe/excluir; SQLs também validados em `isql` real | **Aprovado** (ver RF4-03) |
+| T18 | Obrigatórios, validação T16, documento único, só dígitos | Leitura de `Validar`: nome, CPF/CNPJ (por tipo), e-mail, duplicidade ignorando o próprio Id; `uses` sem Vcl/FireDAC/Dados; execução real confirmou cada caso com o campo certo | **Aprovado** (texto sem acento, RF4-01) |
+| T19 | Cabeçalho, chips de situação, busca, vazio, erro + Tentar novamente, sem SQL no form | Leitura: form só chama `TClienteService`, sem SQL/FireDAC; execução real aprovada (grade com seed, busca, inativos, Novo/Editar/Excluir) | **Aprovado** |
+| T20 | Coluna única, erro no campo, máscara por tipo, Enter/Esc, botões nos papéis | Leitura: `EValidacao.Campo` vira erro no campo com foco no 1º inválido; execução real aprovada | **Aprovado com ressalva** (RF4-01; borda grossa, abaixo) |
+
+### Testes de integração (dentro do lote)
+
+Form -> Service -> Repository -> Firebird exercitado pelo usuário na IDE: incluir, editar, duplicado, inativar (lista filtra), excluir. Contrato `IClienteRepository` consistente entre Service e Repository. Dependência do Lote 3 (T14/T15/T68) satisfeita: lista embutida no `FormMain`, herda das bases.
+
+### Observações (não são reprovação)
+
+- Borda grossa dos campos da edição (T20): revisar na T60.
+- T68: roteiro visual completo e contraste AA/"nenhuma cor solta" seguem como dívida conhecida (aval do usuário).
+- Não verificados em execução: fallback de menu (T14), DPI 125% e 1366x768 (T60), busca com acento/caixa (RF4-03).
+
+### Fechamento estrutural
+
+Todas as 5 tarefas `Concluída`. Dependências da Seção 4 (T16->T07; T17->T08,T12,T03; T18->T16,T17; T19->T14,T15,T18; T20->T14,T15,T18) resolvidas e não órfãs. Nenhuma tarefa `Bloqueada`. Unit e chamada temporárias do teste da T18 (`ERPV.Temp.TesteT18`, `RodarTesteT18`) confirmadas ausentes do repositório. Nota: o cabeçalho do Lote 3 ainda não está marcado `Validado`; não bloqueia o Lote 4. Tarefas criadas em `Refatoração Lote-4` (fim da Seção 3 do `TASK.md`): RF4-01, RF4-02, RF4-03. Nenhuma escalação ao `coordenador`.
+
+### Veredito do lote (chapéu QA)
+
+**Aprovado com ressalvas.** Nenhuma reprovação crítica; 3 ajustes simples viraram tarefas em `Refatoração Lote-4`. Segue para auditoria de segurança.
+
+## Lote 5 — Cadastro de Produtos (D2)
+
+Base: critério de aceite de T21-T24 no `TASK.md`, código real lido (`ERPV.Dados.ProdutoRepository`, `ERPV.Negocio.ProdutoService`, `ERPV.UI.FormListaProdutos`, `ERPV.UI.FormEdicaoProduto`, integração em `ERPV.UI.FormMain`/`ERPV.App.Root`), sem usar a nota do Executor como base. Limitação declarada: sem CLI de compilação e sem testes automatizados; evidência de execução é a verificação real do usuário na IDE (2026-09-23), cruzada com a leitura do código. O Validador não recompilou. Aviso: os textos "Não compilado" nas células de T21/T23/T24 do `TASK.md` estão desatualizados (as mesmas células registram verificação real posterior).
+
+| Tarefa | Critério (resumo) | Verificação | Veredito |
+|---|---|---|---|
+| T21 | CRUD no banco; lista com filtro de ativos | Leitura: SQL 100% parametrizado (`ParamByName`), LIKE escapado, preço `Currency`, transação com `Iniciou`/rollback, FK na exclusão mapeada; execução real: incluir (RETURNING), obter, alterar, listar sem/com inativos, excluir | **Aprovado** (RF5-01, RF5-02) |
+| T22 | Preço -1 / descrição vazia recusados; válido persiste | Leitura de `Validar`: Trim, descrição, unidade, preço < 0 com `EValidacao.CreateCampo`; `uses` sem Vcl/FireDAC/Dados; execução real confirmou todos os casos (preço 0 válido) | **Aprovado** |
+| T23 | Lista igual à T19: cabeçalho, chips, vazio, erro + Tentar novamente, "Inativo" visível | Leitura: form só chama `TProdutoService` (sem SQL/FireDAC), Tentar novamente, Excluir com confirmação, "Inativo" texto+cor; execução real aprovada (seed, preço pt-BR, busca, inativos, shell) | **Aprovado** |
+| T24 | Preço pt-BR, gravado NUMERIC(15,2); erros do T22 no campo; layout/papéis de botão | Leitura: `cxCurrencyEdit` lido como Currency (sem Double), `EValidacao.Campo` mapeado para o campo; execução real aprovada (19,90, erros por campo, Salvar/Cancelar) | **Aprovado** |
+
+### Testes de integração (dentro do lote)
+
+Form -> Service -> Repository -> Firebird exercitado pelo usuário na IDE. Contrato `IProdutoRepository` consistente entre Service e Repository; `FormMain.Configurar(BaseUrl, ClienteService, ProdutoService)` e `AbrirDestino(dsProdutos)` integram a lista ao shell; `ERPV.App.Root` monta repositório e serviço. Teste temporário (`ERPV.Temp.TesteT22`, `RodarTesteT22`) confirmado ausente do repositório. Não aplicável: teste cross-platform (projeto Delphi VCL desktop) e API-CONTRACT (fora do escopo do lote).
+
+### Requisitos não funcionais
+
+Precisão monetária (Currency/NUMERIC(15,2)) ok; SQL parametrizado (sem injeção); erros logados e traduzidos para mensagem segura. Não verificados: DPI 125% e 1366x768 (T60), performance com volume.
+
+### Achados (bug-documentation) — todos Simples, nenhum Crítico
+
+- **RF5-01 (Simples):** mensagens fixas do repositório usam `EInfra` (handler global as trocaria pela genérica); `Excluir` sem verificar linhas afetadas (Id inexistente passa silencioso); busca com acento/caixa (`UPPER`) não verificada. Mesmo padrão de RF4-02/RF4-03. Sem impacto no critério de aceite.
+- **RF5-02 (Simples):** DELETE de produto com item de venda (FK) não provado; só exercitável no Lote 6, e a regra "excluir = inativar" é da T30.
+
+Padrão recorrente: RF5-01 repete RF4-02/RF4-03 (clones de Cliente). Sugere apenas corrigir o modelo antes de clonar de novo; não é problema de decomposição, sem escalação ao `coordenador`.
+
+### Fechamento estrutural
+
+T21-T24 `Concluída`. Dependências da Seção 4 (T21->T08,T12,T03; T22->T21,T11; T23->T14,T15,T22; T24->T14,T15,T22) resolvidas e não órfãs; T21 bloqueia T16/T17 e T25 (Lote 4 já validado, Lote 6 pendente), sem inconsistência. Nenhuma tarefa `Bloqueada`. Tarefas criadas em `Refatoração Lote-5` (Seção 3 do `TASK.md`): RF5-01, RF5-02.
+
+### Veredito do lote (chapéu QA)
+
+**Aprovado com ressalvas.** Nenhuma reprovação crítica; T21-T24 aprovadas; 2 ajustes simples em `Refatoração Lote-5`. Segue para auditoria de segurança (chapéu DevSecOps).

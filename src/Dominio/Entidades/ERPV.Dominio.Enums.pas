@@ -1,4 +1,4 @@
-unit ERPV.Dominio.Enums;
+﻿unit ERPV.Dominio.Enums;
 
 {
   Enums do Domínio (T08, Lote 2). Unit pura, sem Vcl/FireDAC/System.Net/Id*
