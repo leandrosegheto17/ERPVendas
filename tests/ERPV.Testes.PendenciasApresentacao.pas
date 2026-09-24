@@ -16,6 +16,8 @@ type
   TTestesPendenciasApresentacao = class
   public
     [Test] procedure Concluido_MostraItemConcluido;
+    [Test] procedure Concluido_ComMensagemPendente_EhAviso;
+    [Test] procedure Concluido_ComMensagemEnviado_EhInfo;
     [Test] procedure Falha_MostraAindaNaoFoiPossivelComErro;
     [Test] procedure Falha_SemMensagem_TemTextoPadrao;
     [Test] procedure Subtitulo_Singular_Plural_E_Todos;
@@ -42,6 +44,35 @@ begin
   M := MensagemDeReenvio(R);
   Assert.AreEqual('Item concluído.', M.Texto);
   Assert.IsTrue(M.Sucesso);
+end;
+
+procedure TTestesPendenciasApresentacao.Concluido_ComMensagemPendente_EhAviso;
+var
+  R: TResultadoReenvio;
+  M: TMensagemReenvio;
+begin
+  R.Desfecho := rrConcluido;
+  R.Mensagem := 'Quitação concluída; e-mail pendente na fila';
+  M := MensagemDeReenvio(R);
+  Assert.AreEqual('Quitação concluída; e-mail pendente na fila', M.Texto);
+  Assert.IsTrue(M.Sucesso);
+  Assert.IsTrue(M.Aviso);
+  R.Mensagem := 'Quitação concluída; não foi possível enviar o e-mail nem registrá-lo na fila';
+  M := MensagemDeReenvio(R);
+  Assert.IsTrue(M.Aviso);
+end;
+
+procedure TTestesPendenciasApresentacao.Concluido_ComMensagemEnviado_EhInfo;
+var
+  R: TResultadoReenvio;
+  M: TMensagemReenvio;
+begin
+  R.Desfecho := rrConcluido;
+  R.Mensagem := 'Quitação concluída; e-mail enviado';
+  M := MensagemDeReenvio(R);
+  Assert.AreEqual('Quitação concluída; e-mail enviado', M.Texto);
+  Assert.IsTrue(M.Sucesso);
+  Assert.IsFalse(M.Aviso);
 end;
 
 procedure TTestesPendenciasApresentacao.Falha_MostraAindaNaoFoiPossivelComErro;

@@ -18,7 +18,8 @@ uses
   ERPV.Dominio.Contratos.IClienteRepository,
   ERPV.Dominio.Contratos.IRelatorioPedido,
   ERPV.Dominio.Contratos.IEmailSender, ERPV.Dominio.Cliente,
-  ERPV.Negocio.FilaService;
+  ERPV.Negocio.QuitacaoService, ERPV.Negocio.FilaService,
+  ERPV.Negocio.VendaService, ERPV.Negocio.PendenciaFila;
 
 type
   TVendaFake = class(TInterfacedObject, IVendaRepository)
@@ -29,6 +30,7 @@ type
     UltimoMotivo: string;
     Atualizacoes: Integer;
     FalharAtualizar: Boolean;
+    ObterEInfra: Boolean;
     constructor Create;
     function Incluir(const AVenda: TVenda): Integer;
     procedure Alterar(const AVenda: TVenda);
@@ -55,9 +57,18 @@ type
   TFilaFake = class(TInterfacedObject, IFilaRepository)
   public
     Concluidos, Falhas: Integer;
+    Enfileirados: Integer;
+    UltimoTipoEnfileirado: TTipoFila;
     UltimoErro: string;
     FalharRegistrar: Boolean;
     FalharConcluir: Boolean;
+    PendenciaBloqueia, PendenciaEInfra: Boolean;
+    ItemExiste, ItemPendente, ItemTipoForcado: Boolean;
+    ItemVendaId: Integer;
+    ItemTipo: TTipoFila;
+    constructor Create;
+    function ObterItem(AId: Integer; out AVendaId: Integer; out ATipo: TTipoFila;
+      out APendente: Boolean): Boolean;
     procedure Enfileirar(AVendaId: Integer; ATipo: TTipoFila; const AErro: string = '');
     function Listar(ASomentePendentes: Boolean): TDataSet;
     procedure MarcarConcluido(AId: Integer);
@@ -111,11 +122,13 @@ type
     FRelI: IRelatorioPedido;
     FEmailI: IEmailSender;
     FSvc: TFilaService;
+    FQuit: TQuitacaoService;
   public
     [Setup] procedure Setup;
     [TearDown] procedure TearDown;
     [Test] procedure Quitacao_Erro500DepoisOk_ConcluiEQuita;
     [Test] procedure Quitacao_Erro500_MantemPendenteEIncrementa;
+    [Test] procedure Quitacao_Recusa4xxComCpfEEmail_MensagemEErroMascarados;
     [Test] procedure Quitacao_GetJaQuitada_ConcluiLocalSemPost;
     [Test] procedure Cancelamento_ReenviaSemMotivo_MotivoNulo;
     [Test] procedure Cancelamento_Erro500_RegistraFalha;
@@ -131,6 +144,26 @@ type
     [Test] procedure VendaInexistente_RegistraFalha;
     [Test] procedure GravacaoLocalEInfra_ViraFalhaSemExcecao;
     [Test] procedure RegistrarFalhaEInfra_ViraFalhaSemExcecao;
+    [Test] procedure Item_Concluido_RecusaSemEfeitos;
+    [Test] procedure Item_Inexistente_RecusaSemEfeitos;
+    [Test] procedure Item_VinculoVendaErrada_RecusaSemEfeitos;
+    [Test] procedure Item_TipoDivergente_RecusaSemEfeitos;
+    [Test] procedure Item_Pendente_SegueFluxoNormal;
+    [Test] procedure PosQuitacao_GetQuitada_EnviaEmailUmaVez;
+    [Test] procedure PosQuitacao_PostOk_EnviaEmailUmaVez;
+    [Test] procedure PosQuitacao_EmailFalha_EnfileiraEmail;
+    [Test] procedure PosQuitacao_JaQuitadaLocal_NaoExecuta;
+    [Test] procedure PosQuitacao_Cancelamento_NaoExecuta;
+    [Test] procedure PosQuitacao_Excecao_NaoAlteraConcluido;
+    [Test] procedure Bloqueio_Confirmar_ComPendencia_NaoChamaFinanceiro;
+    [Test] procedure Bloqueio_Confirmar_FilaEInfra_ResultadoTipado;
+    [Test] procedure Bloqueio_Cancelar_ComPendencia_NaoChamaFinanceiro;
+    [Test] procedure Bloqueio_Cancelar_FilaEInfra_ResultadoTipado;
+    [Test] procedure Bloqueio_VendaSalvar_ComPendencia_ERegraNegocio;
+    [Test] procedure Bloqueio_VendaSalvar_FilaEInfra_ERegraNegocio;
+    [Test] procedure Bloqueio_VendaExcluir_ComPendencia_ERegraNegocio;
+    [Test] procedure Bloqueio_VendaExcluir_FilaEInfra_ERegraNegocio;
+    [Test] procedure Reenviar_ObterEInfra_ViraFalha;
   end;
 
 implementation
@@ -146,6 +179,8 @@ end;
 
 function TVendaFake.Obter(AId: Integer): TVenda;
 begin
+  if ObterEInfra then
+    raise EInfra.Create('falha simulada');
   if not Existe then
     Exit(nil);
   Result := TVenda.Create;
@@ -196,10 +231,47 @@ end;
 
 { TFilaFake }
 
-procedure TFilaFake.Enfileirar(AVendaId: Integer; ATipo: TTipoFila; const AErro: string); begin end;
+constructor TFilaFake.Create;
+begin
+  inherited Create;
+  ItemExiste := True;
+  ItemPendente := True;
+  ItemVendaId := 10;
+  ItemTipo := tfQuitacao;
+end;
+
+function TFilaFake.ObterItem(AId: Integer; out AVendaId: Integer;
+  out ATipo: TTipoFila; out APendente: Boolean): Boolean;
+begin
+  Result := ItemExiste;
+  AVendaId := ItemVendaId;
+  ATipo := ItemTipo;
+  APendente := ItemPendente;
+  if ItemTipoForcado then
+    Exit;
+  // Mapeamento padrao dos testes: Id 1 = QUITACAO, 2 = CANCELAMENTO, 3 = EMAIL.
+  case AId of
+    2: ATipo := tfCancelamento;
+    3: ATipo := tfEmail;
+  else
+    ATipo := tfQuitacao;
+  end;
+end;
+
+procedure TFilaFake.Enfileirar(AVendaId: Integer; ATipo: TTipoFila; const AErro: string);
+begin
+  Inc(Enfileirados);
+  UltimoTipoEnfileirado := ATipo;
+end;
+
 function TFilaFake.Listar(ASomentePendentes: Boolean): TDataSet; begin Result := nil; end;
 function TFilaFake.ContarPendencias: Integer; begin Result := 0; end;
-function TFilaFake.ExistePendenciaPorVenda(AVendaId: Integer; ATipo: TTipoFila): Boolean; begin Result := False; end;
+function TFilaFake.ExistePendenciaPorVenda(AVendaId: Integer; ATipo: TTipoFila): Boolean;
+begin
+  if PendenciaEInfra then
+    raise EInfra.Create('falha simulada');
+  Result := PendenciaBloqueia and (ATipo = tfQuitacao);
+end;
 
 procedure TFilaFake.MarcarConcluido(AId: Integer);
 begin
@@ -287,12 +359,14 @@ begin
   FEmailI := FEmail;
   // GET padrao: Financeiro ainda Pendente => segue para o POST.
   FGw.RespStatus := TResultadoFinanceiro.Sucesso(svPendente);
-  FSvc := TFilaService.Create(FVendaI, FGwI, FFilaI, FCliI, FRelI, FEmailI);
+  FQuit := TQuitacaoService.Create(FVendaI, FGwI, FFilaI, FCliI, FRelI, FEmailI);
+  FSvc := TFilaService.Create(FVendaI, FGwI, FFilaI, FCliI, FRelI, FEmailI, FQuit);
 end;
 
 procedure TTestesFilaService.TearDown;
 begin
   FSvc.Free;
+  FQuit.Free;
 end;
 
 procedure TTestesFilaService.Quitacao_Erro500DepoisOk_ConcluiEQuita;
@@ -321,6 +395,23 @@ begin
   Assert.AreEqual('erro 500', FFila.UltimoErro);
   Assert.AreEqual(0, FFila.Concluidos);
   Assert.AreEqual(Ord(svPendente), Ord(FVenda.Status));
+end;
+
+procedure TTestesFilaService.Quitacao_Recusa4xxComCpfEEmail_MensagemEErroMascarados;
+var
+  R: TResultadoReenvio;
+begin
+  // RF13-04: dado pessoal na resposta do Financeiro nao chega em claro a UI.
+  FGw.RespPost := TResultadoFinanceiro.Indisponivel(422,
+    'Recusado: cliente 123.456.789-09 joao@example.com');
+  R := FSvc.Reenviar(1, 10, tfQuitacao);
+  Assert.AreEqual(Ord(rrFalha), Ord(R.Desfecho));
+  Assert.IsFalse(R.Mensagem.Contains('123.456.789-09'));
+  Assert.IsFalse(R.Mensagem.Contains('joao@example.com'));
+  Assert.IsTrue(R.Mensagem.Contains('***.456.789-**'));
+  Assert.IsTrue(R.Mensagem.Contains('j***@example.com'));
+  Assert.IsFalse(FFila.UltimoErro.Contains('123.456.789-09'));
+  Assert.IsFalse(FFila.UltimoErro.Contains('joao@example.com'));
 end;
 
 procedure TTestesFilaService.Quitacao_GetJaQuitada_ConcluiLocalSemPost;
@@ -476,6 +567,7 @@ var
   R: TResultadoReenvio;
 begin
   FVenda.Existe := False;
+  FFila.ItemVendaId := 99;
   R := FSvc.Reenviar(1, 99, tfQuitacao);
   Assert.AreEqual(Ord(rrFalha), Ord(R.Desfecho));
   Assert.AreEqual(1, FFila.Falhas);
@@ -503,6 +595,298 @@ begin
   R := FSvc.Reenviar(1, 10, tfQuitacao);
   Assert.AreEqual(Ord(rrFalha), Ord(R.Desfecho));
   Assert.IsTrue(R.Mensagem <> '');
+end;
+
+procedure TTestesFilaService.Item_Concluido_RecusaSemEfeitos;
+var
+  R: TResultadoReenvio;
+begin
+  FFila.ItemPendente := False;
+  R := FSvc.Reenviar(3, 10, tfEmail);
+  Assert.AreEqual(Ord(rrFalha), Ord(R.Desfecho));
+  Assert.AreEqual(0, FEmail.Envios);
+  Assert.AreEqual(0, FGw.Gets + FGw.Posts);
+  Assert.AreEqual(0, FFila.Concluidos);
+  Assert.AreEqual(0, FFila.Falhas);
+  Assert.AreEqual(0, FVenda.Atualizacoes);
+end;
+
+procedure TTestesFilaService.Item_Inexistente_RecusaSemEfeitos;
+var
+  R: TResultadoReenvio;
+begin
+  FFila.ItemExiste := False;
+  R := FSvc.Reenviar(1, 10, tfQuitacao);
+  Assert.AreEqual(Ord(rrFalha), Ord(R.Desfecho));
+  Assert.AreEqual(0, FGw.Gets + FGw.Posts);
+  Assert.AreEqual(0, FFila.Concluidos + FFila.Falhas);
+end;
+
+procedure TTestesFilaService.Item_VinculoVendaErrada_RecusaSemEfeitos;
+var
+  R: TResultadoReenvio;
+begin
+  FFila.ItemVendaId := 99;
+  R := FSvc.Reenviar(1, 10, tfQuitacao);
+  Assert.AreEqual(Ord(rrFalha), Ord(R.Desfecho));
+  Assert.AreEqual(0, FGw.Gets + FGw.Posts);
+  Assert.AreEqual(0, FFila.Concluidos + FFila.Falhas);
+end;
+
+procedure TTestesFilaService.Item_TipoDivergente_RecusaSemEfeitos;
+var
+  R: TResultadoReenvio;
+begin
+  FFila.ItemTipoForcado := True;
+  FFila.ItemTipo := tfCancelamento;
+  R := FSvc.Reenviar(1, 10, tfQuitacao);
+  Assert.AreEqual(Ord(rrFalha), Ord(R.Desfecho));
+  Assert.AreEqual(0, FGw.Gets + FGw.Posts);
+  Assert.AreEqual(0, FFila.Concluidos + FFila.Falhas);
+end;
+
+procedure TTestesFilaService.Item_Pendente_SegueFluxoNormal;
+var
+  R: TResultadoReenvio;
+begin
+  FGw.RespPost := TResultadoFinanceiro.Sucesso(svQuitada, Now);
+  R := FSvc.Reenviar(1, 10, tfQuitacao);
+  Assert.IsTrue(R.Concluiu);
+  Assert.AreEqual(1, FFila.Concluidos);
+end;
+
+procedure TTestesFilaService.PosQuitacao_GetQuitada_EnviaEmailUmaVez;
+var
+  R: TResultadoReenvio;
+begin
+  FGw.RespStatus := TResultadoFinanceiro.Sucesso(svQuitada);
+  R := FSvc.Reenviar(1, 10, tfQuitacao);
+  Assert.IsTrue(R.Concluiu);
+  Assert.AreEqual(0, FGw.Posts);
+  Assert.AreEqual(1, FEmail.Envios);
+  Assert.AreEqual(1, FRel.Gerados);
+  Assert.AreEqual(1, FRel.Limpezas);
+  Assert.AreEqual(0, FFila.Enfileirados);
+end;
+
+procedure TTestesFilaService.PosQuitacao_PostOk_EnviaEmailUmaVez;
+var
+  R: TResultadoReenvio;
+begin
+  FGw.RespPost := TResultadoFinanceiro.Sucesso(svQuitada, Now);
+  R := FSvc.Reenviar(1, 10, tfQuitacao);
+  Assert.IsTrue(R.Concluiu);
+  Assert.AreEqual(1, FGw.Posts);
+  Assert.AreEqual(1, FEmail.Envios);
+  Assert.AreEqual(1, FRel.Gerados);
+  Assert.AreEqual(1, FFila.Concluidos);
+end;
+
+procedure TTestesFilaService.PosQuitacao_EmailFalha_EnfileiraEmail;
+var
+  R: TResultadoReenvio;
+begin
+  FEmail.Resp := TResultadoEnvioEmail.Falha('SMTP fora do ar');
+  FGw.RespPost := TResultadoFinanceiro.Sucesso(svQuitada, Now);
+  R := FSvc.Reenviar(1, 10, tfQuitacao);
+  Assert.IsTrue(R.Concluiu);
+  Assert.AreEqual(1, FFila.Concluidos);
+  Assert.AreEqual(1, FFila.Enfileirados);
+  Assert.AreEqual(Ord(tfEmail), Ord(FFila.UltimoTipoEnfileirado));
+  Assert.AreEqual(Ord(svQuitada), Ord(FVenda.Status));
+end;
+
+procedure TTestesFilaService.PosQuitacao_JaQuitadaLocal_NaoExecuta;
+var
+  R: TResultadoReenvio;
+begin
+  FVenda.Status := svQuitada;
+  R := FSvc.Reenviar(1, 10, tfQuitacao);
+  Assert.IsTrue(R.Concluiu);
+  Assert.AreEqual(0, FEmail.Envios);
+  Assert.AreEqual(0, FRel.Gerados);
+  Assert.AreEqual(0, FFila.Enfileirados);
+end;
+
+procedure TTestesFilaService.PosQuitacao_Cancelamento_NaoExecuta;
+var
+  R: TResultadoReenvio;
+begin
+  FGw.RespPost := TResultadoFinanceiro.Sucesso(svCancelada);
+  R := FSvc.Reenviar(2, 10, tfCancelamento);
+  Assert.IsTrue(R.Concluiu);
+  Assert.AreEqual(0, FEmail.Envios);
+  Assert.AreEqual(0, FRel.Gerados);
+  Assert.AreEqual(0, FFila.Enfileirados);
+end;
+
+procedure TTestesFilaService.PosQuitacao_Excecao_NaoAlteraConcluido;
+var
+  R: TResultadoReenvio;
+begin
+  FRel.LevantarGerar := True;
+  FGw.RespPost := TResultadoFinanceiro.Sucesso(svQuitada, Now);
+  R := FSvc.Reenviar(1, 10, tfQuitacao);
+  Assert.AreEqual(Ord(rrConcluido), Ord(R.Desfecho));
+  Assert.AreEqual(1, FFila.Concluidos);
+  Assert.AreEqual(0, FFila.Falhas);
+  Assert.AreEqual(Ord(svQuitada), Ord(FVenda.Status));
+  Assert.AreEqual(1, FFila.Enfileirados);
+end;
+
+procedure TTestesFilaService.Bloqueio_Confirmar_ComPendencia_NaoChamaFinanceiro;
+var
+  Levantou: Boolean;
+begin
+  FFila.PendenciaBloqueia := True;
+  Levantou := False;
+  try
+    FQuit.Confirmar(10);
+  except
+    on ERegraNegocio do
+      Levantou := True;
+  end;
+  Assert.IsTrue(Levantou);
+  Assert.AreEqual(0, FGw.Posts);
+  Assert.AreEqual(0, FGw.Gets);
+end;
+
+procedure TTestesFilaService.Bloqueio_Confirmar_FilaEInfra_ResultadoTipado;
+var
+  R: TResultadoQuitacao;
+begin
+  FFila.PendenciaEInfra := True;
+  R := FQuit.Confirmar(10);
+  Assert.AreEqual(Ord(qdIndisponivel), Ord(R.Desfecho));
+  Assert.AreEqual(MSG_FALHA_VERIFICAR_FILA, R.Mensagem);
+  Assert.AreEqual(0, FGw.Posts);
+  Assert.AreEqual(0, FGw.Gets);
+  Assert.AreEqual(Ord(svPendente), Ord(FVenda.Status));
+end;
+
+procedure TTestesFilaService.Bloqueio_Cancelar_ComPendencia_NaoChamaFinanceiro;
+var
+  R: TResultadoCancelamento;
+begin
+  FFila.PendenciaBloqueia := True;
+  R := FQuit.Cancelar(10, 'x');
+  Assert.AreEqual(Ord(dcNaoPermitida), Ord(R.Desfecho));
+  Assert.AreEqual(MSG_BLOQUEIO_FILA, R.Mensagem);
+  Assert.AreEqual(0, FGw.Posts);
+end;
+
+procedure TTestesFilaService.Bloqueio_Cancelar_FilaEInfra_ResultadoTipado;
+var
+  R: TResultadoCancelamento;
+begin
+  FFila.PendenciaEInfra := True;
+  R := FQuit.Cancelar(10, 'x');
+  Assert.AreEqual(Ord(dcNaoPermitida), Ord(R.Desfecho));
+  Assert.AreEqual(MSG_FALHA_VERIFICAR_FILA, R.Mensagem);
+  Assert.AreEqual(0, FGw.Posts);
+end;
+
+procedure TTestesFilaService.Bloqueio_VendaSalvar_ComPendencia_ERegraNegocio;
+var
+  Svc: TVendaService;
+  V: TVenda;
+  Msg: string;
+begin
+  FFila.PendenciaBloqueia := True;
+  Svc := TVendaService.Create(FVendaI, FCliI, nil, FFilaI);
+  V := TVenda.Create;
+  try
+    V.Id := 10;
+    Msg := '';
+    try
+      Svc.Salvar(V);
+    except
+      on E: ERegraNegocio do
+        Msg := E.Message;
+    end;
+    Assert.AreEqual(MSG_BLOQUEIO_FILA, Msg);
+  finally
+    V.Free;
+    Svc.Free;
+  end;
+end;
+
+procedure TTestesFilaService.Bloqueio_VendaSalvar_FilaEInfra_ERegraNegocio;
+var
+  Svc: TVendaService;
+  V: TVenda;
+  Msg: string;
+begin
+  FFila.PendenciaEInfra := True;
+  Svc := TVendaService.Create(FVendaI, FCliI, nil, FFilaI);
+  V := TVenda.Create;
+  try
+    V.Id := 10;
+    Msg := '';
+    try
+      Svc.Salvar(V);
+    except
+      on E: ERegraNegocio do
+        Msg := E.Message;
+    end;
+    Assert.AreEqual(MSG_FALHA_VERIFICAR_FILA, Msg);
+  finally
+    V.Free;
+    Svc.Free;
+  end;
+end;
+
+procedure TTestesFilaService.Bloqueio_VendaExcluir_ComPendencia_ERegraNegocio;
+var
+  Svc: TVendaService;
+  Msg: string;
+begin
+  FFila.PendenciaBloqueia := True;
+  Svc := TVendaService.Create(FVendaI, FCliI, nil, FFilaI);
+  try
+    Msg := '';
+    try
+      Svc.Excluir(10);
+    except
+      on E: ERegraNegocio do
+        Msg := E.Message;
+    end;
+    Assert.AreEqual(MSG_BLOQUEIO_FILA, Msg);
+  finally
+    Svc.Free;
+  end;
+end;
+
+procedure TTestesFilaService.Bloqueio_VendaExcluir_FilaEInfra_ERegraNegocio;
+var
+  Svc: TVendaService;
+  Msg: string;
+begin
+  FFila.PendenciaEInfra := True;
+  Svc := TVendaService.Create(FVendaI, FCliI, nil, FFilaI);
+  try
+    Msg := '';
+    try
+      Svc.Excluir(10);
+    except
+      on E: ERegraNegocio do
+        Msg := E.Message;
+    end;
+    Assert.AreEqual(MSG_FALHA_VERIFICAR_FILA, Msg);
+  finally
+    Svc.Free;
+  end;
+end;
+
+procedure TTestesFilaService.Reenviar_ObterEInfra_ViraFalha;
+var
+  R: TResultadoReenvio;
+begin
+  FVenda.ObterEInfra := True;
+  R := FSvc.Reenviar(1, 10, tfQuitacao);
+  Assert.AreEqual(Ord(rrFalha), Ord(R.Desfecho));
+  Assert.AreEqual(0, FGw.Posts);
+  Assert.AreEqual(0, FFila.Concluidos);
 end;
 
 initialization

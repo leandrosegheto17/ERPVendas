@@ -53,6 +53,8 @@ type
 
     procedure Enfileirar(AVendaId: Integer; ATipo: TTipoFila; const AErro: string = '');
     function Listar(ASomentePendentes: Boolean): TDataSet;
+    function ObterItem(AId: Integer; out AVendaId: Integer; out ATipo: TTipoFila;
+      out APendente: Boolean): Boolean;
     procedure MarcarConcluido(AId: Integer);
     procedure RegistrarFalha(AId: Integer; const AErro: string);
     function ContarPendencias: Integer;
@@ -73,6 +75,11 @@ const
   SQL_INCREMENTAR =
     'UPDATE FILA_INTEGRACAO SET TENTATIVAS = TENTATIVAS + 1, ' +
     'ULTIMO_ERRO = :ERRO WHERE ID = :ID';
+  SQL_REGISTRAR_FALHA =
+    'UPDATE FILA_INTEGRACAO SET TENTATIVAS = TENTATIVAS + 1, ' +
+    'ULTIMO_ERRO = :ERRO WHERE ID = :ID AND STATUS = ''PENDENTE''';
+  SQL_OBTER_ITEM =
+    'SELECT VENDA_ID, TIPO, STATUS FROM FILA_INTEGRACAO WHERE ID = :ID';
   SQL_INSERIR =
     'INSERT INTO FILA_INTEGRACAO (VENDA_ID, TIPO, STATUS, TENTATIVAS, ULTIMO_ERRO) ' +
     'VALUES (:VENDA_ID, :TIPO, ''PENDENTE'', 1, :ERRO)';
@@ -207,6 +214,40 @@ begin
   end;
 end;
 
+function TFilaRepository.ObterItem(AId: Integer; out AVendaId: Integer;
+  out ATipo: TTipoFila; out APendente: Boolean): Boolean;
+var
+  Q: TFDQuery;
+begin
+  Result := False;
+  AVendaId := 0;
+  ATipo := tfQuitacao;
+  APendente := False;
+  Q := NovaQuery;
+  try
+    try
+      Q.SQL.Text := SQL_OBTER_ITEM;
+      Q.ParamByName('ID').AsInteger := AId;
+      Q.Open;
+      if Q.IsEmpty then
+        Exit;
+      AVendaId := Q.FieldByName('VENDA_ID').AsInteger;
+      ATipo := StrToTipoFila(Q.FieldByName('TIPO').AsString);
+      APendente := SameText(Q.FieldByName('STATUS').AsString, 'PENDENTE');
+      Result := True;
+    except
+      on E: Exception do
+      begin
+        if E is EInfra then
+          raise;
+        TratarFalha('existe', E);
+      end;
+    end;
+  finally
+    Q.Free;
+  end;
+end;
+
 procedure TFilaRepository.MarcarConcluido(AId: Integer);
 var
   Q: TFDQuery;
@@ -251,12 +292,12 @@ begin
     try
       Iniciou := not FConexao.EmTransacao;
       FConexao.IniciarTransacao;
-      Q.SQL.Text := SQL_INCREMENTAR;
+      Q.SQL.Text := SQL_REGISTRAR_FALHA;
       Q.ParamByName('ID').AsInteger := AId;
       Q.ParamByName('ERRO').AsString := TruncarErro(AErro);
+      // RF13-01: so altera item PENDENTE; 0 linhas (concluido/inexistente)
+      // nao e erro, apenas nao altera nada.
       Q.ExecSQL;
-      if Q.RowsAffected = 0 then
-        raise EInfra.Create(MSG_NAO_ENCONTRADO);
       if Iniciou then
         FConexao.Confirmar;
     except

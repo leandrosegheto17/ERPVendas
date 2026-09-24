@@ -892,3 +892,24 @@ Escopo: RF12-01..06 (9 arquivos; leitura de compilação e `git diff HEAD~1`, na
 - Achados simples (sem retorno ao executor): RF12-07 (hostname, ver segurança), RF12-08, RF12-09.
 
 **Veredito: Aprovado com ressalvas.** Nenhuma reprovação crítica nem erro de compilação óbvio. Liberado ao DevSecOps.
+
+## Refatoração Lote-13 — validação (2026-09-24)
+
+Chapéu QA, por leitura (nada compilado nem executado; sem compilador Delphi). Escopo: RF13-01..07 (commit `1b6da8f`, 13 arquivos).
+
+- **Compilação/regressão por leitura**: `ObterItem` tem a mesma assinatura (out params) na interface, em `TFilaRepository`, `TFilaFake` e `TFilaMemoria` (únicas 3 implementações de `IFilaRepository`; declaração e implementação batem). `TFilaService.Create` com `AQuitacao`/`ALogger = nil` no fim: declaração = implementação; chamadores (Root, Setup dos testes) coerentes. `uses ERPV.Negocio.QuitacaoService` na interface do FilaService sem ciclo (QuitacaoService só usa Core/Dominio e `PendenciaFila`; nenhuma unit de Negocio referencia FilaService, só Root/UI/tests). Posse: FilaService não libera FQuitacao/FLogger; Root libera FilaService antes de QuitacaoService e o logger por último. `Nomes: array[TDesfechoReenvio]` cobre os 3 valores.
+- **RF13-01**: `Reenviar` -> `ReenviarInterno` valida existência, PENDENTE, venda e tipo antes de qualquer efeito (sem RegistrarFalha/HTTP/e-mail); `EInfra` do `ObterItem` vira `rrFalha`. `RegistrarFalha` com `AND STATUS = 'PENDENTE'`, 0 linhas não é erro. UI: `PodeReenviarItem` lê o STATUS bruto ('PENDENTE'); o Tipo enviado pela UI é o da coluna, então o item EMAIL continua funcionando.
+- **RF13-02**: pós-quitação só em `ConcluirLocal` com `AAlvo = svQuitada` (transição feita no reenvio via GET ou POST); não roda em venda já quitada localmente, nem em cancelamento; `rrConcluido` inalterado se o pós falhar (try/except + `ExecutarPosQuitacao` já defensivo); reaproveita `PosQuitacao` (RF12-01, `eqFalhouSemFila` tratado no `case`).
+- **RF13-03/07**: `RecalcularBloqueioFila`, tratamento local só de `ERegraNegocio` (re-raise se não bloqueada), `FConfirmando` (RF9-02), `EnterAcionaSalvar`/`CMDialogKey` (RF7-01) e RF7-02 preservados; `DefinirOcupado` restaura o estado no finally; símbolos usados existem (`clERPVTextoSecundario`, `ERPVEspaco16`, `FGrade`, `BtnFechar`).
+- **RF13-04/05/06**: máscara única em `Falha` (mesma Msg vai a `RegistrarFalha` e à UI; resultado esperado do teste confere com `MascararSensiveis`); um log por reenvio só com Ids/tipo/desfecho; `ExigirPendente` libera `AAtual` antes do raise (sem double free); `ERegraNegocio` não descende de `EInfra` (`ERPV.Core.Erros`), então o `raise` dentro do try de Confirmar não é engolido.
+- **Testes**: sintaxe DUnitX coerente; defaults do fake (`ItemExiste`/`ItemPendente`, Id 1/2/3 = QUITACAO/CANCELAMENTO/EMAIL, venda 10) mantêm os testes antigos; `TVendaService` com nil de produto é seguro (Salvar/Excluir falham em `ExigirPendente` antes de `Validar`). Cobertura nova: 5 `Item_*`, 6 `PosQuitacao_*`, máscara, 9 `Bloqueio_*`/`Reenviar_ObterEInfra_ViraFalha`.
+- **BOM/EOL**: 9 units de src com BOM (Root sem BOM e ASCII, como antes); `tests/ERPV.Testes.FilaService.pas` sem BOM e ASCII puro (grep sem ocorrências); `PendenciaFila.pas` de teste mantém o BOM anterior.
+
+Achados simples (sem retorno ao executor; viram tarefas em `Refatoração Lote-13`, RF13-01..07 seguem `Concluída`):
+- RF13-08: `MensagemDeReenvio` descarta a mensagem do pós-quitação quando `Concluiu`; o operador não vê "e-mail pendente/não enfileirado" (o RF13-02 fica silencioso na UI).
+- RF13-09: `RecalcularBloqueioFila` pode levantar `EInfra` dentro do handler/pós-fluxo (vai ao handler global).
+- RF13-10: confirmar na IDE (compilação dos testes e da form, foco/seleção da grade, suíte completa).
+
+Nenhum erro de compilação certo encontrado; dúvidas de API concentradas em RF13-10.
+
+**Veredito: Aprovado com ressalvas.** Sem reprovação crítica. Liberado ao DevSecOps.

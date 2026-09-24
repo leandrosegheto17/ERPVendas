@@ -19,6 +19,9 @@ type
   TMensagemReenvio = record
     Texto: string;
     Sucesso: Boolean;
+    /// <summary>True quando concluiu com ressalva (e-mail nao saiu).
+    /// So relevante com Sucesso = True; a tela usa tom de aviso.</summary>
+    Aviso: Boolean;
   end;
 
   /// <summary>T53 (UX 4.2): habilitacao dos botoes da lista de vendas.
@@ -48,6 +51,8 @@ function AcoesDaVenda(const AStatus: string; ATemFilaPendente,
 
 function TextoTipoFila(const ATipo: string): string;
 function TextoSituacaoFila(const AStatus: string): string;
+/// <summary>RF13-01: so item com STATUS PENDENTE pode ser reenviado.</summary>
+function PodeReenviarItem(const AStatus: string): Boolean;
 function SubtituloPendencias(ATotal: Integer; ASomentePendentes: Boolean): string;
 function MensagemDeReenvio(const AResultado: TResultadoReenvio): TMensagemReenvio;
 
@@ -113,6 +118,11 @@ begin
     Result := AStatus;
 end;
 
+function PodeReenviarItem(const AStatus: string): Boolean;
+begin
+  Result := SameText(AStatus, 'PENDENTE');
+end;
+
 function SubtituloPendencias(ATotal: Integer; ASomentePendentes: Boolean): string;
 begin
   if ASomentePendentes then
@@ -132,10 +142,24 @@ begin
 end;
 
 function MensagemDeReenvio(const AResultado: TResultadoReenvio): TMensagemReenvio;
+var
+  Msg: string;
 begin
   Result.Sucesso := AResultado.Concluiu;
+  Result.Aviso := False;
   if AResultado.Concluiu then
-    Result.Texto := 'Item concluído.'
+  begin
+    if AResultado.Mensagem <> '' then
+    begin
+      Result.Texto := AResultado.Mensagem;
+      // Regra por substring (fragil: acompanha os textos de TFilaService.ConcluirLocal).
+      Msg := LowerCase(AResultado.Mensagem);
+      Result.Aviso := (Pos('e-mail pendente', Msg) > 0) or
+        (Pos('não foi possível', Msg) > 0) or (Pos('nao foi possivel', Msg) > 0);
+    end
+    else
+      Result.Texto := 'Item concluído.';
+  end
   else if AResultado.Mensagem <> '' then
     Result.Texto := 'Ainda não foi possível: ' + AResultado.Mensagem
   else

@@ -18,7 +18,7 @@
   - EInfra (banco) NAO escapa (padrao RF9-01/RF10-01): falha ao gravar o status
     local, ao MarcarConcluido ou ao RegistrarFalha vira rrFalha com mensagem
     amigavel (sem dado pessoal/erro tecnico); item segue PENDENTE e o proximo
-    reenvio reconcilia pelo GET. Sem log aqui (o service nao tem logger).
+    reenvio reconcilia pelo GET. Log so de Ids/desfecho (RF13-05).
   - T51 (EMAIL): venda ja Quitada, status intocado. Regenera PDF do banco
     (IRelatorioPedido), envia (IEmailSender), apaga o PDF sempre; sucesso =>
     MarcarConcluido; falha (SMTP, sem e-mail, excecao) => rrFalha + RegistrarFalha
@@ -35,6 +35,7 @@ interface
 uses
   System.SysUtils,
   ERPV.Core.Erros,
+  ERPV.Core.Log,
   ERPV.Dominio.Enums,
   ERPV.Dominio.Venda,
   ERPV.Dominio.Resultados,
@@ -44,7 +45,8 @@ uses
   ERPV.Dominio.Contratos.IClienteRepository,
   ERPV.Dominio.Contratos.IRelatorioPedido,
   ERPV.Dominio.Contratos.IEmailSender,
-  ERPV.Dominio.Cliente;
+  ERPV.Dominio.Cliente,
+  ERPV.Negocio.QuitacaoService;
 
 type
   TDesfechoReenvio = (
@@ -68,7 +70,13 @@ type
     FClienteRepositorio: IClienteRepository;
     FRelatorio: IRelatorioPedido;
     FEmailSender: IEmailSender;
+    FQuitacao: TQuitacaoService; // RF13-02: nao e dono; pode ser nil
+    FLogger: TLogger; // RF13-05: nao e dono; pode ser nil
     function ReenviarEmail(AFilaId, AVendaId: Integer): TResultadoReenvio;
+    function ReenviarInterno(AFilaId, AVendaId: Integer;
+      ATipo: TTipoFila): TResultadoReenvio;
+    procedure Registrar(AFilaId, AVendaId: Integer; ATipo: TTipoFila;
+      ADesfecho: TDesfechoReenvio);
     function Falha(AFilaId: Integer; const AMensagem: string): TResultadoReenvio;
     function ConcluirLocal(AFilaId, AVendaId: Integer; AAlvo: TStatusVenda;
       const AData: TDateTime): TResultadoReenvio;
@@ -76,9 +84,10 @@ type
     constructor Create(const AVendaRepositorio: IVendaRepository;
       const AFinanceiro: IFinanceiroGateway; const AFilaRepositorio: IFilaRepository;
       const AClienteRepositorio: IClienteRepository;
-      const ARelatorio: IRelatorioPedido; const AEmailSender: IEmailSender);
+      const ARelatorio: IRelatorioPedido; const AEmailSender: IEmailSender;
+      AQuitacao: TQuitacaoService = nil; ALogger: TLogger = nil);
 
-    /// <summary>Reenvia item PENDENTE de QUITACAO/CANCELAMENTO. Falha esperada
+    ///<summary>Reenvia item PENDENTE de QUITACAO/CANCELAMENTO. Falha esperada
     /// de integracao vira resultado tipado, nunca excecao.</summary>
     function Reenviar(AFilaId, AVendaId: Integer; ATipo: TTipoFila): TResultadoReenvio;
   end;
@@ -86,6 +95,7 @@ type
 implementation
 
 const
+  MsgItemInvalido = 'Este item não está pendente ou não pertence à venda informada.';
   MsgFalhaLocal = 'Não foi possível concluir o item localmente; ele segue ' +
     'pendente e será reconciliado no próximo reenvio';
 
@@ -97,9 +107,12 @@ end;
 constructor TFilaService.Create(const AVendaRepositorio: IVendaRepository;
   const AFinanceiro: IFinanceiroGateway; const AFilaRepositorio: IFilaRepository;
   const AClienteRepositorio: IClienteRepository;
-  const ARelatorio: IRelatorioPedido; const AEmailSender: IEmailSender);
+  const ARelatorio: IRelatorioPedido; const AEmailSender: IEmailSender;
+  AQuitacao: TQuitacaoService; ALogger: TLogger);
 begin
   inherited Create;
+  FQuitacao := AQuitacao;
+  FLogger := ALogger;
   FClienteRepositorio := AClienteRepositorio;
   FRelatorio := ARelatorio;
   FEmailSender := AEmailSender;
@@ -112,7 +125,9 @@ function TFilaService.Falha(AFilaId: Integer; const AMensagem: string): TResulta
 var
   Msg: string;
 begin
-  Msg := Trim(AMensagem);
+  // RF13-04: texto do Financeiro/excecoes e mascarado (CPF/e-mail) antes de ir
+  // para RegistrarFalha e para a UI (mesma variavel; idempotente).
+  Msg := TLogger.MascararSensiveis(Trim(AMensagem));
   if Msg = '' then
     Msg := 'Falha no reenvio';
   try
@@ -138,6 +153,22 @@ begin
   end;
   Result.Desfecho := rrConcluido;
   Result.Mensagem := '';
+  // RF13-02: transicao Pendente->Quitada feita AGORA no reenvio => pos-quitacao
+  // (PDF + e-mail; falha => item EMAIL na fila) uma vez, como na T49. Nunca
+  // reposta o Financeiro nem altera o desfecho (rrConcluido) se o pos falhar.
+  if (AAlvo = svQuitada) and (FQuitacao <> nil) then
+  begin
+    try
+      case FQuitacao.ExecutarPosQuitacao(AVendaId) of
+        eqEnviado: Result.Mensagem := 'Quitação concluída; e-mail enviado';
+        eqFalhou: Result.Mensagem := 'Quitação concluída; e-mail pendente na fila';
+        eqFalhouSemFila: Result.Mensagem := 'Quitação concluída; não foi possível ' +
+          'enviar o e-mail nem registrá-lo na fila';
+      end;
+    except
+      // best-effort: a quitacao ja esta concluida
+    end;
+  end;
 end;
 
 function TFilaService.ReenviarEmail(AFilaId, AVendaId: Integer): TResultadoReenvio;
@@ -173,6 +204,8 @@ begin
           Erro := 'Cliente sem e-mail cadastrado'
         else
         begin
+          // RF13-05: se GerarPdf falhar, ele mesmo apaga o PDF parcial (RF11-02)
+          // e LimparAntigos varre residuos > 24 h; Pdf so e atribuido no sucesso.
           Pdf := FRelatorio.GerarPdf(Venda);
           Env := FEmailSender.Enviar(Destino,
             Format('Confirmação de Pedido %d', [AVendaId]),
@@ -214,14 +247,61 @@ begin
   Result.Mensagem := '';
 end;
 
+procedure TFilaService.Registrar(AFilaId, AVendaId: Integer; ATipo: TTipoFila;
+  ADesfecho: TDesfechoReenvio);
+const
+  Nomes: array[TDesfechoReenvio] of string =
+    ('rrConcluido', 'rrFalha', 'rrNaoSuportado');
+begin
+  // RF13-05: so Ids, tipo e desfecho (sem e-mail/CPF/mensagem de erro).
+  if FLogger = nil then
+    Exit;
+  try
+    FLogger.Info(Format('Reenvio fila %d venda %d tipo %s: %s',
+      [AFilaId, AVendaId, TipoFilaToStr(ATipo), Nomes[ADesfecho]]));
+  except
+    // log best-effort
+  end;
+end;
+
 function TFilaService.Reenviar(AFilaId, AVendaId: Integer;
+  ATipo: TTipoFila): TResultadoReenvio;
+begin
+  Result := ReenviarInterno(AFilaId, AVendaId, ATipo);
+  Registrar(AFilaId, AVendaId, ATipo, Result.Desfecho);
+end;
+
+function TFilaService.ReenviarInterno(AFilaId, AVendaId: Integer;
   ATipo: TTipoFila): TResultadoReenvio;
 var
   Venda: TVenda;
   StatusLocal, Alvo, Oposto: TStatusVenda;
   Resp: TResultadoFinanceiro;
   Data: TDateTime;
+  ItemVendaId: Integer;
+  ItemTipo: TTipoFila;
+  ItemPendente: Boolean;
 begin
+  // RF13-01 (SG13-02): nao confia no chamador; o item precisa existir, estar
+  // PENDENTE e pertencer a (AVendaId, ATipo). Recusa sem tocar em nada
+  // (sem RegistrarFalha, sem HTTP, sem e-mail).
+  try
+    if not FFilaRepositorio.ObterItem(AFilaId, ItemVendaId, ItemTipo, ItemPendente)
+      or not ItemPendente or (ItemVendaId <> AVendaId) or (ItemTipo <> ATipo) then
+    begin
+      Result.Desfecho := rrFalha;
+      Result.Mensagem := MsgItemInvalido;
+      Exit;
+    end;
+  except
+    on EInfra do
+    begin
+      Result.Desfecho := rrFalha;
+      Result.Mensagem := MsgFalhaLocal;
+      Exit;
+    end;
+  end;
+
   if ATipo = tfEmail then
     Exit(ReenviarEmail(AFilaId, AVendaId));
   if not (ATipo in [tfQuitacao, tfCancelamento]) then
@@ -242,7 +322,12 @@ begin
     Oposto := svQuitada;
   end;
 
-  Venda := FVendaRepositorio.Obter(AVendaId);
+  try
+    Venda := FVendaRepositorio.Obter(AVendaId);
+  except
+    on EInfra do
+      Exit(Falha(AFilaId, MsgFalhaLocal)); // RF13-06: banco indisponivel
+  end;
   if Venda = nil then
     Exit(Falha(AFilaId, 'Venda não encontrada'));
   try
@@ -291,7 +376,12 @@ begin
   // POST fora de transacao (ADR-006); cancelamento sai SEM motivo (RF10-02).
   if ATipo = tfQuitacao then
   begin
-    Venda := FVendaRepositorio.Obter(AVendaId);
+    try
+      Venda := FVendaRepositorio.Obter(AVendaId);
+    except
+      on EInfra do
+        Exit(Falha(AFilaId, MsgFalhaLocal)); // RF13-06
+    end;
     if Venda = nil then
       Exit(Falha(AFilaId, 'Venda não encontrada'));
     try
