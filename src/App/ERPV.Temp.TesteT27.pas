@@ -48,10 +48,10 @@ begin
   V := TVenda.Create;
   try
     try
-      CliA.Nome := 'T27 Ativo'; CliA.TipoPessoa := tpFisica; CliA.CpfCnpj := '52998224725';
+      CliA.Nome := 'T27 Ativo'; CliA.TipoPessoa := tpFisica; CliA.CpfCnpj := '11144477735';
       CliA.Email := 't27a@teste.com'; CliA.Ativo := True;
       Root.ClienteService.Salvar(CliA);
-      CliI.Nome := 'T27 Inativo'; CliI.TipoPessoa := tpJuridica; CliI.CpfCnpj := '11222333000181';
+      CliI.Nome := 'T27 Inativo'; CliI.TipoPessoa := tpJuridica; CliI.CpfCnpj := '11444777000161';
       CliI.Email := 't27i@teste.com'; CliI.Ativo := False;
       Root.ClienteService.Salvar(CliI);
       ProA.Descricao := 'T27 Prod Ativo'; ProA.Unidade := 'UN'; ProA.PrecoUnitario := 10; ProA.Ativo := True;
